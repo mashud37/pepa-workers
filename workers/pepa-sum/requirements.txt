@@ -1,0 +1,6 @@
+pypdf
+spacy
+scikit-learn
+numpy
+rank-bm25
+pyyaml

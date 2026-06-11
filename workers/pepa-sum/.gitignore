@@ -1,0 +1,28 @@
+# Secrets / Cloud Run config
+env.yaml
+secrets.yaml
+.env
+
+# Runtime data (kept in tree via .gitkeep)
+data/*
+!data/.gitkeep
+input/*
+!input/.gitkeep
+output/*
+!output/.gitkeep
+
+# Caches / generated
+*.index.json
+.index.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# OS
+.DS_Store
+Thumbs.db

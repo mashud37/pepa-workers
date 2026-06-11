@@ -1,0 +1,29 @@
+app: pepa-sum               # label value (app=...)
+prefix: pepa               # GCP resource-name prefix
+region: europe-west1
+type: service
+
+artifact_registry:
+  repo: pepa
+  image: pepa/app:latest
+
+service_account:
+  name: pepa-sa
+  display: "pepa-sum — summariser service"
+  roles: [roles/run.invoker]
+
+env_file: env.yaml
+base_url_var: BASE_URL      # presence => two-pass deploy; CLI patches env.yaml
+env_generated:              # auto-filled with secrets.token_hex(32) if absent
+  - JOB_TOKEN
+
+service:
+  name: pepa
+  allow_unauthenticated: true   # endpoint is guarded by JOB_TOKEN (?token=)
+  memory: 8Gi                   # GGUF model + 16k-context KV cache
+  cpu: 8                        # faster CPU generation at ~equal vCPU-second cost
+  max_instances: 1
+  concurrency: 1
+  timeout: 900
+
+# No schedulers: this service is triggered on demand by the local CLI, not cron.

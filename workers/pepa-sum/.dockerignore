@@ -1,0 +1,11 @@
+input/
+output/
+data/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env.yaml
+secrets.yaml
+.git/
+README.md
