@@ -1,5 +1,12 @@
-"""Talks to the Cloud Run summariser service and builds its prompt."""
-from backends.prompt import build_prompt, SYSTEM
-from backends.summarizer import summarize
+"""LLM generation (backend-routed) and the prompts for the generated documents."""
+from backends.llm import complete
+from backends.prompt import (
+    SUMMARY_SYSTEM, RUNDOWN_SYSTEM,
+    build_summary_prompt, build_rundown_prompt,
+)
 
-__all__ = ["build_prompt", "SYSTEM", "summarize"]
+__all__ = [
+    "complete",
+    "SUMMARY_SYSTEM", "RUNDOWN_SYSTEM",
+    "build_summary_prompt", "build_rundown_prompt",
+]

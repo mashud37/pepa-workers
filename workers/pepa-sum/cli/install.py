@@ -1,10 +1,12 @@
-"""Idempotent setup: create env.yaml, generate the token, check dependencies.
+"""Idempotent setup: create env.yaml, fill settings/keys, check dependencies.
 
-Safe to re-run — only missing/blank/placeholder values are filled, and a real
-BASE_URL or JOB_TOKEN is never overwritten.
+Safe to re-run — only missing/blank/placeholder values are filled; a real
+ANTHROPIC_API_KEY, JOB_TOKEN, or BASE_URL is never overwritten.
 """
+import getpass
 import secrets
 import shutil
+import sys
 
 import yaml
 
@@ -12,7 +14,8 @@ import config
 from cli import ui
 
 _PLACEHOLDERS = {"", "changeme", "REPLACE_ME"}
-_CORE_DEPS = ["pypdf", "spacy", "sklearn", "rank_bm25", "numpy", "yaml"]
+_CORE_DEPS = ["anthropic", "pypdf", "spacy", "sklearn", "rank_bm25", "numpy", "yaml"]
+_DEFAULTS = {"BACKEND": "anthropic", "PARA_METHOD": "llm", "ON_EXISTING": "ask"}
 
 
 def run():
@@ -21,10 +24,11 @@ def run():
     _ensure_env()
     _check_deps()
     _check_spacy_model()
-    _check_gcloud()
     ui.step("Next")
-    ui.info("Deploy the model service:  python manage.py deploy")
-    ui.info("Then drop PDFs in input/ and run:  python manage.py summarize")
+    if config.backend() == "anthropic":
+        ui.info("Drop PDFs in input/ and run:  python manage.py summarize")
+    else:
+        ui.info("Deploy the self-hosted service:  python manage.py deploy")
     return 0
 
 
@@ -42,14 +46,36 @@ def _ensure_env():
 
     data = yaml.safe_load(config.ENV_FILE.read_text(encoding="utf-8")) or {}
     changed = False
+
+    for key, default in _DEFAULTS.items():
+        if str(data.get(key, "")).strip() in _PLACEHOLDERS:
+            data[key] = default
+            changed = True
+
     if str(data.get("JOB_TOKEN", "")).strip() in _PLACEHOLDERS:
         data["JOB_TOKEN"] = secrets.token_hex(32)
         changed = True
-        ui.ok("generated JOB_TOKEN")
+        ui.ok("generated JOB_TOKEN (self-hosted fallback)")
+
+    if data.get("BACKEND") == "anthropic" and not config.anthropic_api_key():
+        key = _prompt_api_key()
+        if key:
+            data["ANTHROPIC_API_KEY"] = key
+            changed = True
+            ui.ok("stored ANTHROPIC_API_KEY")
+
     if changed:
         config.ENV_FILE.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
     else:
         ui.info("env.yaml already configured")
+
+
+def _prompt_api_key():
+    if not sys.stdin.isatty():
+        ui.warn("ANTHROPIC_API_KEY not set — paste it during an interactive install "
+                "or set the ANTHROPIC_API_KEY env var")
+        return None
+    return getpass.getpass("  Anthropic API key (blank to skip): ").strip()
 
 
 def _check_deps():
@@ -76,10 +102,3 @@ def _check_spacy_model():
         ui.ok("spaCy model en_core_web_sm present")
     except Exception:
         ui.warn("spaCy model missing — python -m spacy download en_core_web_sm")
-
-
-def _check_gcloud():
-    if shutil.which("gcloud"):
-        ui.ok("gcloud CLI found")
-    else:
-        ui.warn("gcloud CLI not found — needed for deploy (https://cloud.google.com/sdk)")

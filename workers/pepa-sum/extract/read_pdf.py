@@ -7,6 +7,7 @@ imported, so the tool still runs (with a warning) when poppler/tesseract are
 not installed.
 """
 import re
+from collections import Counter
 from pathlib import Path
 
 from pypdf import PdfReader
@@ -15,6 +16,9 @@ from cli import ui
 
 # Below this many characters a page is assumed to be scanned, not born-digital.
 _OCR_THRESHOLD = 40
+
+# A line that is just a page number (arabic or roman), at a page edge.
+_PAGE_NUM_RE = re.compile(r"^\s*(?:\d{1,4}|[ivxlcdm]{1,6})\s*$", re.IGNORECASE)
 
 # A reference-list heading on its own line. Stripping everything from here cuts
 # 1k+ tokens off a typical paper and removes text that adds nothing to a summary.
@@ -37,7 +41,44 @@ def read_pdf(path) -> str:
     if scanned:
         for n, text in _ocr_pages(path, scanned):
             pages[n] = text
+    pages = _strip_running_headers(pages)
     return _strip_references("\n\n".join(p for p in pages if p).strip())
+
+
+def _hdr_key(line):
+    """Identity of a header/footer line ignoring its page number (which varies):
+    the alphabetic characters, lowercased. None for lines too short to matter."""
+    key = re.sub(r"[^a-z]", "", line.lower())
+    return key if len(key) >= 5 else None
+
+
+def _strip_running_headers(pages, edge_lines=3):
+    """Remove running headers/footers and bare page-number lines.
+
+    A running header (journal name, article title, author) repeats near the top
+    or bottom of most pages, so pypdf splices it into the body between pages. We
+    find edge lines whose text (minus the page number) recurs across many pages
+    and drop them everywhere, plus any line that is only a page number."""
+    if len(pages) < 4:
+        return pages
+
+    counts = Counter()
+    for p in pages:
+        lines = p.split("\n")
+        for ln in lines[:edge_lines] + lines[-edge_lines:]:
+            key = _hdr_key(ln)
+            if key:
+                counts[key] += 1
+
+    threshold = max(3, int(len(pages) * 0.3))
+    recurring = {k for k, c in counts.items() if c >= threshold}
+
+    cleaned = []
+    for p in pages:
+        kept = [ln for ln in p.split("\n")
+                if not _PAGE_NUM_RE.match(ln) and _hdr_key(ln) not in recurring]
+        cleaned.append("\n".join(kept))
+    return cleaned
 
 
 def _strip_references(text):

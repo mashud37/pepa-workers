@@ -1,15 +1,23 @@
-"""The main command: turn every PDF in input/ into a structured summary.
+"""The main command: turn every PDF in input/ into three structured documents.
 
-Per paper: read text (OCR fallback) -> extract deterministic signals -> retrieve
-the information-rich passages -> build the prompt -> call the Cloud Run model ->
-write output/<name>.md. A paper that already has a summary is left alone: with
---force it is redone silently; interactively the run asks before overwriting.
+Per paper: read text (OCR fallback, references stripped) -> extract deterministic
+signals + passages -> build sum_ (structured brief), para_ (paragraph rundown),
+and quote_ (verified verbatim quotes) in output/. A paper already processed is
+left alone: with --force it is redone silently; interactively the run asks
+before overwriting.
 """
 import sys
 
 import config
 from cli import ui
 from cli.progress import StepSpinner
+
+_DOCS = ("sum", "para", "quote")
+_LABELS = {
+    "sum": "sum_  structured brief",
+    "para": "para_ paragraph rundown",
+    "quote": "quote_ salient quotes",
+}
 
 
 def run(input_dir=None, output_dir=None, force=False):
@@ -29,17 +37,28 @@ def run(input_dir=None, output_dir=None, force=False):
 
     ui.header("pepa-sum — summarising papers")
     ui.info(f"{len(pdfs)} PDF(s) in {in_dir}")
+    ui.info(f"backend: {config.backend()}  ·  paragraph rundown: {config.para_method()}")
+    ui.info(f"on existing: {config.on_existing()}  ·  Ctrl-C to stop after the current step.")
 
-    done = errors = skipped = 0
+    on_existing = config.on_existing()
+    done = errors = skipped = stopped = 0
     for pdf in pdfs:
-        if (out_dir / (pdf.stem + ".md")).exists() and not force:
-            if not _should_overwrite(pdf.name):
-                ui.info(f"skip {pdf.name} (kept existing summary)")
+        present = [d for d in _DOCS if (out_dir / f"{d}_{pdf.stem}.md").exists()]
+        regen = force
+        if len(present) == len(_DOCS) and not force:
+            if not _keep_existing(pdf.name, on_existing):
+                regen = True
+            else:
+                ui.info(f"skip {_short(pdf.name)} (all documents exist)")
                 skipped += 1
                 continue
         try:
-            _summarise_one(pdf, out_dir)
+            _summarise_one(pdf, out_dir, force=regen)
             done += 1
+        except KeyboardInterrupt:
+            ui.warn("stopped (Ctrl-C) — finished documents are saved")
+            stopped = 1
+            break
         except SystemExit:
             raise  # configuration/endpoint errors are fatal for the whole run
         except Exception as e:
@@ -47,25 +66,39 @@ def run(input_dir=None, output_dir=None, force=False):
             errors += 1
 
     ui.step("Done")
-    ui.ok(f"{done} summarised, {skipped} skipped, {errors} failed")
+    ui.ok(f"{done} processed, {skipped} skipped, {errors} failed"
+          + (f", {len(pdfs) - done - skipped - errors} not reached" if stopped else ""))
     return 1 if errors else 0
 
 
-def _should_overwrite(name):
-    """Ask before re-summarising a paper that already has output. Off a TTY
-    (piped/scripted) keep the existing file so batch runs stay resumable; use
-    --force to overwrite without prompting."""
-    if not sys.stdin.isatty():
+def _keep_existing(name, policy):
+    """Whether to keep a fully-done paper's existing documents.
+
+    policy `skip` keeps them all (no prompt); `overwrite` redoes them; `ask`
+    prompts per paper. Off a TTY, `ask` keeps existing so batch runs stay
+    resumable. --force overrides this entirely (handled by the caller)."""
+    if policy == "skip":
+        return True
+    if policy == "overwrite":
         return False
-    return ui.confirm(f"'{name}' already summarised — overwrite?", default_yes=False)
+    if not sys.stdin.isatty():
+        return True
+    return not ui.confirm(f"'{name}' already done — overwrite?", default_yes=False)
 
 
-def _summarise_one(pdf, out_dir):
+def _summarise_one(pdf, out_dir, force=False):
     from extract import read_pdf, extract_signals, select_passages
-    from backends import build_prompt, SYSTEM, summarize
-    from render import write_summary
+    import documents
+    from render import write_doc
 
     ui.step(pdf.name)
+
+    todo = [d for d in _DOCS if force or not (out_dir / f"{d}_{pdf.stem}.md").exists()]
+    for d in _DOCS:
+        if d not in todo:
+            ui.info(f"kept {d}_ (exists)")
+    if not todo:
+        return
 
     text = _spin("reading + OCR", lambda: read_pdf(pdf), lambda t: f"{len(t):,} chars")
     if not text:
@@ -80,13 +113,19 @@ def _summarise_one(pdf, out_dir):
         lambda r: f"{len(r[0]['noun_phrases'])} phrases, {len(r[1])} passages",
     )
 
-    summary = _spin(
-        "summarising (cloud)",
-        lambda: summarize(SYSTEM, build_prompt(text, signals, passages)),
-    )
+    builders = {
+        "sum": lambda: documents.build_summary(text, signals, passages),
+        "para": lambda: documents.build_rundown(text),
+        "quote": lambda: documents.build_quotes(text, signals),
+    }
+    for d in todo:
+        def _build_and_write(d=d):
+            write_doc(out_dir, d, pdf.name, builders[d]())
+        _spin(_LABELS[d], _build_and_write, lambda _: "saved")
 
-    out_path = write_summary(out_dir, pdf.name, summary)
-    ui.ok(f"wrote {out_path.name}")
+
+def _short(name, width=50):
+    return name if len(name) <= width else name[:width] + "..."
 
 
 def _spin(label, fn, summary=lambda r: ""):
