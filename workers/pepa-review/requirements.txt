@@ -3,8 +3,7 @@ numpy
 anthropic
 
 # Optional — install for richer features:
-#   pip install scikit-learn      # k-means clustering for knowledge graph
-#   pip install networkx          # GraphML export
-#   pip install pyvis             # standalone HTML graph export
-#   pip install hdbscan           # density-based clustering (UMAP recipe)
+#   pip install scikit-learn      # clustering, TF-IDF/SVD, silhouette (corpus map)
+#   pip install umap-learn        # UMAP reduction — the UMAP->HDBSCAN recipe (corpus map)
+#   pip install hdbscan           # density-based clustering (corpus map)
 #   pip install rank_bm25         # hybrid BM25+dense retrieval

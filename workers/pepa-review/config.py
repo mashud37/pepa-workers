@@ -23,6 +23,18 @@ GENERATION_MODEL_QUALITY = "claude-sonnet-4-6"
 EMBED_MODEL_GEMINI = "gemini-embedding-001"
 EMBED_MODEL_OLLAMA = "nomic-embed-text"
 
+# Corpus-map clustering (WS4) — UMAP -> consensus -> c-TF-IDF
+MAP_UMAP_DIM = 10
+MAP_MIN_THREADS = 6            # thread-count band floor (silhouette is swept within the band)
+MAP_MAX_THREADS = 40           # thread-count band ceiling
+MAP_WEIGHT_DENSE = 0.6
+MAP_WEIGHT_TITLE = 0.2
+MAP_WEIGHT_LITERATURE = 0.2
+MAP_OUTLIER_THRESHOLD = 0.15   # min co-association to best thread; below -> cross-cutting/outlier
+MAP_MULTI_MARGIN = 0.8         # second thread listed if its profile >= margin * best
+MAP_MERGE_SIM = 0.9            # centroid cosine above which two threads may merge
+MAP_MERGE_TERM_J = 0.5         # plus top-term Jaccard above which two threads merge
+
 _ENV_OVERRIDE = {
     "corpus_dir":       "PEPAREVIEW_CORPUS_DIR",
     "anthropic_api_key": "ANTHROPIC_API_KEY",

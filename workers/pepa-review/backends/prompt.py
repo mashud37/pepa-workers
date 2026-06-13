@@ -62,36 +62,47 @@ def explore_prompt(query, briefs_text, history=""):
 def map_system():
     return (
         "You are a research analyst characterising a thematic cluster of academic works. "
-        "Be precise and substantive. Draw on what the works actually argue, not generic summaries."
+        "Be precise and substantive. Draw directly on what the works argue, not generic summaries. "
+        "Name authors when attributing concepts or arguments."
     )
 
 
-def map_thread_prompt(records, max_works=20):
+def map_thread_prompt(records, total_in_cluster, max_works=20, top_terms=None):
     parts = []
     for r in records[:max_works]:
-        args = r.get("arguments_text", "")[:350]
-        parts.append(
+        entry = (
             f"**{r.get('authors', '')} — {r.get('title', '')}**\n"
             f"Question: {r.get('question', '')}\n"
-            f"Arguments: {args}"
+            f"Arguments: {r.get('arguments_text', '')[:350]}"
         )
-    n = len(records)
-    shown = min(n, max_works)
-    note = f" (showing {shown} most central)" if n > max_works else ""
+        methods = r.get("methods", "")[:120]
+        empirical = r.get("empirical", "")[:120]
+        if methods:
+            entry += f"\nMethods: {methods}"
+        if empirical:
+            entry += f"\nContext: {empirical}"
+        parts.append(entry)
+
+    shown = len(records[:max_works])
+    note = f" (showing {shown} most central of {total_in_cluster})" if total_in_cluster > max_works else ""
     works_text = "\n\n".join(parts)
+    terms_block = (
+        f"Distinctive terms for this cluster (c-TF-IDF): {', '.join(top_terms)}\n\n"
+        if top_terms else ""
+    )
+
     return (
-        f"The following {n} academic works form a thematic cluster{note}:\n\n"
+        f"The following {total_in_cluster} academic works form a thematic cluster{note}:\n\n"
         f"{works_text}\n\n"
+        f"{terms_block}"
         f"---\n"
-        f"Provide:\n"
-        f"1. A concise thread name (3–7 words)\n"
-        f"2. A 2–3 sentence discussion of the thread's intellectual contribution and internal tensions\n"
-        f"3. 6–8 key arguments or claims that recur across these works\n\n"
-        f"Use this exact format:\n"
-        f"**Theme:** [thread name]\n"
-        f"**Discussion:** [2–3 sentences]\n"
+        f"Provide all six sections below. Be specific — cite authors by surname.\n\n"
+        f"**Theme:** [3–7 word thread name]\n"
+        f"**Discussion:** [2–3 sentences on the thread's intellectual contribution and internal tensions]\n"
         f"**Key arguments:**\n"
-        f"- [argument]\n"
-        f"- [argument]\n"
-        f"..."
+        f"- [empirical or analytical claim that recurs across works — 5 to 7 items]\n"
+        f"**Key concepts:**\n"
+        f"- [Term: brief definition (Author/s) — 4 to 6 items]\n"
+        f"**Methods:** [1–2 sentences on dominant research approaches used]\n"
+        f"**Empirical contexts:** [brief description of countries, platforms, cultural settings studied]\n"
     )

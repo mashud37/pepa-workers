@@ -26,7 +26,10 @@ def run(query=None):
             _reply(query, active, history)
             history.append(query)
     else:
-        active = _build_corpus()
+        active, seed_query = _build_corpus()
+        if active and seed_query:
+            _reply(seed_query, active, history)
+            history.append(seed_query)
 
     while True:
         if not active:
@@ -65,32 +68,40 @@ def run(query=None):
                 _print_corpus(active)
 
         elif action == 2:
-            active = _build_corpus()
+            active, seed_query = _build_corpus()
             history = []
+            if active and seed_query:
+                _reply(seed_query, active, history)
+                history.append(seed_query)
 
 
 def _build_corpus():
-    """Pick query-retrieval or manual preselection, return active hit list."""
+    """Pick query-retrieval or manual preselection.
+
+    Returns (active_hits, seed_query) where seed_query is the user's query
+    string when method=Query (so the caller can fire an initial response),
+    or None when method=Manual (corpus is already shown; no auto-response).
+    """
     method = ui.menu("Corpus source", [
         ("Query",           f"retrieve top {_K} works by semantic similarity"),
         ("Select manually", "pick works by author/title keyword, fill remainder to threshold"),
     ])
     if method is None:
-        return []
+        return [], None
 
     if method == 0:
         q = ui.ask("Query")
         if not q:
-            return []
-        return _fetch(q)
+            return [], None
+        return _fetch(q), q
 
     selected = _keyword_select()
     if not selected:
-        return []
+        return [], None
     active = _fill_to_k(selected)
     ui.ok(f"corpus: {len(selected)} selected + {len(active) - len(selected)} auto-filled = {len(active)} works")
     _print_corpus(active)
-    return active
+    return active, None
 
 
 def _fetch(query):
