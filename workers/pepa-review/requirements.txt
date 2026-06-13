@@ -1,0 +1,10 @@
+pyyaml
+numpy
+anthropic
+
+# Optional — install for richer features:
+#   pip install scikit-learn      # k-means clustering for knowledge graph
+#   pip install networkx          # GraphML export
+#   pip install pyvis             # standalone HTML graph export
+#   pip install hdbscan           # density-based clustering (UMAP recipe)
+#   pip install rank_bm25         # hybrid BM25+dense retrieval
