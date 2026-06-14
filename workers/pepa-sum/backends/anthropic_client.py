@@ -4,14 +4,20 @@ Pay-per-use, so idle cost is zero; far better quality and speed than the
 self-hosted CPU model. The API key comes from ANTHROPIC_API_KEY (env or
 env.yaml). Retries transient overload/rate-limit a couple of times.
 """
+import threading
 import time
 
 import config
 
 _RETRYABLE = (429, 500, 502, 503, 529)
 
+_lock = threading.Lock()
+_cached = {"key": None, "client": None}
 
-def complete(system, prompt, max_tokens=2000):
+
+def _client():
+    """One thread-safe client, reused across calls (and threads) so concurrent
+    rundown batches share its connection pool instead of each opening a new one."""
     try:
         import anthropic
     except ImportError:
@@ -24,7 +30,17 @@ def complete(system, prompt, max_tokens=2000):
             "var (run: python manage.py install)."
         )
 
-    client = anthropic.Anthropic(api_key=key)
+    with _lock:
+        if _cached["client"] is None or _cached["key"] != key:
+            _cached["key"] = key
+            _cached["client"] = anthropic.Anthropic(api_key=key)
+        return _cached["client"]
+
+
+def complete(system, prompt, max_tokens=2000):
+    client = _client()
+    import anthropic
+
     for attempt in range(3):
         try:
             msg = client.messages.create(

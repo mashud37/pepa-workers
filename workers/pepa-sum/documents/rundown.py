@@ -5,6 +5,7 @@ abstractively (batched so it scales and works on either backend); `extractive`
 picks each paragraph's most central sentence verbatim, with no model call.
 """
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 import config
 from backends import RUNDOWN_SYSTEM, build_rundown_prompt, complete
@@ -20,11 +21,20 @@ def build(text):
     return "\n".join(f"{i}. {b}" for i, b in enumerate(bullets, 1))
 
 
+def _complete_chunk(chunk):
+    return complete(RUNDOWN_SYSTEM, build_rundown_prompt(chunk), max_tokens=60 * len(chunk) + 200)
+
+
 def _llm_rundown(paragraphs, batch=15):
+    chunks = [paragraphs[start:start + batch] for start in range(0, len(paragraphs), batch)]
+    workers = min(config.max_workers(), len(chunks))
+    if workers <= 1:
+        texts = [_complete_chunk(c) for c in chunks]
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            texts = list(ex.map(_complete_chunk, chunks))
     bullets = []
-    for start in range(0, len(paragraphs), batch):
-        chunk = paragraphs[start:start + batch]
-        text = complete(RUNDOWN_SYSTEM, build_rundown_prompt(chunk), max_tokens=60 * len(chunk) + 200)
+    for text in texts:
         bullets.extend(_parse_numbered(text))
     return bullets
 

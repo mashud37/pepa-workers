@@ -26,6 +26,7 @@ _ENV_OVERRIDE = {
     "BASE_URL": "PEPA_BASE_URL",
     "JOB_TOKEN": "PEPA_JOB_TOKEN",
     "MODEL": "PEPA_MODEL",
+    "MAX_WORKERS": "PEPA_MAX_WORKERS",
 }
 
 BACKENDS = ("anthropic", "cloudrun")
@@ -84,6 +85,18 @@ def job_token():
 
 def model():
     return get("MODEL", "qwen2.5-3b-instruct")
+
+
+def max_workers():
+    """Concurrent LLM requests for the paragraph rundown. The self-hosted
+    cloudrun model is a single scale-to-zero instance, so it stays serial."""
+    if backend() == "cloudrun":
+        return 1
+    try:
+        n = int(get("MAX_WORKERS", 4))
+    except (TypeError, ValueError):
+        n = 4
+    return max(1, min(n, 8))
 
 
 def set_values(updates):

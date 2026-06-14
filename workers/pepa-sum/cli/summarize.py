@@ -7,10 +7,11 @@ left alone: with --force it is redone silently; interactively the run asks
 before overwriting.
 """
 import sys
+import time
 
 import config
 from cli import ui
-from cli.progress import StepSpinner
+from cli.progress import StepSpinner, _CHECK, _LABEL_W
 
 _DOCS = ("sum", "para", "quote")
 _LABELS = {
@@ -100,6 +101,7 @@ def _summarise_one(pdf, out_dir, force=False):
     if not todo:
         return
 
+    t0 = time.time()
     text = _spin("reading + OCR", lambda: read_pdf(pdf), lambda t: f"{len(t):,} chars")
     if not text:
         raise RuntimeError("no extractable text")
@@ -118,14 +120,50 @@ def _summarise_one(pdf, out_dir, force=False):
         "para": lambda: documents.build_rundown(text),
         "quote": lambda: documents.build_quotes(text, signals),
     }
-    for d in todo:
-        def _build_and_write(d=d):
-            write_doc(out_dir, d, pdf.name, builders[d]())
-        _spin(_LABELS[d], _build_and_write, lambda _: "saved")
+
+    llm_todo = [d for d in ("sum", "para") if d in todo]
+
+    if len(llm_todo) == 2:
+        from concurrent.futures import ThreadPoolExecutor
+
+        def _run_both():
+            def _build(d):
+                write_doc(out_dir, d, pdf.name, builders[d]())
+            with ThreadPoolExecutor(max_workers=2) as ex:
+                futures = [ex.submit(_build, d) for d in llm_todo]
+                for f in futures:
+                    f.result()
+
+        _spin("running LLM calls", _run_both)
+        for d in llm_todo:
+            _done_line(_LABELS[d])
+    else:
+        for d in llm_todo:
+            def _build_and_write(d=d):
+                write_doc(out_dir, d, pdf.name, builders[d]())
+            _spin(_LABELS[d], _build_and_write, lambda _: "saved")
+
+    if "quote" in todo:
+        _spin(_LABELS["quote"],
+              lambda: write_doc(out_dir, "quote", pdf.name, builders["quote"]()),
+              lambda _: "saved")
+
+    ui.info(f"done in {time.time() - t0:.0f}s")
 
 
 def _short(name, width=50):
     return name if len(name) <= width else name[:width] + "..."
+
+
+def _done_line(label, summary="saved"):
+    """Print a ✓ completion line matching StepSpinner.done() format (no colour)."""
+    safe = summary.encode("ascii", "replace").decode("ascii")
+    suffix = f"  {safe}" if safe else ""
+    if sys.stdout.isatty():
+        sys.stdout.write(f"  {_CHECK}  {label:<{_LABEL_W}}{suffix}\n")
+        sys.stdout.flush()
+    else:
+        print(f"  {label}... {safe}")
 
 
 def _spin(label, fn, summary=lambda r: ""):

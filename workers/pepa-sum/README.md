@@ -92,7 +92,8 @@ python manage.py deploy
      retrieved passages instead of the whole text, to stay fast and in-budget).
    - `para_`: paragraph rundown — `llm` (model condenses each paragraph) or
      `extractive` (most central sentence per paragraph, no model call), per the
-     `PARA_METHOD` setting.
+     `PARA_METHOD` setting. On the `anthropic` backend the `llm` method runs its
+     paragraph batches concurrently; tune with `MAX_WORKERS` (1–8, default 4).
    - `quote_`: BM25 candidate passages → model picks the best quotes → a
      deterministic verbatim check drops anything not present in the source.
 
