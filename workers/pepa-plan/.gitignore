@@ -1,0 +1,24 @@
+# Secrets
+secrets.yaml
+config.local.yaml
+.env
+
+# Runtime data (kept in tree via .gitkeep)
+data/*
+!data/.gitkeep
+input/*
+!input/.gitkeep
+output/*
+!output/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# OS
+.DS_Store
+Thumbs.db
