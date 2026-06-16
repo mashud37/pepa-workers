@@ -57,7 +57,9 @@ def _format_signals(signals):
     return "\n".join(lines)
 
 
-def build_summary_prompt(text, signals, passages, budget=config.TEXT_BUDGET):
+def build_summary_prompt(text, signals, passages, budget=None):
+    if budget is None:
+        budget = config.text_budget()
     signal_block = _format_signals(signals)
 
     if len(text) <= budget:

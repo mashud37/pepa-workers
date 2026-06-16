@@ -2,17 +2,52 @@
 
 Pay-per-use, so idle cost is zero; far better quality and speed than the
 self-hosted CPU model. The API key comes from ANTHROPIC_API_KEY (env or
-env.yaml). Retries transient overload/rate-limit a couple of times.
+env.yaml). A global semaphore caps how many requests are ever in flight at once
+(so the batch's nested pools can't outrun the account's rate limit), and
+transient overload/rate-limit is ridden out with backoff that honors Retry-After.
 """
+import random
 import threading
 import time
 
 import config
 
 _RETRYABLE = (429, 500, 502, 503, 529)
+_MAX_ATTEMPTS = 5
 
 _lock = threading.Lock()
 _cached = {"key": None, "client": None}
+
+_gate_lock = threading.Lock()
+_gate = {"limit": None, "sem": None}
+
+_usage_lock = threading.Lock()
+# `input`/`output` are live (full-price) tokens; `batch_input`/`batch_output`
+# are Message Batches tokens, billed at 50% (the cost estimate halves them).
+_usage = {"input": 0, "output": 0, "calls": 0, "batch_input": 0, "batch_output": 0}
+
+
+def usage_snapshot():
+    """Cumulative token usage tallied from API responses since the last reset —
+    the basis for the run's cost estimate. Safe to read from any thread."""
+    with _usage_lock:
+        return dict(_usage)
+
+
+def reset_usage():
+    with _usage_lock:
+        _usage.update(input=0, output=0, calls=0, batch_input=0, batch_output=0)
+
+
+def _governor():
+    """One BoundedSemaphore sized to config.max_concurrency(), shared by every
+    thread, so total simultaneous API calls stay within the configured cap."""
+    limit = config.max_concurrency()
+    with _gate_lock:
+        if _gate["sem"] is None or _gate["limit"] != limit:
+            _gate["limit"] = limit
+            _gate["sem"] = threading.BoundedSemaphore(limit)
+        return _gate["sem"]
 
 
 def _client():
@@ -37,30 +72,148 @@ def _client():
         return _cached["client"]
 
 
+def _backoff(attempt, error=None):
+    """Seconds to wait before the next attempt: honor a Retry-After header when
+    the API sends one, else exponential backoff with jitter."""
+    after = _retry_after(error)
+    if after is not None:
+        return after
+    return min(2 ** attempt + random.uniform(0, 1), 30)
+
+
+def _retry_after(error):
+    resp = getattr(error, "response", None)
+    headers = getattr(resp, "headers", None)
+    if not headers:
+        return None
+    try:
+        return float(headers.get("retry-after"))
+    except (TypeError, ValueError):
+        return None
+
+
 def complete(system, prompt, max_tokens=2000):
     client = _client()
     import anthropic
 
-    for attempt in range(3):
+    last = None
+    for attempt in range(_MAX_ATTEMPTS):
         try:
-            msg = client.messages.create(
-                model=config.anthropic_model(),
-                max_tokens=max_tokens,
-                temperature=0.2,
-                system=system,
-                messages=[{"role": "user", "content": prompt}],
-            )
+            with _governor():
+                msg = client.messages.create(
+                    model=config.anthropic_model(),
+                    max_tokens=max_tokens,
+                    temperature=0.2,
+                    system=system,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+            u = getattr(msg, "usage", None)
+            if u is not None:
+                with _usage_lock:
+                    _usage["input"] += getattr(u, "input_tokens", 0) or 0
+                    _usage["output"] += getattr(u, "output_tokens", 0) or 0
+                    _usage["calls"] += 1
             return "".join(
                 b.text for b in msg.content if getattr(b, "type", None) == "text"
             ).strip()
         except anthropic.APIStatusError as e:
             status = getattr(e, "status_code", None)
-            if status in _RETRYABLE and attempt < 2:
-                time.sleep(2 ** attempt)
-                continue
-            raise SystemExit(f"Anthropic API error {status}: {getattr(e, 'message', e)}")
+            if status not in _RETRYABLE:
+                # A non-transient API error (bad request, auth, model) — fatal.
+                raise SystemExit(f"Anthropic API error {status}: {getattr(e, 'message', e)}")
+            last = e
+            if attempt < _MAX_ATTEMPTS - 1:
+                time.sleep(_backoff(attempt, e))
         except anthropic.APIConnectionError as e:
-            if attempt < 2:
-                time.sleep(2 ** attempt)
+            last = e
+            if attempt < _MAX_ATTEMPTS - 1:
+                time.sleep(_backoff(attempt))
+
+    # Transient errors exhausted retries: recoverable per paper, not fatal to the
+    # whole batch — the caller logs it and moves on (re-run picks the paper up).
+    raise RuntimeError(f"Anthropic API unavailable after {_MAX_ATTEMPTS} attempts: {last}")
+
+
+# Message Batches API: same model and request shape as complete() above
+# (model, max_tokens, temperature=0.2, system, single user message), so a paper
+# summarised via a batch is drawn from the identical model and configuration as
+# the live path — only the transport differs. 50% cheaper, asynchronous.
+_BATCH_MAX_REQUESTS = 90000       # API ceiling is 100k; stay under it
+# API caps total request size at 256 MB. sum_ prompts embed the full paper text,
+# so a large run hits the size ceiling long before the count one — split on both.
+# Conservative byte budget (margin under 256 MB, and chars under-count UTF-8).
+_BATCH_MAX_BYTES = 180_000_000
+
+
+def run_batch(requests, on_progress=None):
+    """Run many LLM calls through the Messages Batches API.
+
+    `requests` is a list of {custom_id, system, prompt, max_tokens}. Returns
+    {custom_id: text} for every request that succeeded; failed/expired ones are
+    simply absent (the caller treats a missing id as a per-paper failure and the
+    paper is retried on the next run). Polls until the batch ends; on Ctrl-C the
+    in-flight batch is cancelled to stop spend, then the interrupt propagates."""
+    client = _client()
+    model = config.anthropic_model()
+    poll = config.batch_poll_seconds()
+    results = {}
+    for sub in _sub_batches(requests, _BATCH_MAX_REQUESTS, _BATCH_MAX_BYTES):
+        batch = client.messages.batches.create(requests=[
+            {
+                "custom_id": r["custom_id"],
+                "params": {
+                    "model": model,
+                    "max_tokens": r["max_tokens"],
+                    "temperature": 0.2,
+                    "system": r["system"],
+                    "messages": [{"role": "user", "content": r["prompt"]}],
+                },
+            }
+            for r in sub
+        ])
+        try:
+            while True:
+                status = client.messages.batches.retrieve(batch.id)
+                if on_progress:
+                    on_progress(status)
+                if status.processing_status == "ended":
+                    break
+                time.sleep(poll)
+        except KeyboardInterrupt:
+            try:
+                client.messages.batches.cancel(batch.id)
+            except Exception:
+                pass
+            raise
+        for res in client.messages.batches.results(batch.id):
+            if res.result.type != "succeeded":
                 continue
-            raise SystemExit(f"Could not reach the Anthropic API: {e}")
+            msg = res.result.message
+            results[res.custom_id] = "".join(
+                b.text for b in msg.content if getattr(b, "type", None) == "text"
+            ).strip()
+            u = getattr(msg, "usage", None)
+            if u is not None:
+                with _usage_lock:
+                    _usage["batch_input"] += getattr(u, "input_tokens", 0) or 0
+                    _usage["batch_output"] += getattr(u, "output_tokens", 0) or 0
+                    _usage["calls"] += 1
+    return results
+
+
+def _sub_batches(seq, max_count, max_bytes):
+    """Split requests into batches under BOTH the count and the total-size ceiling.
+    A single request larger than max_bytes still goes out on its own (one paper's
+    text is well under the limit); the size guard only prevents many papers from
+    summing past it. Size is estimated from prompt+system chars plus per-request
+    overhead — cheap, and the budget keeps margin for the under-count vs UTF-8."""
+    batch, size = [], 0
+    for r in seq:
+        r_bytes = len(r["system"]) + len(r["prompt"]) + 256
+        if batch and (len(batch) >= max_count or size + r_bytes > max_bytes):
+            yield batch
+            batch, size = [], 0
+        batch.append(r)
+        size += r_bytes
+    if batch:
+        yield batch

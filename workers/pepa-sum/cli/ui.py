@@ -66,10 +66,22 @@ def step(text):
     print(); print(_c(BOLD + BLUE, f"{_SYM['step']} {text}"))
 
 
-def ok(text):    print(f"  {_c(GREEN, _SYM['ok'])} {text}")
-def warn(text):  print(f"  {_c(YELLOW, _SYM['warn'])} {text}")
-def info(text):  print(f"  {_c(DIM, _SYM['info'])} {text}")
-def error(text): print(f"  {_c(RED, _SYM['err'])} {text}")
+_LINE_STYLE = {"ok": (GREEN, "ok"), "warn": (YELLOW, "warn"),
+               "info": (DIM, "info"), "error": (RED, "err")}
+
+
+def line(kind, text):
+    """Build a status line string (same style as ok/warn/info/error) without
+    printing it — for callers that must route output through a live progress
+    spinner instead of straight to stdout."""
+    color, sym = _LINE_STYLE[kind]
+    return f"  {_c(color, _SYM[sym])} {text}"
+
+
+def ok(text):    print(line("ok", text))
+def warn(text):  print(line("warn", text))
+def info(text):  print(line("info", text))
+def error(text): print(line("error", text))
 
 
 def abort(text, code=1):

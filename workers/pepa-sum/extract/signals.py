@@ -7,9 +7,12 @@ the raw material of the paper's arguments). They are hints handed to the model
 to sharpen extraction — they never replace the full text.
 """
 import re
+import threading
 from collections import Counter
 
-_nlp = None
+# spaCy's pipeline is not safe to call from multiple threads at once, so each
+# worker thread loads and uses its own model.
+_local = threading.local()
 _ENTITY_LABELS = {"ORG", "PERSON", "GPE", "LOC", "PRODUCT", "WORK_OF_ART",
                   "LAW", "EVENT", "NORP", "FAC"}
 # Discourse verbs are scaffolding ("show", "is"), not the paper's claims.
@@ -18,11 +21,12 @@ _STOP_VERBS = {"be", "have", "do", "show", "use", "make", "give", "find",
 
 
 def _load_nlp():
-    global _nlp
-    if _nlp is None:
+    nlp = getattr(_local, "nlp", None)
+    if nlp is None:
         import spacy
-        _nlp = spacy.load("en_core_web_sm")
-    return _nlp
+        nlp = spacy.load("en_core_web_sm")
+        _local.nlp = nlp
+    return nlp
 
 
 def _norm(s):

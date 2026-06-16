@@ -21,6 +21,8 @@ def main():
     s.add_argument("-i", "--input", type=Path, help="Input folder of PDFs")
     s.add_argument("-o", "--output", type=Path, help="Output folder for documents")
     s.add_argument("-f", "--force", action="store_true", help="Redo papers already processed")
+    s.add_argument("--mode", choices=["auto", "serial", "parallel", "batch"],
+                   help="Execution mode (default: auto — chosen by estimated time)")
 
     sub.add_parser("settings", help="Choose backend + paragraph-rundown method")
     sub.add_parser("config", help="Print effective config and cost note")
@@ -31,7 +33,8 @@ def main():
     if args.command is None:
         return menu.main()
     if args.command == "summarize":
-        return summarize.run(input_dir=args.input, output_dir=args.output, force=args.force)
+        return summarize.run(input_dir=args.input, output_dir=args.output,
+                             force=args.force, mode=args.mode)
     if args.command == "settings":
         return settings.run()
     if args.command == "config":

@@ -1,21 +1,32 @@
 """Extract text from a PDF, falling back to OCR for image-only pages.
 
-pypdf reads the embedded text layer, which born-digital academic PDFs almost
-always have. A page that yields almost no text is treated as scanned: it is
-rendered and OCR'd locally via tesseract. That OCR path is optional and lazily
-imported, so the tool still runs (with a warning) when poppler/tesseract are
+PyMuPDF reads the embedded text layer, which born-digital academic PDFs almost
+always have; it is C-fast and returns at once on image-only pages, so a scanned
+or print-to-PDF file is recognised as text-less instantly rather than stalling a
+pure-Python parser. pypdf is the fallback when PyMuPDF is not installed. A page
+that yields almost no text is treated as scanned: with OCR enabled it is rendered
+via PyMuPDF and OCR'd locally via tesseract. The OCR path is optional and lazily
+imported, so the tool still runs (with a warning) when PyMuPDF or tesseract are
 not installed.
 """
+import logging
 import re
 from collections import Counter
 from pathlib import Path
 
 from pypdf import PdfReader
 
+logging.getLogger("pypdf").setLevel(logging.ERROR)
+
+import config
 from cli import ui
 
 # Below this many characters a page is assumed to be scanned, not born-digital.
 _OCR_THRESHOLD = 40
+# In `auto` mode, OCR only kicks in when at least this fraction of the pages are
+# sparse — i.e. the document is genuinely scanned, not a born-digital paper with
+# a few figure/equation pages that happen to carry no extractable text.
+_OCR_DOC_FRACTION = 0.5
 
 # A line that is just a page number (arabic or roman), at a page edge.
 _PAGE_NUM_RE = re.compile(r"^\s*(?:\d{1,4}|[ivxlcdm]{1,6})\s*$", re.IGNORECASE)
@@ -29,20 +40,58 @@ _REF_HEADING = re.compile(
 
 def read_pdf(path) -> str:
     path = Path(path)
-    reader = PdfReader(str(path))
-    pages = []
-    scanned = []
-    for n, page in enumerate(reader.pages):
-        text = (page.extract_text() or "").strip()
-        if len(text) < _OCR_THRESHOLD:
-            scanned.append(n)
-        pages.append(text)
+    pages = _text_pages(path)
+    scanned = [n for n, t in enumerate(pages) if len(t) < _OCR_THRESHOLD]
 
-    if scanned:
+    if scanned and _should_ocr(len(scanned), len(pages)):
         for n, text in _ocr_pages(path, scanned):
             pages[n] = text
     pages = _strip_running_headers(pages)
     return _strip_references("\n\n".join(p for p in pages if p).strip())
+
+
+def _text_pages(path):
+    """Per-page text via PyMuPDF (fitz) — C-fast, and instant on image-only pages,
+    so a scanned/print-to-PDF is recognised as text-less at once instead of grinding
+    pypdf's pure-Python content-stream parser for minutes. Falls back to pypdf only
+    when PyMuPDF is not installed."""
+    try:
+        import fitz
+    except ImportError:
+        return _text_pages_pypdf(path)
+    # Malformed/print-to-PDF content streams make MuPDF print "syntax error in
+    # content stream" straight to stderr; the text still extracts fine, so mute
+    # the chatter — left on, it collides with the progress spinner's live line.
+    try:
+        fitz.TOOLS.mupdf_display_errors(False)
+    except Exception:
+        pass
+    out = []
+    with fitz.open(str(path)) as doc:
+        for page in doc:
+            raw = (page.get_text("text") or "").strip()
+            out.append(raw.encode("utf-8", "surrogatepass").decode("utf-8", "ignore"))
+    return out
+
+
+def _text_pages_pypdf(path):
+    out = []
+    for page in PdfReader(str(path)).pages:
+        raw = (page.extract_text() or "").strip()
+        out.append(raw.encode("utf-8", "surrogatepass").decode("utf-8", "ignore"))
+    return out
+
+
+def _should_ocr(num_scanned, num_pages):
+    """Whether to run the (slow) OCR path for this document. `off` never does;
+    `force` always does; `auto` only when the document is mostly scanned, so a
+    born-digital paper's odd image page never drags it onto the OCR path."""
+    mode = config.ocr_mode()
+    if mode == "off":
+        return False
+    if mode == "force":
+        return True
+    return num_pages > 0 and num_scanned / num_pages >= _OCR_DOC_FRACTION
 
 
 def _hdr_key(line):
@@ -97,16 +146,29 @@ def _ocr_pages(path, page_numbers):
 
     Degrades to a warning and no text when the OCR stack is unavailable."""
     try:
+        import fitz
         import pytesseract
-        from pdf2image import convert_from_path
+        from PIL import Image
     except ImportError:
         ui.warn(f"{path.name}: {len(page_numbers)} scanned page(s) skipped "
-                "(install pytesseract + pdf2image, plus tesseract & poppler)")
+                "(install PyMuPDF + pytesseract, plus tesseract)")
         return
 
-    for n in page_numbers:
-        try:
-            image = convert_from_path(str(path), first_page=n + 1, last_page=n + 1)[0]
-            yield n, pytesseract.image_to_string(image).strip()
-        except Exception as e:
-            ui.warn(f"{path.name}: OCR failed on page {n + 1} ({e})")
+    dpi = config.ocr_dpi()
+    scale = dpi / 72
+    total = len(page_numbers)
+    # Heads-up BEFORE the slow loop starts, so a scanned paper reads as "OCR is
+    # working" rather than a hang. Set OCR: off (or PEPA_OCR=off) to skip it.
+    ui.warn(f"{path.name}: scanned — OCR-ing {total} page(s) at {dpi} dpi (slow)")
+    doc = fitz.open(str(path))
+    try:
+        for i, n in enumerate(page_numbers, 1):
+            try:
+                pix = doc[n].get_pixmap(matrix=fitz.Matrix(scale, scale))
+                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                raw = pytesseract.image_to_string(img).strip()
+                yield n, raw.encode("utf-8", "surrogatepass").decode("utf-8", "ignore")
+            except Exception as e:
+                ui.warn(f"{path.name}: OCR failed on page {n + 1} ({e})")
+    finally:
+        doc.close()
