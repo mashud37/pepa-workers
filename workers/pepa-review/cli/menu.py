@@ -14,6 +14,7 @@ def main():
             ("Explore literature",   "interactive discovery over the corpus"),
             ("Corpus map",           "cluster works into thematic threads, write report"),
             ("Build / refresh index","embed all sum_ briefs into the retrieval index"),
+            ("Bibliographic data",   "ingest DOIs/refs, export document reference, citation graph"),
             ("Show config",          "paths, models, index status"),
             ("Install / setup",      "create secrets.yaml, check deps"),
         ])
@@ -36,11 +37,37 @@ def main():
             from cli import index_cmd
             index_cmd.run()
         elif choice == 5:
+            _biblio_menu()
+        elif choice == 6:
             from cli import show_config
             show_config.run()
-        elif choice == 6:
+        elif choice == 7:
             from cli import install
             install.run()
+
+
+def _biblio_menu():
+    from cli import biblio_cmd
+    while True:
+        sub = ui.menu("Bibliographic data", [
+            ("Stats",           "summary counts for biblio.db"),
+            ("Export CSVs",     "write works.csv + citations.csv to output/"),
+            ("Citation graph",  "directed corpus→corpus citation network (HTML/GraphML)"),
+            ("Coupling graph",  "bibliographic coupling network (shared references)"),
+            ("Ingest data",     "load upstream works/citations file into biblio.db"),
+        ])
+        if sub is None:
+            break
+        elif sub == 0:
+            biblio_cmd.run("stats")
+        elif sub == 1:
+            biblio_cmd.run("export")
+        elif sub == 2:
+            biblio_cmd.run("network", graph_type="citation", fmt="html")
+        elif sub == 3:
+            biblio_cmd.run("network", graph_type="coupling", fmt="html")
+        elif sub == 4:
+            biblio_cmd.run("ingest")
 
 
 def _corpus_status():

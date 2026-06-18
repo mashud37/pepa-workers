@@ -32,6 +32,20 @@ def main():
     sub.add_parser("config", help="Show effective configuration")
     sub.add_parser("install", help="Set up files and check dependencies")
 
+    bi = sub.add_parser("biblio", help="Bibliographic enrichment (ingest, export, stats, network)")
+    bi.add_argument("subcmd", choices=["ingest", "export", "stats", "network"],
+                    help="ingest | export | stats | network")
+    bi.add_argument("--works", default=None, metavar="FILE",
+                    help="Works metadata file (CSV or JSONL) — required for ingest")
+    bi.add_argument("--citations", default=None, metavar="FILE",
+                    help="Citations edge-list file (CSV or JSONL) — optional for ingest")
+    bi.add_argument("--graph-type", default="citation", choices=["citation", "coupling"],
+                    metavar="TYPE", help="citation (default) or coupling")
+    bi.add_argument("--format", default="html", choices=["html", "graphml"],
+                    metavar="FMT", help="html (default) or graphml")
+    bi.add_argument("--output", default=None, metavar="DIR",
+                    help="Output directory (default: output/)")
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -56,6 +70,16 @@ def main():
         show_config.run()
     elif args.command == "install":
         install.run()
+    elif args.command == "biblio":
+        from cli import biblio_cmd
+        biblio_cmd.run(
+            args.subcmd,
+            works_file=args.works,
+            citations_file=args.citations,
+            graph_type=args.graph_type,
+            fmt=args.format,
+            output_dir=args.output,
+        )
 
 
 if __name__ == "__main__":

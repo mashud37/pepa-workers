@@ -9,6 +9,7 @@ import config
 
 
 def _gemini(model, texts):
+    import time
     import urllib.error
     key = config.gemini_api_key()
     out = []
@@ -18,21 +19,25 @@ def _gemini(model, texts):
             f"{model}:embedContent?key={key}"
         )
         body = {"model": f"models/{model}", "content": {"parts": [{"text": t}]}}
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(body).encode(),
-            headers={"Content-Type": "application/json"},
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=120) as r:
-                out.append(json.load(r)["embedding"]["values"])
-        except urllib.error.HTTPError as e:
-            body_bytes = e.read()
+        data = json.dumps(body).encode()
+        for attempt in range(5):
+            req = urllib.request.Request(
+                url, data=data, headers={"Content-Type": "application/json"}
+            )
             try:
-                detail = json.loads(body_bytes).get("error", {}).get("message", body_bytes.decode())
-            except Exception:
-                detail = body_bytes.decode(errors="replace")
-            raise SystemExit(f"Gemini embed API {e.code}: {detail}")
+                with urllib.request.urlopen(req, timeout=120) as r:
+                    out.append(json.load(r)["embedding"]["values"])
+                break
+            except urllib.error.HTTPError as e:
+                if e.code in (429, 500, 503) and attempt < 4:
+                    time.sleep(min(2 ** attempt, 60))
+                    continue
+                body_bytes = e.read()
+                try:
+                    detail = json.loads(body_bytes).get("error", {}).get("message", body_bytes.decode())
+                except Exception:
+                    detail = body_bytes.decode(errors="replace")
+                raise RuntimeError(f"Gemini embed API {e.code}: {detail}")
     return out
 
 

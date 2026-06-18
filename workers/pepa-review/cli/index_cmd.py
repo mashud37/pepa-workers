@@ -29,15 +29,18 @@ def run(force=False):
     sp = progress.StepSpinner("indexing")
     sp.start()
 
-    def on_progress(i, total_, label):
-        sp._label = f"[{i}/{total_}] {label[:18]}"
+    def on_progress(i, total_, _label):
+        sp._label = f"embedding [{i}/{total_}]"
+
+    def on_status(msg):
+        sp._label = msg
 
     try:
         from index.store import build_index
-        n, model_used = build_index(force=force, progress_cb=on_progress)
+        n, model_used = build_index(force=force, progress_cb=on_progress, status_cb=on_status)
         sp.done(f"{n} records")
-    except Exception as e:
+    except BaseException as e:
         sp.done("error")
-        raise SystemExit(str(e))
+        raise SystemExit(str(e)) from None
 
     ui.ok(f"index ready: {n} records, {model_used}")

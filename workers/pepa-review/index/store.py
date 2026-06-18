@@ -14,11 +14,14 @@ from corpus.metadata import work_list
 from corpus.parse_sum import parse_sum
 
 
-def build_index(force=False, progress_cb=None):
+_CHECKPOINT_EVERY = 100
+
+
+def build_index(force=False, progress_cb=None, status_cb=None):
     """Embed all sum_ briefs and persist to data/index.json.
 
     Skips papers already in the index unless force=True. Calls
-    progress_cb(i, total, label) per paper when provided.
+    progress_cb(i, total, label) per paper and status_cb(msg) at phase changes.
     Returns (total_records, model_string).
     """
     existing = _load_raw() or {}
@@ -30,12 +33,17 @@ def build_index(force=False, progress_cb=None):
     if not to_index:
         return len(existing.get("records", [])), existing.get("model", "")
 
-    texts, metas = [], []
+    base_records = [] if force else list(existing.get("records", []))
+    base_vectors = [] if force else list(existing.get("vectors", []))
+
+    new_records, new_vectors, model = [], [], ""
     for i, work in enumerate(to_index):
+        if progress_cb:
+            progress_cb(i + 1, len(to_index), work["authors"])
         parsed = parse_sum(work["sum_path"])
         text = _brief_text(parsed)
-        texts.append(text)
-        metas.append({
+        vecs, model = embed([text])
+        new_records.append({
             "base":           work["base"],
             "authors":        work["authors"],
             "title":          work["title"],
@@ -48,14 +56,15 @@ def build_index(force=False, progress_cb=None):
             "conclusions":    parsed.get("conclusions", ""),
             "literature":     parsed.get("literature", ""),
         })
-        if progress_cb:
-            progress_cb(i + 1, len(to_index), work["authors"])
+        new_vectors.append(vecs[0])
 
-    vecs, model = embed(texts)
+        if (i + 1) % _CHECKPOINT_EVERY == 0:
+            _write_index(base_records + new_records, base_vectors + new_vectors, model)
+
     provider = model.split("/", 1)[0]
 
     if force or not existing:
-        records, vectors = metas, vecs
+        records, vectors = new_records, new_vectors
     else:
         cur_provider = existing.get("provider", "")
         if cur_provider and cur_provider != provider:
@@ -63,14 +72,12 @@ def build_index(force=False, progress_cb=None):
                 f"Index was built with '{cur_provider}' embeddings but the active "
                 f"provider is now '{provider}'. Re-run: python manage.py index --force"
             )
-        records = existing["records"] + metas
-        vectors = existing["vectors"] + vecs
+        records = base_records + new_records
+        vectors = base_vectors + new_vectors
 
-    dim = len(vectors[0]) if vectors else 0
-    new_idx = {"provider": provider, "model": model, "dim": dim,
-               "records": records, "vectors": vectors}
-    config.INDEX_FILE.parent.mkdir(parents=True, exist_ok=True)
-    config.INDEX_FILE.write_text(json.dumps(new_idx), encoding="utf-8")
+    if status_cb:
+        status_cb("saving index")
+    _write_index(records, vectors, model)
     return len(records), model
 
 
@@ -160,6 +167,15 @@ def _rrf(rankings, rrf_k=60):
         for rank, idx in enumerate(ranking):
             scores[idx] += 1.0 / (rrf_k + rank + 1)
     return sorted(scores, key=scores.get, reverse=True)
+
+
+def _write_index(records, vectors, model):
+    provider = model.split("/", 1)[0] if model else ""
+    dim = len(vectors[0]) if vectors else 0
+    data = {"provider": provider, "model": model, "dim": dim,
+            "records": records, "vectors": vectors}
+    config.INDEX_FILE.parent.mkdir(parents=True, exist_ok=True)
+    config.INDEX_FILE.write_text(json.dumps(data), encoding="utf-8")
 
 
 def _load_raw():

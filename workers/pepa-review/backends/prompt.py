@@ -14,10 +14,84 @@ def review_prompt(outline, briefs_text):
     return (
         f"USER OUTLINE AND ARGUMENTS:\n{outline}\n\n"
         f"SELECTED WORKS (sum_ briefs):\n{briefs_text}\n\n"
-        "Write a thematically organised literature review that directly advances the "
-        "arguments in the outline. For each theme, synthesise the works — showing agreements, "
-        "divergences, and gaps. Cite every claim. End with a short synthesis paragraph "
-        "tying the themes together."
+        "Follow the outline's structure: treat each numbered point, heading, or paragraph "
+        "marker in the outline as its own section with its own `##` heading — do not collapse "
+        "them into a single section. Under each, synthesise the works that bear on that point, "
+        "showing agreements, divergences, and gaps, and cite every claim inline. End with a "
+        "short synthesis paragraph tying the sections together."
+    )
+
+
+def review_plan_system():
+    return (
+        "You are a scholarly research assistant planning the structure of a literature review. "
+        "You identify the key terms and the genuine tensions running through a body of work, "
+        "then organise them into a small number of overarching sections. Be specific and draw "
+        "directly on the works provided."
+    )
+
+
+def review_plan_prompt(outline, briefs_text, terms, n_min, n_max):
+    terms_block = f"DISTINCTIVE TERMS ACROSS THE WORKS (c-TF-IDF): {', '.join(terms)}\n\n" if terms else ""
+    return (
+        f"USER PROMPT / ROUGH OUTLINE:\n{outline}\n\n"
+        f"SELECTED WORKS (sum_ briefs):\n{briefs_text}\n\n"
+        f"{terms_block}"
+        f"First name the key terms and the central tensions in this literature. Then map them "
+        f"into {n_min} to {n_max} overarching sections that together structure a review answering "
+        f"the prompt. Use exactly this format:\n\n"
+        f"**Key terms and tensions:**\n"
+        f"- [term or tension — one line each, 4 to 7 items]\n\n"
+        f"**Section:** [section title]\n"
+        f"- Covers: [the terms/tensions this section develops]\n"
+        f"- Works: [Author surnames of the works that belong here]\n\n"
+        f"(repeat the **Section:** block for each section, in reading order)"
+    )
+
+
+def review_section_system():
+    return (
+        "You are a scholarly research assistant drafting one section of an academic literature "
+        "review. Write in a formal, analytical style. Synthesise the works rather than "
+        "summarising them one by one; show where they agree, diverge, and complement each other. "
+        "Cite works inline as (AuthorLastname Year-or-keyword)."
+    )
+
+
+def review_section_prompt(title, covers, briefs_text, debate_block=""):
+    covers_block = f"This section develops: {covers}\n\n" if covers else ""
+    return (
+        f"SECTION TITLE: {title}\n\n"
+        f"{covers_block}"
+        f"WORKS FOR THIS SECTION (sum_ briefs):\n{briefs_text}\n\n"
+        f"{debate_block}"
+        f"Draft this section as 1 to 3 connected paragraphs under a `## {title}` heading. "
+        f"Advance an argument; do not list works. Cite every claim inline."
+    )
+
+
+def gaps_section_system():
+    return (
+        "You are a research assistant reviewing one section of a scholarly draft against a corpus "
+        "of works it has not yet cited. For that section only, you recommend the most relevant "
+        "missed works, the arguments the section should engage, and the terms it should "
+        "incorporate. Be specific and skip anything not genuinely relevant to this section."
+    )
+
+
+def gaps_section_prompt(section_text, candidate_briefs, terms):
+    terms_block = f"CANDIDATE DISTINCTIVE TERMS (from the missed works): {', '.join(terms)}\n\n" if terms else ""
+    return (
+        f"DRAFT SECTION:\n{section_text}\n\n"
+        f"CANDIDATE WORKS NOT YET CITED (most similar to this section):\n{candidate_briefs}\n\n"
+        f"{terms_block}"
+        f"Use exactly this format; write 'none' under a heading if nothing applies:\n\n"
+        f"**Works to add:**\n"
+        f"- [Authors — keyword]: the specific argument or evidence it would contribute here\n"
+        f"**Arguments to engage:**\n"
+        f"- [an argument from these works this section should address]\n"
+        f"**Terms to incorporate:**\n"
+        f"- [a term or concept the section should name, with a 4-6 word gloss]"
     )
 
 

@@ -52,6 +52,21 @@ def run():
     else:
         ui.info("no graph yet — run: python manage.py graph")
 
+    ui.step("Bibliographic enrichment")
+    ui.info(f"use_biblio: {'on' if config.use_biblio() else 'off'}")
+    if config.BIBLIO_DB.exists():
+        from biblio.store import stats
+        s = stats()
+        if s:
+            ui.ok(
+                f"biblio.db: {s['works']} works, "
+                f"{s['internal_edges']} internal citation edges"
+            )
+        else:
+            ui.info("biblio.db present but empty")
+    else:
+        ui.info("biblio.db absent — run: python manage.py biblio ingest")
+
     ui.step("Paths")
     ui.info(f"data/:   {config.DATA_DIR}")
     ui.info(f"input/:  {config.INPUT_DIR}")

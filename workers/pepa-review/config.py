@@ -17,6 +17,29 @@ SECRETS_FILE = ROOT / "secrets.yaml"
 SECRETS_EXAMPLE = ROOT / "secrets.example.yaml"
 INDEX_FILE = DATA_DIR / "index.json"
 GRAPH_FILE = DATA_DIR / "graph.json"
+BIBLIO_DB  = DATA_DIR / "biblio.db"
+
+# Minimum match_confidence to include a works row in authority/coupling signals
+BIBLIO_MIN_CONFIDENCE = 0.7
+# Cosine threshold for coupling-graph edges (shared-reference adjacency)
+BIBLIO_COUPLING_THRESHOLD = 2       # min shared references to form a coupling edge
+# Weight of the citation feature channel when added to map.py (Phase 3)
+MAP_WEIGHT_CITATION = 0.15
+# Review biblio anchoring: anchors are top-tercile cited_by_count AND older-half year;
+# each anchor pairs with its nearest newer-half works (by embedding) as interlocutors.
+BIBLIO_ANCHOR_CITE_PCTL = 0.66      # citation percentile at/above which a work may anchor
+BIBLIO_INTERLOCUTOR_TOPN = 2        # newer works paired to each anchor
+
+# Gap-check (WS2): hybrid hits retrieved per draft paragraph
+GAPS_PARA_K = 5
+
+# Literature review (WS1)
+REVIEW_CANDIDATE_K = 40             # broad candidate pool retrieved for the outline
+REVIEW_SECTIONS_MIN = 3            # synthesised-structure section band
+REVIEW_SECTIONS_MAX = 4
+
+# Cap on concurrent LLM calls for per-section/per-thread fan-out
+LLM_MAX_WORKERS = 4
 
 GENERATION_MODEL_DEFAULT = "claude-haiku-4-5-20251001"
 GENERATION_MODEL_QUALITY = "claude-sonnet-4-6"
@@ -43,6 +66,7 @@ _ENV_OVERRIDE = {
     "gemini_api_key":   "GEMINI_API_KEY",
     "ollama_base_url":  "PEPAREVIEW_OLLAMA_URL",
     "embed_model":      "PEPAREVIEW_EMBED_MODEL",
+    "use_biblio":       "PEPAREVIEW_USE_BIBLIO",
 }
 
 _PLACEHOLDERS = {"", "REPLACE_ME", "changeme"}
@@ -93,6 +117,12 @@ def embed_config():
     if gemini_api_key():
         return ("gemini", get("embed_model", EMBED_MODEL_GEMINI))
     return (None, None)
+
+
+def use_biblio():
+    """True when bibliographic enrichment is enabled and biblio.db exists."""
+    raw = get("use_biblio", "false")
+    return str(raw).lower() in ("1", "true", "yes") and BIBLIO_DB.exists()
 
 
 def set_values(updates):

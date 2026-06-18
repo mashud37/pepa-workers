@@ -34,11 +34,24 @@ def load_corpus():
             "quote_path": str(quote_files[base]) if base in quote_files else None,
         }
         for base, path in sorted(sum_files.items())
+        if _has_template(path)
     ]
+
+
+def _has_template(path):
+    """True when the sum_ file contains the filled-out markdown template.
+
+    A successful run always produces a ## H2 title header; a plain-text LLM
+    error message never does, so this distinguishes real summaries from stubs."""
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+        return "\n## " in text or text.startswith("## ")
+    except OSError:
+        return False
 
 
 def paper_count():
     d = config.corpus_dir()
     if not d.exists():
         return 0
-    return sum(1 for _ in d.glob("sum_*.md"))
+    return sum(1 for f in d.glob("sum_*.md") if _has_template(f))
