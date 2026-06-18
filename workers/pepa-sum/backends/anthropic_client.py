@@ -15,6 +15,37 @@ import config
 _RETRYABLE = (429, 500, 502, 503, 529)
 _MAX_ATTEMPTS = 5
 
+# Anthropic models expose a 200k-token context window. A prompt that, with its
+# reserved output, would exceed it returns a fatal 400 mid-run — and a single
+# oversized paper would otherwise abort the whole batch (serial re-raises the
+# SystemExit; a batch request just fails silently and re-fails on every re-run).
+# A cheap characters-based estimate (dense academic text runs ~3.5 chars/token)
+# trips before the call so the paper is skipped cleanly; the API's own 400 is the
+# authoritative backstop for anything the estimate under-counts.
+CONTEXT_LIMIT_TOKENS = 200_000
+_CHARS_PER_TOKEN = 3.5
+_CONTEXT_MARGIN_TOKENS = 1_000
+
+
+class PromptTooLong(Exception):
+    """A request would exceed the model's context window. Recoverable per paper:
+    the caller logs it and moves on, the paper is simply not produced."""
+
+
+def _estimate_tokens(text):
+    return int(len(text) / _CHARS_PER_TOKEN)
+
+
+def request_token_estimate(system, prompt, max_tokens):
+    """Conservative tokens this request occupies: input text plus reserved output."""
+    return _estimate_tokens(system) + _estimate_tokens(prompt) + max_tokens
+
+
+def would_overflow(system, prompt, max_tokens):
+    """Whether the request is too large for the context window (estimate only)."""
+    est = request_token_estimate(system, prompt, max_tokens)
+    return est + _CONTEXT_MARGIN_TOKENS > CONTEXT_LIMIT_TOKENS
+
 _lock = threading.Lock()
 _cached = {"key": None, "client": None}
 
@@ -93,6 +124,12 @@ def _retry_after(error):
 
 
 def complete(system, prompt, max_tokens=2000):
+    if would_overflow(system, prompt, max_tokens):
+        est = request_token_estimate(system, prompt, max_tokens)
+        raise PromptTooLong(
+            f"prompt ~{est:,} tokens exceeds the {CONTEXT_LIMIT_TOKENS:,}-token "
+            "context window — paper skipped (lower the text budget to shorten it)"
+        )
     client = _client()
     import anthropic
 
@@ -118,9 +155,13 @@ def complete(system, prompt, max_tokens=2000):
             ).strip()
         except anthropic.APIStatusError as e:
             status = getattr(e, "status_code", None)
+            detail = str(getattr(e, "message", e))
+            if status == 400 and "too long" in detail.lower():
+                # Estimate missed it: skip this paper rather than abort the run.
+                raise PromptTooLong(f"prompt rejected as too long — paper skipped ({detail})")
             if status not in _RETRYABLE:
                 # A non-transient API error (bad request, auth, model) — fatal.
-                raise SystemExit(f"Anthropic API error {status}: {getattr(e, 'message', e)}")
+                raise SystemExit(f"Anthropic API error {status}: {detail}")
             last = e
             if attempt < _MAX_ATTEMPTS - 1:
                 time.sleep(_backoff(attempt, e))

@@ -81,6 +81,11 @@ python manage.py deploy
 A paper that keeps failing is logged and skipped, not fatal — just re-run to pick
 it up (its documents are absent, so it is retried). This is true in every mode.
 
+> **A paper too large for the model's context** is skipped with a clear message
+> rather than aborting the run, and a re-run won't fix it (the failure is not
+> transient). Lower the text budget so its body is summarised from the opening
+> plus retrieved passages instead of in full.
+
 ## Execution modes
 
 The run picks how to execute by **estimated wall-clock time** for the number of

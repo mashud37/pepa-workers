@@ -20,6 +20,10 @@ _DEFAULTS = {"BACKEND": "anthropic", "PARA_METHOD": "llm", "ON_EXISTING": "ask"}
 
 def run():
     ui.header("Install / setup")
+    ui.info("  · 1/4  Directories")
+    ui.info("  · 2/4  Environment / secrets")
+    ui.info("  · 3/4  Python dependencies")
+    ui.info("  · 4/4  spaCy model")
     _ensure_dirs()
     _ensure_env()
     _check_deps()
@@ -33,6 +37,7 @@ def run():
 
 
 def _ensure_dirs():
+    ui.step("Directories")
     for d in (config.INPUT_DIR, config.OUTPUT_DIR, config.DATA_DIR):
         d.mkdir(parents=True, exist_ok=True)
         (d / ".gitkeep").touch()
@@ -40,6 +45,7 @@ def _ensure_dirs():
 
 
 def _ensure_env():
+    ui.step("Environment / secrets")
     if not config.ENV_FILE.exists():
         shutil.copyfile(config.ENV_EXAMPLE, config.ENV_FILE)
         ui.ok("created env.yaml from template")
@@ -79,6 +85,7 @@ def _prompt_api_key():
 
 
 def _check_deps():
+    ui.step("Python dependencies")
     import importlib
     missing = [m for m in _CORE_DEPS if not _importable(importlib, m)]
     if missing:
@@ -96,9 +103,15 @@ def _importable(importlib, name):
 
 
 def _check_spacy_model():
+    from cli.progress import StepSpinner
+    ui.step("spaCy model")
+    sp = StepSpinner("loading en_core_web_sm")
+    sp.start()
     try:
         import spacy
         spacy.load("en_core_web_sm")
+        sp.done("present")
         ui.ok("spaCy model en_core_web_sm present")
     except Exception:
+        sp.done("missing")
         ui.warn("spaCy model missing — python -m spacy download en_core_web_sm")

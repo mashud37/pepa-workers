@@ -86,6 +86,7 @@ def run(input_dir=None, output_dir=None, force=False, mode=None):
 
     chosen = _select_mode(len(work), mode)
     _show_plan(len(work), chosen, mode)
+    _preflight_cost_check(work, chosen)
     _reset_usage()
 
     if chosen == "serial":
@@ -419,23 +420,32 @@ def _run_batch(work, out_dir, skipped):
         # artifacts at a time and freeing them straight after. Deterministic
         # documents (quotes, extractive rundowns) need no LLM, so write them now.
         para_llm = config.para_method() == "llm"
+        ns = len(spooled)
+        ui.step(f"Building batch requests for {ns} paper(s)")
         requests, plans = [], []
         for idx, (pdf, todo, path) in enumerate(spooled):
+            ui.info(f"[{idx + 1}/{ns}] {_short(pdf.name)}")
             with open(path, "rb") as f:
                 text, signals, passages = pickle.load(f)
-            plan = {"pdf": pdf, "sum": None, "para": None, "wrote": False}
+            plan = {"pdf": pdf, "sum": None, "para": None, "wrote": False, "oversize": False}
             if "quote" in todo:
                 write_doc(out_dir, "quote", pdf.name, documents.build_quotes(text, signals))
                 plan["wrote"] = True
             if "sum" in todo:
-                cid = f"p{idx}s"
-                requests.append({
-                    "custom_id": cid,
-                    "system": SUMMARY_SYSTEM,
-                    "prompt": build_summary_prompt(text, signals, passages),
-                    "max_tokens": summary.MAX_TOKENS,
-                })
-                plan["sum"] = cid
+                sum_prompt = build_summary_prompt(text, signals, passages)
+                # A batch request too large for the context window would fail
+                # silently and re-fail on every re-run; catch it here instead.
+                if anthropic_client.would_overflow(SUMMARY_SYSTEM, sum_prompt, summary.MAX_TOKENS):
+                    plan["oversize"] = True
+                else:
+                    cid = f"p{idx}s"
+                    requests.append({
+                        "custom_id": cid,
+                        "system": SUMMARY_SYSTEM,
+                        "prompt": sum_prompt,
+                        "max_tokens": summary.MAX_TOKENS,
+                    })
+                    plan["sum"] = cid
             if "para" in todo:
                 if not para_llm:
                     write_doc(out_dir, "para", pdf.name, documents.build_rundown(text))
@@ -468,8 +478,14 @@ def _run_batch(work, out_dir, skipped):
         results = anthropic_client.run_batch(requests, on_progress=_batch_progress())
 
         # Reassemble: a paper is done only if every request it expected came back.
-        for plan in plans:
+        ui.step(f"Assembling results for {len(plans)} paper(s)")
+        for pi, plan in enumerate(plans, 1):
             pdf = plan["pdf"]
+            ui.info(f"[{pi}/{len(plans)}] {_short(pdf.name)}")
+            if plan["oversize"]:
+                errors += 1
+                ui.error(f"[batch] {_short(pdf.name)}: too large for the model context — skipped")
+                continue
             wrote = plan["wrote"]
             failed = False
             if plan["sum"] is not None:
@@ -629,6 +645,10 @@ def _build_docs(pdf, out_dir, todo, text, signals, passages):
         "quote": lambda: documents.build_quotes(text, signals),
     }
 
+    steps = [d for d in ("sum", "para", "quote") if d in todo]
+    for i, d in enumerate(steps, 1):
+        ui.info(f"  · {i}/{len(steps)}  {_LABELS[d]}")
+
     llm_todo = [d for d in ("sum", "para") if d in todo]
 
     if len(llm_todo) == 2:
@@ -661,6 +681,30 @@ def _build_docs(pdf, out_dir, todo, text, signals, passages):
 # ---------------------------------------------------------------------------
 # Cost reporting and shared helpers
 # ---------------------------------------------------------------------------
+
+def _preflight_cost_check(work, mode, threshold=10.0):
+    if not work:
+        return
+    if config.backend() != "anthropic":
+        return
+    price = config.price_per_mtok()
+    if price is None:
+        return
+    model = config.anthropic_model()
+    p_in, p_out = price
+    n = len(work)
+    total_in = n * 5000
+    total_out = n * 2500
+    cost = total_in / 1e6 * p_in + total_out / 1e6 * p_out
+    if mode == "batch":
+        cost *= 0.5
+    if cost > threshold:
+        ui.warn(f"Estimated cost: ~${cost:.2f}  ({total_in / 1e6:.2f}M in + {total_out / 1e6:.2f}M out · {model})")
+        if not ui.confirm("Cost exceeds threshold — proceed?"):
+            raise SystemExit("Aborted.")
+    else:
+        ui.info(f"Est. cost ~${cost:.2f}")
+
 
 def _reset_usage():
     """Zero the token tally before a run, so the cost estimate covers only it.

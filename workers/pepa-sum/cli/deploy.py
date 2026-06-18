@@ -30,11 +30,11 @@ def run():
 
 
 def _select_project():
+    ui.step("Select GCP project")
     current = _gcloud("config", "get-value", "project")
     listing = _gcloud("projects", "list", "--format=value(projectId)")
     projects = [p for p in listing.splitlines() if p.strip()]
 
-    ui.step("Select GCP project")
     if current:
         ui.info(f"active gcloud project: {current}")
     for i, p in enumerate(projects, 1):

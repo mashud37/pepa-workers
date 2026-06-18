@@ -163,6 +163,7 @@ def _ocr_pages(path, page_numbers):
     doc = fitz.open(str(path))
     try:
         for i, n in enumerate(page_numbers, 1):
+            ui.info(f"[{i}/{total}] OCR page {n + 1}")
             try:
                 pix = doc[n].get_pixmap(matrix=fitz.Matrix(scale, scale))
                 img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
