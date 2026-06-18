@@ -4,21 +4,33 @@ from pathlib import Path
 
 import config
 from cli import ui
+from cli import templates
 from plan.outline import generate
 from plan.refine import refine
 from skeleton.build import load as load_library
 
 
 def run(input_file=None, literature_file=None, skeleton_id=None,
-        feedback=None, no_input=False):
+        feedback=None, no_input=False, template_file=None):
     ui.header("Outline a paper")
 
     idea = _resolve_idea(input_file, no_input)
     literature = _resolve_literature(literature_file)
-    skeleton = _resolve_skeleton(skeleton_id, no_input)
+    structure = _resolve_structure(template_file, no_input)
+    # A user-authored template defines the structure outright; only fall back to a
+    # learned skeleton (and its requirement that the library exists) when none is set.
+    skeleton = None if structure else _resolve_skeleton(skeleton_id, no_input)
+    blueprint = _resolve_blueprint(skeleton) if skeleton else None
+
+    ui.step("Plan")
+    ui.info("  · 1/3  Generate outline")
+    ui.info("  · 2/3  Review and refine  (optional)")
+    ui.info("  · 3/3  Save")
 
     ui.step("Generating first outline")
-    outline_text = generate(idea, literature, skeleton)
+    if blueprint:
+        ui.info(f"using within-section blueprints for {len(blueprint)} move(s)")
+    outline_text = generate(idea, literature, skeleton, structure, blueprint)
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     out_path = config.OUTPUT_DIR / f"outline_{ts}.md"
@@ -76,6 +88,36 @@ def _resolve_literature(literature_file):
     if not p.exists():
         raise SystemExit(f"Literature file not found: {literature_file}")
     return p.read_text(encoding="utf-8").strip()
+
+
+def _resolve_structure(template_file, no_input):
+    """A plan template's text if the user supplies/picks one, else None (the outline
+    then follows a learned skeleton). Templates take precedence over skeletons."""
+    if template_file:
+        p = Path(template_file)
+        if not p.exists():
+            raise SystemExit(f"Template not found: {template_file}")
+        return p.read_text(encoding="utf-8").strip()
+
+    existing = templates.list_templates()
+    if not existing or no_input or not sys.stdin.isatty():
+        return None
+
+    options = [(p.name, "") for p in existing] + [("No template — use a learned skeleton", "")]
+    choice = ui.menu("Plan structure", options)
+    if choice is None or choice == len(existing):
+        return None
+    return templates.read(existing[choice])
+
+
+def _resolve_blueprint(skeleton):
+    """The chosen skeleton's within-section blueprints, if the add-on has been built;
+    None otherwise (outlining works fine without it)."""
+    from skeleton.blueprint import load as load_blueprints
+    library = load_blueprints()
+    if not library:
+        return None
+    return library.get("blueprints", {}).get(skeleton.get("id")) or None
 
 
 def _resolve_skeleton(skeleton_id, no_input):

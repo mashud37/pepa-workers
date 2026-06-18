@@ -9,7 +9,9 @@ def main():
     while True:
         choice = ui.menu("Main menu", [
             ("Build skeletons",        "learn paragraph structures from pepa-sum corpus"),
-            ("Outline a paper",        "idea → skeleton → paragraph-by-paragraph plan"),
+            ("Build blueprints",       "within-section paragraph progression per skeleton move"),
+            ("Outline a paper",        "idea → template/skeleton → paragraph-by-paragraph plan"),
+            ("Plan templates",         "create/edit your own section/paragraph progressions"),
             ("Review argumentation",   "argumentation-flow feedback on idea or draft"),
             ("Show config",            "paths, models, skeleton library status"),
             ("Install / setup",        "create secrets.yaml, check deps"),
@@ -21,15 +23,21 @@ def main():
             from cli import abstract
             abstract.run()
         elif choice == 1:
+            from cli import blueprint
+            blueprint.run()
+        elif choice == 2:
             from cli import outline
             outline.run()
-        elif choice == 2:
+        elif choice == 3:
+            from cli import templates
+            templates.run()
+        elif choice == 4:
             from cli import review
             review.run()
-        elif choice == 3:
+        elif choice == 5:
             from cli import show_config
             show_config.run()
-        elif choice == 4:
+        elif choice == 6:
             from cli import install
             install.run()
 
@@ -49,3 +57,9 @@ def _status():
         ui.info(f"skeletons: {n} in library")
     else:
         ui.warn("no skeleton library yet — choose 'Build skeletons'")
+
+    if config.BLUEPRINTS_FILE.exists():
+        import json
+        bp = json.loads(config.BLUEPRINTS_FILE.read_text(encoding="utf-8"))
+        m = sum(len(moves) for moves in bp.get("blueprints", {}).values())
+        ui.info(f"blueprints: {m} within-section move guides")

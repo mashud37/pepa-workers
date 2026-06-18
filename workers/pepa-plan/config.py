@@ -8,13 +8,38 @@ CORPUS_DIR_DEFAULT = ROOT.parent / "pepa-sum" / "output"
 DATA_DIR = ROOT / "data"
 INPUT_DIR = ROOT / "input"
 OUTPUT_DIR = ROOT / "output"
+TEMPLATES_DIR = ROOT / "templates"
+EXAMPLE_TEMPLATE = TEMPLATES_DIR / "example.plan.md"
 SECRETS_FILE = ROOT / "secrets.yaml"
 SECRETS_EXAMPLE = ROOT / "secrets.example.yaml"
 SKELETONS_FILE = DATA_DIR / "skeletons.json"
+SEQUENCES_FILE = DATA_DIR / "sequences.json"
+BLUEPRINTS_FILE = DATA_DIR / "blueprints.json"
 
 GENERATION_MODEL_DEFAULT = "claude-haiku-4-5-20251001"
 GENERATION_MODEL_QUALITY = "claude-sonnet-4-6"
 CONCURRENCY_DEFAULT = 8
+
+# How move-labelling is executed. `auto` picks serial/parallel/batch by estimated
+# wall-clock; `batch` uses the Anthropic Message Batches API (50% cheaper, async).
+MODES = ("auto", "serial", "parallel", "batch")
+
+# Coarse planning constants that only steer the auto mode choice, never the work.
+# Labelling is one fast LLM call per paper; the local read+parse is negligible.
+EST_LABEL_SECONDS = 3.0        # one paper's labelling call, run serially
+EST_PARALLEL_PPH = 2500        # realistic sustained papers/hour in parallel — the
+                               # account rate limit, not the worker count, bounds
+                               # this, so raising concurrency won't beat it
+EST_BATCH_PPH = 6000           # papers/hour once a batch is running
+EST_BATCH_FLOOR_MINUTES = 55   # batch latency floor (most batches finish within ~1h)
+
+# USD per million tokens (input, output), for the post-run cost estimate only.
+# Verify against current Anthropic pricing; these are not billing figures.
+_PRICES_PER_MTOK = {
+    "claude-haiku-4-5": (1.0, 5.0),
+    "claude-sonnet-4-6": (3.0, 15.0),
+    "claude-opus-4-8": (5.0, 25.0),
+}
 
 _ENV_OVERRIDE = {
     "corpus_dir":        "PEPAPLAN_CORPUS_DIR",
@@ -22,6 +47,8 @@ _ENV_OVERRIDE = {
     "anthropic_model":   "PEPAPLAN_ANTHROPIC_MODEL",
     "review_model":      "PEPAPLAN_REVIEW_MODEL",
     "concurrency":       "PEPAPLAN_CONCURRENCY",
+    "mode":              "PEPAPLAN_MODE",
+    "batch_poll":        "PEPAPLAN_BATCH_POLL",
 }
 
 _PLACEHOLDERS = {"", "REPLACE_ME", "changeme"}
@@ -58,7 +85,36 @@ def review_model():
 
 
 def concurrency():
-    return int(get("concurrency", CONCURRENCY_DEFAULT))
+    """Concurrent labelling requests in parallel mode, and the hard cap the client
+    governor enforces across every in-flight call."""
+    return _clamped_int("concurrency", CONCURRENCY_DEFAULT, 1, 32)
+
+
+def mode():
+    """Execution mode for move-labelling: auto | serial | parallel | batch."""
+    return get("mode", "auto")
+
+
+def batch_poll_seconds():
+    """How often to poll a running Message Batch for completion."""
+    return _clamped_int("batch_poll", 30, 5, 300)
+
+
+def price_per_mtok(model):
+    """(input, output) USD per million tokens for the model, or None if its price
+    isn't known — the caller then reports tokens without a dollar figure."""
+    for key, price in _PRICES_PER_MTOK.items():
+        if model.startswith(key):
+            return price
+    return None
+
+
+def _clamped_int(key, default, lo, hi):
+    try:
+        n = int(get(key, default))
+    except (TypeError, ValueError):
+        n = default
+    return max(lo, min(n, hi))
 
 
 def set_values(updates):

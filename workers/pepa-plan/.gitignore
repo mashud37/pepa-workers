@@ -11,6 +11,13 @@ input/*
 output/*
 !output/.gitkeep
 
+# Local deterministic-clustering benchmark — kept locally for documentation, not shipped
+benchmark/
+
+# Plan templates: ship the example; user copies are personal
+templates/*
+!templates/example.plan.md
+
 # Python
 __pycache__/
 *.py[cod]

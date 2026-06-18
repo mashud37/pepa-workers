@@ -18,6 +18,18 @@ def run():
     ui.info(f"generation (fast):    {config.anthropic_model()}")
     ui.info(f"generation (quality): {config.review_model()}")
 
+    ui.step("Labelling")
+    ui.info(f"mode:        {config.mode()}  (auto|serial|parallel|batch)")
+    ui.info(f"concurrency: {config.concurrency()}  ·  batch poll: {config.batch_poll_seconds()}s")
+
+    ui.step("Plan templates")
+    from cli.templates import list_templates
+    tmpls = list_templates()
+    if tmpls:
+        ui.ok(f"{len(tmpls)} in {config.TEMPLATES_DIR.name}/: " + ", ".join(p.name for p in tmpls))
+    else:
+        ui.warn(f"none in {config.TEMPLATES_DIR.name}/ — create one: python manage.py template --new <name>")
+
     ui.step("Skeleton library")
     if config.SKELETONS_FILE.exists():
         import json

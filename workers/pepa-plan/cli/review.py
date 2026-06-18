@@ -13,6 +13,13 @@ def run(input_file=None):
     ui.header("Review argumentation")
 
     text = _resolve_input(input_file)
+
+    ui.step("Plan")
+    ui.info("  · 1/3  Load skeleton library")
+    ui.info("  · 2/3  Analyse argumentation flow")
+    ui.info("  · 3/3  Save feedback")
+
+    ui.step("Loading skeleton library")
     library = load_library()
     skeleton = library["skeletons"][0] if library and library.get("skeletons") else None
 

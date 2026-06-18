@@ -34,18 +34,58 @@ def skeleton_system():
     )
 
 
-def skeleton_prompt(sequences):
+def skeleton_prompt(sequences, n_total=None):
+    """`sequences` is the (possibly sampled) compact list actually shown to the
+    model; `n_total` is the full corpus size it was drawn from, so the model knows
+    it is generalising from a representative sample, not the whole corpus."""
     data = json.dumps(sequences, ensure_ascii=False)
+    shown = len(sequences)
+    header = (
+        f"Move sequences from a representative sample of {shown} papers "
+        f"(drawn from {n_total} total):"
+        if n_total and n_total != shown
+        else f"Move sequences from {shown} papers:"
+    )
     return (
-        f"Move sequences from {len(sequences)} papers:\n{data}\n\n"
+        f"{header}\n{data}\n\n"
         "Return a JSON array of skeleton objects. Each object must have these exact keys:\n"
         '  "id": string (short slug),\n'
         '  "name": string (3–6 word descriptive name),\n'
         '  "paper_type": string (e.g. empirical, conceptual, review, methods),\n'
         '  "description": string (one sentence),\n'
-        '  "stages": array of {"move": string, "intent": string, "typical_share": number},\n'
-        '  "example_bases": array of strings (base names of representative papers)\n'
-        "Output the JSON array and nothing else."
+        '  "stages": array of {"move": string, "intent": string, "typical_share": number}\n'
+        "Output the JSON array and nothing else. Do not include example papers — those are "
+        "attached deterministically from the corpus afterwards."
+    )
+
+
+def blueprint_system():
+    return (
+        "You are a research methodology analyst. You will receive real example sections "
+        "from academic papers of one structural type — each section is a run of consecutive "
+        "paragraph summaries that all perform the same rhetorical move. Identify the typical "
+        "internal progression: the ordered sub-moves a writer steps through within such a "
+        "section. Output strict JSON only — no commentary, no code fences."
+    )
+
+
+def blueprint_prompt(skeleton, move, intent, sections):
+    blocks = []
+    for i, sec in enumerate(sections, 1):
+        para = "\n".join(f"  {j}. {t}" for j, t in enumerate(sec, 1))
+        blocks.append(f"Section {i} ({len(sec)} paragraph(s)):\n{para}")
+    body = "\n\n".join(blocks)
+    return (
+        f"STRUCTURAL TEMPLATE: {skeleton.get('name', '')} ({skeleton.get('paper_type', '')})\n"
+        f"MOVE: {move} — {intent}\n\n"
+        f"Real example sections performing this move:\n\n{body}\n\n"
+        "Identify how such a section typically unfolds across its paragraphs. Return a JSON "
+        "object with exactly these keys:\n"
+        '  "progression": array of 2-6 objects, each {"sub_move": a SHORT_UPPER_SNAKE label, '
+        '"intent": one short phrase for what that paragraph does, "typical_position": one of '
+        '"first" | "early" | "mid" | "late" | "last"},\n'
+        '  "reads_like": one sentence describing the section\'s overall arc.\n'
+        "Order progression as the paragraphs typically occur. Output the JSON object only."
     )
 
 
@@ -58,7 +98,24 @@ def outline_system():
     )
 
 
-def outline_prompt(idea, literature, skeleton):
+def _blueprint_block(blueprint):
+    """Render the skeleton's within-section guides: for each blueprinted move, the
+    ordered sub-move progression a multi-paragraph section of it should step through."""
+    if not blueprint:
+        return ""
+    lines = ["\nWITHIN-SECTION GUIDES — when a stage below spans several paragraphs, "
+             "progress through these sub-moves in order:"]
+    for move, bp in blueprint.items():
+        sub = " → ".join(s.get("sub_move", "") for s in bp.get("progression", []))
+        if not sub:
+            continue
+        band = bp.get("typical_paragraphs") or []
+        span = f" (~{band[0]}–{band[1]} paras)" if len(band) == 2 else ""
+        lines.append(f"- {move}{span}: {sub}")
+    return "\n".join(lines) + "\n" if len(lines) > 1 else ""
+
+
+def outline_prompt(idea, literature, skeleton, structure=None, blueprint=None):
     lit_block = f"\nLITERATURE NOTES:\n{literature}\n" if literature else ""
     skel_block = (
         f"\nSTRUCTURAL TEMPLATE: {skeleton.get('name', '')} "
@@ -66,8 +123,23 @@ def outline_prompt(idea, literature, skeleton):
         f"{skeleton.get('description', '')}\n"
         f"Stages: " + ", ".join(
             s.get("move", "") for s in skeleton.get("stages", [])
-        )
+        ) + _blueprint_block(blueprint)
     ) if skeleton else ""
+    if structure:
+        return (
+            f"PAPER IDEA:\n{idea}\n"
+            f"{lit_block}\n"
+            "REQUIRED STRUCTURE — follow this exactly: reproduce every section below in "
+            "order, with the number of paragraphs it specifies, and make each paragraph "
+            "fulfil the intent given for it. Do not add, drop, merge, or reorder sections "
+            "or paragraphs.\n"
+            f"\n{structure}\n\n"
+            "Write the plan grouped under the same section headings. Under each heading, "
+            "number the paragraphs and for each write:\n"
+            "  <N>. [MOVE] — <the specific point this paragraph makes>\n"
+            + ("Where literature is provided, note which sources or claims each paragraph draws on. " if literature else "")
+            + "Be specific about arguments, not just topics. Output the structured plan only."
+        )
     return (
         f"PAPER IDEA:\n{idea}\n"
         f"{lit_block}"

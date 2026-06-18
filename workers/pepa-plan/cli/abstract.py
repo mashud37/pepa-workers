@@ -2,14 +2,26 @@ from datetime import datetime
 
 import config
 from cli import ui
+from cli.progress import StepSpinner
 from corpus.load import paper_count
 from skeleton import build as skeleton_build
 
 
-def run(limit=None, sample=None):
+def run(limit=None, sample=None, mode=None):
     ui.header("Build skeleton library")
 
-    count = paper_count()
+    ui.step("Scanning corpus")
+    ui.info("  · 1/4  Scan corpus")
+    ui.info("  · 2/4  Label moves")
+    ui.info("  · 3/4  Synthesise skeletons")
+    ui.info("  · 4/4  Save library and report")
+
+    sp = StepSpinner("Scanning corpus")
+    sp.start()
+    try:
+        count = paper_count()
+    finally:
+        sp.done()
     if count == 0:
         raise SystemExit(
             "No para_*.md files found in corpus.\n"
@@ -21,7 +33,7 @@ def run(limit=None, sample=None):
     if sample:
         ui.info(f"sample: {sample} papers (random)")
 
-    library = skeleton_build.build(limit=limit, sample=sample)
+    library = skeleton_build.build(limit=limit, sample=sample, mode=mode)
     skeleton_build.save(library)
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -50,5 +62,5 @@ def _write_report(library, path):
             lines.append(f"- **{stage.get('move', '')}**{share_str} — {stage.get('intent', '')}")
         examples = sk.get("example_bases", [])
         if examples:
-            lines.append(f"\n**Example papers:** {', '.join(examples[:5])}")
+            lines.append(f"\n**Example papers:** {', '.join(examples[:20])}")
     path.write_text("\n".join(lines), encoding="utf-8")
