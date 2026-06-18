@@ -57,21 +57,49 @@ def run(input_file=None, literature_file=None, skeleton_id=None,
     return 0
 
 
+def _read_file(path):
+    """Read text from .txt, .md, or .docx; raises SystemExit on unsupported format."""
+    p = Path(path)
+    if p.suffix.lower() == ".docx":
+        try:
+            import docx
+        except ImportError:
+            raise SystemExit(
+                "python-docx is required to read .docx files.\n"
+                "Run: pip install python-docx"
+            )
+        doc = docx.Document(str(p))
+        return "\n".join(para.text for para in doc.paragraphs).strip()
+    return p.read_text(encoding="utf-8").strip()
+
+
 def _resolve_idea(input_file, no_input):
     if input_file:
         p = Path(input_file)
         if not p.exists():
             raise SystemExit(f"Input file not found: {input_file}")
-        return p.read_text(encoding="utf-8").strip()
+        return _read_file(p)
 
-    files = sorted(config.INPUT_DIR.glob("*.md")) + sorted(config.INPUT_DIR.glob("*.txt"))
+    files = (
+        sorted(config.INPUT_DIR.glob("*.md"))
+        + sorted(config.INPUT_DIR.glob("*.txt"))
+        + sorted(config.INPUT_DIR.glob("*.docx"))
+    )
     if files:
-        options = [(f.name, "") for f in files] + [("Enter path or free text", "")]
+        options = [(f.name, "") for f in files] + [("Enter a file path", "")]
         choice = ui.menu("Select idea file", options)
         if choice is None:
             raise SystemExit("No idea selected.")
         if choice < len(files):
-            return files[choice].read_text(encoding="utf-8").strip()
+            return _read_file(files[choice])
+        # User chose "Enter a file path"
+        if not no_input and sys.stdin.isatty():
+            raw = ui.ask("File path")
+            if raw:
+                p = Path(raw.strip())
+                if not p.exists():
+                    raise SystemExit(f"File not found: {p}")
+                return _read_file(p)
 
     if no_input or not sys.stdin.isatty():
         raise SystemExit("No input file provided and not running interactively.")

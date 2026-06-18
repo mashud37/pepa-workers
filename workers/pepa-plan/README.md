@@ -139,14 +139,15 @@ bases rather than model-named ones).
 
 ## Outlining a paper
 
-Drop your idea as a `.md` or `.txt` in `input/` (or paste it when prompted).
-Optionally pass a literature notes file. Then choose how the plan is structured —
-either a **plan template** you authored (see below) or a learned **skeleton**. Get
-a first outline, then enter feedback in an iterative loop until the plan is ready.
-The final outline is saved to `output/outline_<ts>.md`.
+Drop your idea as a `.md`, `.txt`, or `.docx` in `input/` (or supply a path when
+prompted). Optionally pass a literature notes file. Then choose how the plan is
+structured — either a **plan template** you authored (see below) or a learned
+**skeleton**. Get a first outline, then enter feedback in an iterative loop until
+the plan is ready. The final outline is saved to `output/outline_<ts>.md`.
 
 ```
 python manage.py outline --input input/my-idea.md
+python manage.py outline --input input/my-idea.docx
 python manage.py outline --input input/idea.md --literature input/lit.md
 python manage.py outline --input input/idea.md --template templates/my-plan.plan.md
 python manage.py outline --no-input   # first shot only, no feedback loop
