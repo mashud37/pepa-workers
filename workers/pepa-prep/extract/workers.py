@@ -67,9 +67,9 @@ def extract_book(path: Path, out_dir: Path, cfg: dict) -> tuple[str, list]:
     return write_chapters(path.stem, out_dir, chapters), warnings
 
 
-def extract_ocr(path: Path, out_dir: Path, cfg: dict) -> tuple[str, list]:
+def extract_ocr(path: Path, out_dir: Path, cfg: dict, progress=None) -> tuple[str, list]:
     fitz = import_fitz()
-    pages = ocr_pages(path, fitz, cfg)
+    pages = ocr_pages(path, fitz, cfg, progress=progress)
     elements = text_to_elements(pages)
     threshold = cfg.get("book_page_threshold", 100)
     if len(pages) > threshold:

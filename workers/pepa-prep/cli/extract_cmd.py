@@ -1,4 +1,5 @@
 """CLI layer for the extract pipeline: categorise → straight → books → OCR."""
+import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -87,9 +88,8 @@ def run(cfg: dict) -> None:
     warns = _run_phase("Step 2/4", "straight", "straight", groups["straight"], out_dir, cfg)
     warns += _run_phase("Step 3/4", "books", "book", groups["book"], out_dir, cfg)
     # OCR parallelises pages inside each file; run files serially to avoid
-    # oversubscribing the CPU with nested pools.
-    warns += _run_phase("Step 4/4", "OCR (scanned)", "ocr", groups["ocr"], out_dir, cfg,
-                        file_workers=1)
+    # oversubscribing the CPU with nested pools, and report page progress per file.
+    warns += _run_ocr_phase("Step 4/4", groups["ocr"], out_dir, cfg)
 
     ui.step("Done")
     ui.ok(f"{todo} file(s) processed → {out_dir.resolve()}")
@@ -129,4 +129,55 @@ def _run_phase(
                     ui.error(f"[{done}/{n}] {name} — {e}")
     except KeyboardInterrupt:
         raise SystemExit("\nInterrupted.")
+    return warns
+
+
+def _live(text: str) -> None:
+    """Overwrite the current line with a transient progress line (TTY only).
+
+    Mirrors ``ui.info``'s prefix so the live line and the settled lines align.
+    """
+    if sys.stdout.isatty():
+        bullet = ui._c(ui.DIM, ui._SYM["info"])
+        sys.stdout.write(f"\r  {bullet} {text}\033[K")
+        sys.stdout.flush()
+
+
+def _live_clear() -> None:
+    if sys.stdout.isatty():
+        sys.stdout.write("\r\033[K")
+        sys.stdout.flush()
+
+
+def _run_ocr_phase(step_label: str, files: list, out_dir: Path, cfg: dict) -> list:
+    """OCR runs file-serial (pages fan out inside each file), so announce every
+    file before work starts and stream page-level progress — the phase is slow
+    and would otherwise look hung."""
+    n = len(files)
+    ui.step(f"{step_label}: Extract OCR (scanned)  [{n} file(s)]")
+    if not files:
+        ui.info("Nothing to do — skipped")
+        return []
+
+    warns: list = []
+    for i, path in enumerate(files, 1):
+        name = _trunc(path.name)
+        ui.info(f"[{i}/{n}] {name} — OCR starting…")
+
+        def progress(done: int, total: int, _i=i, _name=name) -> None:
+            _live(f"[{_i}/{n}] {_name} — page {done}/{total}")
+
+        try:
+            result, warnings = workers.extract_ocr(path, out_dir, cfg, progress=progress)
+            _live_clear()
+            ui.ok(f"[{i}/{n}] {name} — {result}")
+            for w in warnings:
+                ui.warn(f"    {w}")
+                warns.append((path.name, w))
+        except KeyboardInterrupt:
+            _live_clear()
+            raise SystemExit("\nInterrupted.")
+        except Exception as e:
+            _live_clear()
+            ui.error(f"[{i}/{n}] {name} — {e}")
     return warns
