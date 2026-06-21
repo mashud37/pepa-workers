@@ -17,7 +17,9 @@ def pick_review(path: str = None) -> Path:
         if not p.exists():
             raise SystemExit(f"Review file not found: {p}")
         return p
-    candidates = find_files("review_*.md") + find_files("*.review.md") + find_files("review*.md")
+    seen = set()
+    candidates = [p for p in find_files("review_*.md") + find_files("*.review.md") + find_files("review*.md")
+                  if p not in seen and not seen.add(p)]
     if not candidates:
         raise SystemExit("No review file found in input/. Drop a pepa-review output there or pass --review.")
     if len(candidates) == 1:
@@ -41,7 +43,9 @@ def pick_plan(path: str = None) -> Path:
         if not p.exists():
             raise SystemExit(f"Plan file not found: {p}")
         return p
-    candidates = find_files("outline_*.md") + find_files("*.plan.md") + find_files("outline*.md")
+    seen = set()
+    candidates = [p for p in find_files("outline_*.md") + find_files("*.plan.md") + find_files("outline*.md")
+                  if p not in seen and not seen.add(p)]
     if not candidates:
         raise SystemExit("No plan file found in input/. Drop a pepa-plan outline there or pass --plan.")
     if len(candidates) == 1:

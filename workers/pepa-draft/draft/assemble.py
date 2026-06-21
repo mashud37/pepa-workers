@@ -22,11 +22,11 @@ def _retrieve_for_section(label, items, restrict_works):
     return passages
 
 
-def _style_for_section(items, label):
+def _style_for_section(items, label, profile=None):
     try:
         from index.style import retrieve as style_retrieve
         query = items[0]["text"] if items else label
-        return style_retrieve(query)
+        return style_retrieve(query, profile=profile)
     except Exception:
         return []
 
@@ -37,7 +37,7 @@ def _draft_section(key, label, items, review_text, opts):
     context = {
         "review_text": review_text,
         "retrieval": _retrieve_for_section(label, items, opts.get("restrict_works")) if opts.get("use_retrieval", True) else [],
-        "style": _style_for_section(items, label) if opts.get("use_style", True) else [],
+        "style": _style_for_section(items, label, opts.get("style_profile")) if opts.get("use_style", True) else [],
     }
     sp = StepSpinner(f"drafting {label}")
     sp.start()

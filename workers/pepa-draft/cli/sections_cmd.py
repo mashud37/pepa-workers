@@ -7,29 +7,45 @@ def _show_current(assignment: dict) -> None:
     ui.step("Current assignment")
     for sec in SECTIONS:
         indices = assignment.get(sec["key"], [])
-        ui.info(f"  {sec['label']:<20} {len(indices)} items: {indices[:8]}")
+        ui.info(f"  {sec['label']:<20} {len(indices)} items: {indices}")
 
 
 def _move_item(assignment: dict, plan_items: list) -> None:
-    raw = ui.ask("Item index to move")
-    if not raw or not raw.isdigit():
+    raw = ui.ask("Item indices to move (e.g. 40 or 40,41,42)")
+    if not raw:
         return
-    idx = int(raw)
-    item = next((i for i in plan_items if i["index"] == idx), None)
-    if not item:
-        ui.warn(f"No item with index {idx}")
+    parts = [p.strip() for p in raw.split(",")]
+    to_move = []
+    for p in parts:
+        if not p.isdigit():
+            ui.warn(f"Skipping invalid index: {p!r}")
+            continue
+        idx = int(p)
+        item = next((i for i in plan_items if i["index"] == idx), None)
+        if not item:
+            ui.warn(f"No item with index {idx}")
+            continue
+        to_move.append((idx, item))
+    if not to_move:
         return
-    ui.info(f"[{item['move']}] {item['text'][:80]}")
+    for idx, item in to_move:
+        ui.info(f"  {idx}. [{item['move']}] {item['text'][:80]}")
     sec_choice = ui.menu("Move to section", [s["label"] for s in SECTIONS])
     if sec_choice is None:
         return
-    for key in assignment:
-        if idx in assignment[key]:
-            assignment[key].remove(idx)
     target_key = SECTIONS[sec_choice]["key"]
-    assignment[target_key].append(idx)
+    for idx, _item in to_move:
+        for key in assignment:
+            if idx in assignment[key]:
+                assignment[key].remove(idx)
+        assignment[target_key].append(idx)
     assignment[target_key].sort()
-    ui.ok(f"item {idx} moved to {SECTIONS[sec_choice]['label']}")
+    label = SECTIONS[sec_choice]["label"]
+    if len(to_move) == 1:
+        ui.ok(f"item {to_move[0][0]} moved to {label}")
+    else:
+        ui.ok(f"{len(to_move)} items moved to {label}: {[i for i, _ in to_move]}")
+    _show_current(assignment)
 
 
 def _show_unassigned(assignment: dict, plan_items: list) -> None:
@@ -57,16 +73,18 @@ def _show_section(assignment: dict, plan_items: list) -> None:
         ui.info(f"  {item['index']}. [{item['move']}] {item['text'][:80]}")
 
 
-def edit_loop(assignment: dict, plan_items: list, sec_path) -> dict:
-    """Run the interactive section editor. Saves on exit and returns the final assignment.
+def edit_loop(assignment: dict, plan_items: list, sec_path, draft_mode: bool = False) -> tuple:
+    """Run the interactive section editor. Returns (assignment, proceed_to_draft).
 
     Args:
         assignment: Current section assignment dict (modified in place or replaced on reset).
         plan_items: All parsed plan items.
         sec_path: Path where the assignment should be saved.
+        draft_mode: When True, show a 'Proceed to draft' option as [1].
 
     Returns:
-        The saved assignment dict.
+        (assignment, proceed_to_draft) — proceed_to_draft is True only when the user
+        explicitly chose to continue to the draft.
     """
     from draft.sections import from_defaults
     from draft.sections import save as save_assignment
@@ -76,25 +94,51 @@ def edit_loop(assignment: dict, plan_items: list, sec_path) -> dict:
         assignment = from_defaults(plan_items)
         ui.ok("reset to move-label defaults (not yet saved)")
 
+    def _save_and_exit():
+        save_assignment(assignment, sec_path)
+        ui.ok(f"saved to {sec_path.name}")
+
     while True:
-        _ACTIONS = {
-            0: lambda: _move_item(assignment, plan_items),
-            1: lambda: _show_unassigned(assignment, plan_items),
-            2: lambda: _show_section(assignment, plan_items),
-            3: _reset,
-        }
         _show_current(assignment)
-        choice = ui.menu("Edit assignment", [
-            ("Move item",          "Move a plan item to a different section"),
-            ("Show unassigned",    "List items not in any section"),
-            ("Show section items", "List items for a specific section"),
-            ("Reset to defaults",  "Rebuild from move-label defaults (unsaved changes lost)"),
-            ("Save and exit",      "Persist and return"),
-        ])
-        if choice is None or choice == 4:
-            save_assignment(assignment, sec_path)
-            ui.ok(f"saved to {sec_path.name}")
-            return assignment
+
+        if draft_mode:
+            options = [
+                ("Proceed to draft",   "Save and continue to manuscript generation"),
+                ("Move item",          "Move one or more plan items to a different section"),
+                ("Show unassigned",    "List items not in any section"),
+                ("Show section items", "List items for a specific section"),
+                ("Reset to defaults",  "Rebuild from move-label defaults (unsaved changes lost)"),
+            ]
+            _ACTIONS = {
+                1: lambda: _move_item(assignment, plan_items),
+                2: lambda: _show_unassigned(assignment, plan_items),
+                3: lambda: _show_section(assignment, plan_items),
+                4: _reset,
+            }
+        else:
+            options = [
+                ("Move item",          "Move one or more plan items to a different section"),
+                ("Show unassigned",    "List items not in any section"),
+                ("Show section items", "List items for a specific section"),
+                ("Reset to defaults",  "Rebuild from move-label defaults (unsaved changes lost)"),
+            ]
+            _ACTIONS = {
+                0: lambda: _move_item(assignment, plan_items),
+                1: lambda: _show_unassigned(assignment, plan_items),
+                2: lambda: _show_section(assignment, plan_items),
+                3: _reset,
+            }
+
+        choice = ui.menu("Edit assignment", options, back_label="Save and exit")
+
+        if choice is None:
+            _save_and_exit()
+            return assignment, False
+
+        if draft_mode and choice == 0:
+            _save_and_exit()
+            return assignment, True
+
         if choice in _ACTIONS:
             _ACTIONS[choice]()
 
@@ -120,4 +164,4 @@ def run(plan_file: str = None, reset: bool = False) -> None:
         assignment = load_assignment(sec_path)
         ui.ok("loaded existing assignment")
 
-    edit_loop(assignment, plan_items, sec_path)
+    edit_loop(assignment, plan_items, sec_path, draft_mode=False)

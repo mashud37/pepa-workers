@@ -128,7 +128,7 @@ def confirm(question, default_yes=True):
     return raw.strip().lower() in ("y", "yes")
 
 
-def menu(title, options):
+def menu(title, options, back_label="Back"):
     """Print a numbered menu and return a 0-based index, or None for Back/quit."""
     print()
     rule()
@@ -140,7 +140,7 @@ def menu(title, options):
             print(f"  {_c(BLUE, f'[{i}]')} {label.ljust(width)}   {_c(DIM, desc)}")
         else:
             print(f"  {_c(BLUE, f'[{i}]')} {o}")
-    print(f"  {_c(BLUE, '[0]')} Back")
+    print(f"  {_c(BLUE, '[0]')} {back_label}")
     while True:
         raw = ask("Choose")
         if raw in (None, "0", "q", "quit", "exit"):

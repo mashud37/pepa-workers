@@ -62,8 +62,10 @@ def _resolve_assignment(plan_items, plan_path, sections_file):
         raise SystemExit("Cancelled.")
     if choice == 1:
         from cli.sections_cmd import edit_loop
-        assignment = edit_loop(assignment, plan_items, sec_path)
-        return assignment
+        result, proceed = edit_loop(assignment, plan_items, sec_path, draft_mode=True)
+        if not proceed:
+            raise SystemExit("Cancelled.")
+        return result
 
     save_assignment(assignment, sec_path)
     ui.ok(f"saved assignment to {sec_path.name}")
@@ -94,7 +96,7 @@ def _print_summary(manuscript, word_targets, total_target, out_path):
         ui.info(f"  {sec['label']:<20} {sec['words']:>5} words  ({sign}{diff})")
 
 
-def run(review_file=None, plan_file=None, sections_file=None, backend=None, skip=None):
+def run(review_file=None, plan_file=None, sections_file=None, backend=None, skip=None, style_profile=None):
     skip = skip or set()
     ui.header("pepa-draft — draft manuscript")
 
@@ -114,6 +116,7 @@ def run(review_file=None, plan_file=None, sections_file=None, backend=None, skip
         "use_retrieval": "retrieval" not in skip,
         "use_style": "style" not in skip,
         "restrict_works": set(review_parsed.get("works", [])) or None,
+        "style_profile": style_profile,
     }
     manuscript = assemble(plan_items, assignment, review_parsed, opts)
 

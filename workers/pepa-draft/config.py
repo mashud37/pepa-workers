@@ -15,7 +15,8 @@ OUTPUT_DIR = ROOT / "output"
 SECRETS_FILE = ROOT / "secrets.yaml"
 SECRETS_EXAMPLE = ROOT / "secrets.example.yaml"
 SECTIONS_FILE = DATA_DIR / "sections.json"
-STYLE_INDEX_FILE = DATA_DIR / "style_index.json"
+STYLE_INDEX_FILE = DATA_DIR / "style_index.json"  # legacy; use style_index_file(profile)
+STYLE_ACTIVE_FILE = DATA_DIR / "style_active.txt"
 REVIEW_INDEX_DEFAULT = ROOT.parent / "pepa-review" / "data" / "index.json"
 
 DRAFT_MODEL_DEFAULT = "claude-opus-4-8"
@@ -112,6 +113,35 @@ def vllm_base_url() -> str:
 
 def vllm_token() -> str:
     return get("vllm_token", "")
+
+
+def active_style_profile() -> str:
+    if STYLE_ACTIVE_FILE.exists():
+        name = STYLE_ACTIVE_FILE.read_text(encoding="utf-8").strip()
+        if name:
+            return name
+    return "default"
+
+
+def style_index_file(profile: str = None) -> Path:
+    name = profile or active_style_profile()
+    return DATA_DIR / f"style_{name}.json"
+
+
+def set_active_style_profile(name: str) -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    STYLE_ACTIVE_FILE.write_text(name.strip(), encoding="utf-8")
+
+
+def list_style_profiles() -> list:
+    profiles = []
+    for p in sorted(DATA_DIR.glob("style_*.json")):
+        if p == STYLE_INDEX_FILE:
+            continue
+        stem = p.stem  # e.g. style_default
+        if stem.startswith("style_"):
+            profiles.append(stem[len("style_"):])
+    return profiles
 
 
 def review_index_file() -> Path:

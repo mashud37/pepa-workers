@@ -13,7 +13,8 @@ def _handle_draft(args):
     if args.no_style:
         skip.add("style")
     draft_cmd.run(review_file=args.review, plan_file=args.plan,
-                  sections_file=args.sections, backend=args.backend, skip=skip)
+                  sections_file=args.sections, backend=args.backend, skip=skip,
+                  style_profile=args.style_profile)
 
 
 def _handle_sections(args):
@@ -23,7 +24,7 @@ def _handle_sections(args):
 
 def _handle_style(args):
     from cli import style_cmd
-    style_cmd.run(action=args.action, file_path=args.file)
+    style_cmd.run(action=args.action, file_path=args.file, profile=args.profile)
 
 
 def _handle_config(_args):
@@ -57,14 +58,16 @@ def main():
     dr.add_argument("--backend", default=None, choices=("anthropic", "vllm"))
     dr.add_argument("--no-retrieval", action="store_true")
     dr.add_argument("--no-style", action="store_true")
+    dr.add_argument("--style-profile", default=None, metavar="PROFILE")
 
     sc = sub.add_parser("sections", help="Assign plan paragraphs to manuscript sections")
     sc.add_argument("--plan", default=None, metavar="FILE")
     sc.add_argument("--reset", action="store_true")
 
     st = sub.add_parser("style", help="Manage author writing samples for style matching")
-    st.add_argument("action", nargs="?", choices=("add", "list", "remove", "build"))
+    st.add_argument("action", nargs="?", choices=("add", "list", "remove", "build", "switch", "list-profiles"))
     st.add_argument("--file", default=None, metavar="FILE")
+    st.add_argument("--profile", default=None, metavar="PROFILE")
 
     sub.add_parser("config", help="Show effective configuration")
     sub.add_parser("setup", help="Configure API keys and paths interactively")
