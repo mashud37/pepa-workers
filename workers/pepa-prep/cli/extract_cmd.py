@@ -1,0 +1,132 @@
+"""CLI layer for the extract pipeline: categorise → straight → books → OCR."""
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+
+from extract import categorise, workers
+
+from . import ui
+
+_MAX_NAME = 46
+
+
+def _trunc(name: str) -> str:
+    return name if len(name) <= _MAX_NAME else name[: _MAX_NAME - 3] + "..."
+
+
+def run(cfg: dict) -> None:
+    src = Path(cfg["input_folder"])
+    out_dir = Path(cfg["output_folder"]) / "text"
+
+    if not src.is_dir():
+        raise SystemExit(f"Input folder not found: {src}")
+
+    pdfs = sorted(src.glob("*.pdf"))
+    if not pdfs:
+        raise SystemExit(f"No PDFs found in {src}")
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Step plan — always printed before any phase starts
+    ui.step("Plan")
+    ui.info("Step 1/4: Categorise PDFs")
+    ui.info("Step 2/4: Extract straight documents")
+    ui.info("Step 3/4: Extract books (with chapter splitting)")
+    ui.info("Step 4/4: Extract scanned PDFs (OCR)")
+    ui.info(f"Input:    {src.resolve()}")
+    ui.info(f"Output:   {out_dir.resolve()}")
+    ui.info(f"Workers:  {cfg['workers']}")
+
+    # Phase 1: Categorise — pre-filter before opening any PDF
+    fitz = categorise.import_fitz()
+    existing = categorise.scan_existing(out_dir)
+    groups: dict = {"straight": [], "book": [], "ocr": []}
+    skipped = unreadable = 0
+    n_workers = max(1, cfg.get("workers", 4))
+
+    to_scan = []
+    for p in pdfs:
+        if categorise.any_output(existing, p.stem):
+            skipped += 1
+        else:
+            to_scan.append(p)
+
+    ui.step(f"Step 1/4: Categorise  [{len(to_scan)} to scan  {skipped} already done]")
+
+    try:
+        with ThreadPoolExecutor(max_workers=n_workers) as pool:
+            futures = {pool.submit(categorise.scan_one, p, fitz): p for p in to_scan}
+            for i, fut in enumerate(as_completed(futures), 1):
+                path = futures[fut]
+                ui.info(f"[{i}/{len(to_scan)}] {_trunc(path.name)}")
+                scan = fut.result()
+                if scan is None:
+                    ui.warn("  unreadable — skipping")
+                    unreadable += 1
+                    continue
+                pages, fraction = scan
+                file_route = categorise.route(pages, fraction, cfg)
+                groups[file_route].append(path)
+    except KeyboardInterrupt:
+        raise SystemExit("\nInterrupted.")
+
+    n_straight = len(groups["straight"])
+    n_book = len(groups["book"])
+    n_ocr = len(groups["ocr"])
+    ui.ok(
+        f"{n_straight} straight  {n_book} book  {n_ocr} OCR"
+        + (f"  ({skipped} already done)" if skipped else "")
+        + (f"  ({unreadable} unreadable)" if unreadable else "")
+    )
+
+    todo = n_straight + n_book + n_ocr
+    if not todo:
+        ui.info("Nothing to extract.")
+        return
+
+    # Phases 2–4
+    warns = _run_phase("Step 2/4", "straight", "straight", groups["straight"], out_dir, cfg)
+    warns += _run_phase("Step 3/4", "books", "book", groups["book"], out_dir, cfg)
+    # OCR parallelises pages inside each file; run files serially to avoid
+    # oversubscribing the CPU with nested pools.
+    warns += _run_phase("Step 4/4", "OCR (scanned)", "ocr", groups["ocr"], out_dir, cfg,
+                        file_workers=1)
+
+    ui.step("Done")
+    ui.ok(f"{todo} file(s) processed → {out_dir.resolve()}")
+    if warns:
+        ui.warn(f"{len(warns)} file(s) need a look:")
+        for name, w in warns:
+            ui.warn(f"  {_trunc(name)} — {w}")
+
+
+def _run_phase(
+    step_label: str, display: str, route: str, files: list, out_dir: Path, cfg: dict,
+    file_workers: int | None = None,
+) -> list:
+    n = len(files)
+    ui.step(f"{step_label}: Extract {display}  [{n} file(s)]")
+    if not files:
+        ui.info("Nothing to do — skipped")
+        return []
+
+    handler = workers.HANDLERS[route]
+    n_workers = file_workers or max(1, cfg.get("workers", 4))
+    warns: list = []
+
+    try:
+        with ThreadPoolExecutor(max_workers=n_workers) as pool:
+            futures = {pool.submit(handler, p, out_dir, cfg): p for p in files}
+            for done, fut in enumerate(as_completed(futures), 1):
+                path = futures[fut]
+                name = _trunc(path.name)
+                try:
+                    result, warnings = fut.result()
+                    ui.ok(f"[{done}/{n}] {name} — {result}")
+                    for w in warnings:
+                        ui.warn(f"    {w}")
+                        warns.append((path.name, w))
+                except Exception as e:
+                    ui.error(f"[{done}/{n}] {name} — {e}")
+    except KeyboardInterrupt:
+        raise SystemExit("\nInterrupted.")
+    return warns

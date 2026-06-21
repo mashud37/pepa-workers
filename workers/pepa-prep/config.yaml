@@ -1,0 +1,13 @@
+input_folder: ./input
+output_folder: ./output
+workers: 4
+book_page_threshold: 100
+max_chapters: 80
+ocr_dpi: 300
+tesseract_cmd: ""
+
+# Bibliography enrichment (python manage.py biblio)
+biblio_corpus: ../pepa-sum/output   # path to pepa-sum output/ with sum_*.md files
+biblio_output: ./output             # biblio JSON files go into <biblio_output>/biblio/
+biblio_zotero: ""                   # default Zotero CSL-JSON path (blank = auto-detect in input/)
+crossref_email: ""                  # your email for the Crossref polite pool (~50 req/s)
