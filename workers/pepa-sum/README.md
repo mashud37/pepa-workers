@@ -1,8 +1,9 @@
 # pepa-sum
 
-Turn a folder of academic PDFs into a **structured, comparable knowledge base**.
-Drop papers into `input/`, run one command, and get **three Markdown documents
-per paper** in `output/`:
+Turn a folder of academic papers into a **structured, comparable knowledge base**.
+Drop papers into `input/` — born-digital or scanned `.pdf`, or already-extracted
+`.md`/`.txt` (e.g. pepa-prep output) — run one command, and get **three Markdown
+documents per paper** in `output/`:
 
 | File | What it is |
 |---|---|
@@ -33,7 +34,7 @@ every run).
 manage.py              entrypoint (no args = menu; subcommands also available)
 config.py              effective config: backend, settings, paths, budget
 cli/                   command modules (summarize, settings, install, config, deploy) + ui/progress
-extract/               local preprocessing: read_pdf (OCR + reference strip), signals, passages, paragraphs
+extract/               local preprocessing: read_document (pdf via read_pdf + OCR; md/txt direct), reference strip, signals, passages, paragraphs
 documents/             builds the three output documents (summary, rundown, quotes)
 backends/              LLM routing (anthropic / cloudrun) + prompts
 render/                writes <prefix>_<name>.md
@@ -62,12 +63,13 @@ Set `anthropic_api_key` in `env.yaml` (or `ANTHROPIC_API_KEY` env var) for the d
 
 ## Menu
 ```
-1) Summarise papers   2) Settings   3) Show config   4) Install / setup   5) Deploy service
+1) Summarise papers   2) Clean failed outputs   3) Settings   4) Show config   5) Install / setup   6) Deploy service
 ```
 
 ## Direct subcommands (scriptable)
 ```
 python manage.py summarize [--input <dir>] [--output <dir>] [--force] [--mode auto|serial|parallel|batch]
+python manage.py clean [--output <dir>] [--dry-run] [--force]
 python manage.py settings
 python manage.py config
 python manage.py install
@@ -77,9 +79,23 @@ python manage.py deploy
 - `--force` — reprocess papers already done (otherwise resumable: a paper with a
   `sum_` file is skipped, or — interactively — you're asked before overwriting).
 - `--mode` — force an execution mode; default `auto` (see below).
+- `clean` — delete failed summaries and re-run; see [Validated output](#validated-output).
 
 A paper that keeps failing is logged and skipped, not fatal — just re-run to pick
 it up (its documents are absent, so it is retried). This is true in every mode.
+
+## Validated output
+
+A summary is only written if it actually contains the [`sum_` template](#sum_-template)
+— the `##` title plus its bold fields. When the model returns plain text instead
+(a refusal, an error, or the prompt echoed back), that paper is counted as a
+failure and **no `sum_` file is written**, so a re-run retries it rather than
+leaving a stub behind. This holds in every mode.
+
+`python manage.py clean` clears any failed `sum_` files already on disk: it
+removes each `sum_` that lacks the template along with its paired `para_`/`quote_`
+files, leaving those papers to be redone on the next `summarize` run. Use
+`--dry-run` to list what would go first, `--force` to skip the confirmation.
 
 > **A paper too large for the model's context** is skipped with a clear message
 > rather than aborting the run, and a re-run won't fix it (the failure is not

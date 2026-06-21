@@ -30,6 +30,7 @@ import time
 import config
 from cli import ui
 from cli.progress import StepSpinner, ProgressSpinner, _CHECK, _LABEL_W
+from render import paper_stem
 
 _DOCS = ("sum", "para", "quote")
 _LABELS = {
@@ -60,7 +61,7 @@ def _pin_threads():
 def run(input_dir=None, output_dir=None, force=False, mode=None):
     _pin_threads()  # parent sets them so spawned workers inherit before numpy imports
     try:
-        from extract import read_pdf, extract_signals, select_passages  # noqa: F401
+        from extract import read_document, extract_signals, select_passages  # noqa: F401
     except ImportError as e:
         raise SystemExit(f"Missing dependency ({e.name}). Run: pip install -r requirements.txt")
 
@@ -69,16 +70,17 @@ def run(input_dir=None, output_dir=None, force=False, mode=None):
     in_dir.mkdir(parents=True, exist_ok=True)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    pdfs = sorted(in_dir.glob("*.pdf"))
-    if not pdfs:
-        raise SystemExit(f"No PDFs found in {in_dir}. Drop papers there and re-run.")
+    sources = _discover_sources(in_dir)
+    if not sources:
+        raise SystemExit(f"No papers found in {in_dir}. Drop .pdf, .md or .txt files there "
+                         "and re-run.")
 
     on_existing = config.on_existing()
     ui.header("pepa-sum — summarising papers")
-    ui.info(f"{len(pdfs)} PDF(s) in {in_dir}")
+    ui.info(f"{len(sources)} paper(s) in {in_dir}")
     ui.info(f"backend: {config.backend()}  ·  paragraph rundown: {config.para_method()}")
 
-    work, skipped = _plan_work(pdfs, out_dir, force, on_existing)
+    work, skipped = _plan_work(sources, out_dir, force, on_existing)
     if not work:
         ui.step("Done")
         ui.ok(f"0 processed, {skipped} skipped")
@@ -90,7 +92,7 @@ def run(input_dir=None, output_dir=None, force=False, mode=None):
     _reset_usage()
 
     if chosen == "serial":
-        code = _run_serial(pdfs, out_dir, force, on_existing)
+        code = _run_serial(sources, out_dir, force, on_existing)
     elif chosen == "batch":
         code = _run_batch(work, out_dir, skipped)
     else:
@@ -99,13 +101,33 @@ def run(input_dir=None, output_dir=None, force=False, mode=None):
     return code
 
 
-def _plan_work(pdfs, out_dir, force, on_existing):
+def _discover_sources(in_dir):
+    """Every ingestable paper in in_dir — .pdf, .md/.markdown, or .txt — one per
+    stem. When a stem has both a PDF and a text file (e.g. a hand-converted
+    paper.pdf + paper.md), the text file wins: it is already reflowed and
+    reference-stripped, so re-reading the PDF would be wasted work and could
+    disagree with it. Both still map to the same sum_<stem>.md output, so taking
+    one prevents a silent overwrite."""
+    from extract import SUFFIXES
+
+    found = {}
+    for p in sorted(in_dir.iterdir()):
+        if not (p.is_file() and p.suffix.lower() in SUFFIXES):
+            continue
+        stem = paper_stem(p.name)
+        prior = found.get(stem)
+        if prior is None or (prior.suffix.lower() == ".pdf" and p.suffix.lower() != ".pdf"):
+            found[stem] = p
+    return [found[stem] for stem in sorted(found)]
+
+
+def _plan_work(sources, out_dir, force, on_existing):
     """Papers to (re)process, resolved without prompting — `ask` is treated as
     `skip` here, as it already is off a TTY. Each entry is (pdf, regen); regen
     True redoes all three documents, False fills only the missing ones."""
     work, skipped = [], 0
-    for pdf in pdfs:
-        present = [d for d in _DOCS if (out_dir / f"{d}_{pdf.stem}.md").exists()]
+    for pdf in sources:
+        present = [d for d in _DOCS if (out_dir / f"{d}_{paper_stem(pdf.name)}.md").exists()]
         if force:
             work.append((pdf, True))
         elif len(present) == len(_DOCS):
@@ -120,7 +142,7 @@ def _plan_work(pdfs, out_dir, force, on_existing):
 
 def _docs_todo(pdf, out_dir, regen):
     """Which of the three documents this paper still needs."""
-    return [d for d in _DOCS if regen or not (out_dir / f"{d}_{pdf.stem}.md").exists()]
+    return [d for d in _DOCS if regen or not (out_dir / f"{d}_{paper_stem(pdf.name)}.md").exists()]
 
 
 # ---------------------------------------------------------------------------
@@ -194,8 +216,8 @@ def _extract_paper(pdf, todo):
     Used for parallel mode, where the pipeline keeps only a bounded look-ahead
     window of papers in memory at once.
     Returns (pdf, todo, data) with data = (text, signals, passages), or None."""
-    from extract import read_pdf, extract_signals, select_passages
-    text = read_pdf(pdf)
+    from extract import read_document, extract_signals, select_passages
+    text = read_document(pdf)
     if not text or len(text) < MIN_TEXT_CHARS:
         return pdf, todo, None
     signals = extract_signals(text)
@@ -209,8 +231,8 @@ def _extract_to_disk(pdf, todo, idx, spool):
     Spooling inside the child keeps the heavy artifacts off the parent process —
     for batch mode, where every paper is read up front before any LLM work."""
     import pickle
-    from extract import read_pdf, extract_signals, select_passages
-    text = read_pdf(pdf)
+    from extract import read_document, extract_signals, select_passages
+    text = read_document(pdf)
     if not text or len(text) < MIN_TEXT_CHARS:
         return pdf, todo, None
     signals = extract_signals(text)
@@ -490,7 +512,7 @@ def _run_batch(work, out_dir, skipped):
             failed = False
             if plan["sum"] is not None:
                 text = results.get(plan["sum"])
-                if text:
+                if text and documents.has_template(text):
                     write_doc(out_dir, "sum", pdf.name, text)
                     wrote = True
                 else:
@@ -529,7 +551,7 @@ def _batch_progress():
 # with a one-paper look-ahead so the next paper's local stage overlaps the LLM.
 # ---------------------------------------------------------------------------
 
-def _run_serial(pdfs, out_dir, force, on_existing):
+def _run_serial(sources, out_dir, force, on_existing):
     """One paper at a time, but a single look-ahead worker reads and signals the
     NEXT paper while the current paper's LLM calls are in flight, so the local CPU
     stage overlaps the network wait and the gap between papers closes. Only two
@@ -541,7 +563,7 @@ def _run_serial(pdfs, out_dir, force, on_existing):
             "one runs  ·  Ctrl-C to stop after the current paper.")
     counters = {"skipped": 0}
     done = errors = stopped = 0
-    jobs = _serial_jobs(pdfs, out_dir, force, on_existing, counters)
+    jobs = _serial_jobs(sources, out_dir, force, on_existing, counters)
 
     def submit_next(ex):
         """Advance to the next paper that needs work and start its extraction."""
@@ -598,13 +620,13 @@ def _run_serial(pdfs, out_dir, force, on_existing):
     return 1 if errors else 0
 
 
-def _serial_jobs(pdfs, out_dir, force, on_existing, counters):
+def _serial_jobs(sources, out_dir, force, on_existing, counters):
     """Yield (pdf, regen) for each paper that needs work, in order, applying the
     skip/overwrite decision (and the interactive prompt) inline. Fully-done papers
     need no extraction, so they are resolved here and never handed to the
     look-ahead — there is no gap to close on a paper that does no work."""
-    for pdf in pdfs:
-        present = [d for d in _DOCS if (out_dir / f"{d}_{pdf.stem}.md").exists()]
+    for pdf in sources:
+        present = [d for d in _DOCS if (out_dir / f"{d}_{paper_stem(pdf.name)}.md").exists()]
         if len(present) == len(_DOCS) and not force:
             if _keep_existing(pdf.name, on_existing):
                 ui.info(f"skip {_short(pdf.name)} (all documents exist)")

@@ -7,7 +7,7 @@ import sys
 import argparse
 from pathlib import Path
 
-from cli import menu, summarize, settings, install, show_config, deploy, ui
+from cli import menu, summarize, cleanup, settings, install, show_config, deploy, ui
 
 
 def main():
@@ -24,6 +24,11 @@ def main():
     s.add_argument("--mode", choices=["auto", "serial", "parallel", "batch"],
                    help="Execution mode (default: auto — chosen by estimated time)")
 
+    c = sub.add_parser("clean", help="Delete failed outputs (sum_ files missing the template) + their pairs")
+    c.add_argument("-o", "--output", type=Path, help="Output folder to clean")
+    c.add_argument("-n", "--dry-run", action="store_true", help="List what would be deleted, delete nothing")
+    c.add_argument("-f", "--force", action="store_true", help="Delete without confirmation")
+
     sub.add_parser("settings", help="Choose backend + paragraph-rundown method")
     sub.add_parser("config", help="Print effective config and cost note")
     sub.add_parser("install", help="Create env.yaml, store API key, check dependencies")
@@ -35,6 +40,8 @@ def main():
     if args.command == "summarize":
         return summarize.run(input_dir=args.input, output_dir=args.output,
                              force=args.force, mode=args.mode)
+    if args.command == "clean":
+        return cleanup.run(output_dir=args.output, dry_run=args.dry_run, force=args.force)
     if args.command == "settings":
         return settings.run()
     if args.command == "config":

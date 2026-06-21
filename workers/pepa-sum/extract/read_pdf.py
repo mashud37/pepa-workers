@@ -33,8 +33,11 @@ _PAGE_NUM_RE = re.compile(r"^\s*(?:\d{1,4}|[ivxlcdm]{1,6})\s*$", re.IGNORECASE)
 
 # A reference-list heading on its own line. Stripping everything from here cuts
 # 1k+ tokens off a typical paper and removes text that adds nothing to a summary.
+# The optional leading `#*` lets it match a markdown heading too (e.g. `## References`
+# in a .md input), so the strip works the same on PDF text and on markdown.
 _REF_HEADING = re.compile(
-    r"(?im)^\s*(?:\d+\.?\s*)?(references|bibliography|works cited|literature cited|reference list)\s*$"
+    r"(?im)^\s*#*\s*(?:\d+\.?\s*)?"
+    r"(references|bibliography|works cited|literature cited|reference list)\s*$"
 )
 
 
@@ -47,7 +50,7 @@ def read_pdf(path) -> str:
         for n, text in _ocr_pages(path, scanned):
             pages[n] = text
     pages = _strip_running_headers(pages)
-    return _strip_references("\n\n".join(p for p in pages if p).strip())
+    return strip_references("\n\n".join(p for p in pages if p).strip())
 
 
 def _text_pages(path):
@@ -130,10 +133,11 @@ def _strip_running_headers(pages, edge_lines=3):
     return cleaned
 
 
-def _strip_references(text):
+def strip_references(text):
     """Cut the document at its reference list. Uses the last references heading
     in the back half of the text, so an earlier in-text mention of "references"
-    is never mistaken for the section itself."""
+    is never mistaken for the section itself. Shared with the markdown/text
+    reader so a paper reaches the LLM the same way whatever format it arrived in."""
     cut = None
     for m in _REF_HEADING.finditer(text):
         if m.start() >= len(text) * 0.5:
