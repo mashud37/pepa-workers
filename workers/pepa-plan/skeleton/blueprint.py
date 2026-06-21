@@ -15,11 +15,9 @@ import statistics
 from datetime import datetime, timezone
 
 import config
+from backends import anthropic_client, llm, prompt
 from cli import ui
 from corpus import join
-from backends import llm
-from backends import prompt
-from backends import anthropic_client
 from skeleton import build
 
 MAJOR_SHARE = 0.10          # a move worth blueprinting (rarer ones don't generalise)

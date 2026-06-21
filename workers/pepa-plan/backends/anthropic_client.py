@@ -173,45 +173,60 @@ def run_batch(requests, on_progress=None, on_created=None):
     poll = config.batch_poll_seconds()
     results = {}
     for sub in _sub_batches(requests, _BATCH_MAX_REQUESTS, _BATCH_MAX_BYTES):
-        batch = client.messages.batches.create(requests=[
-            {
-                "custom_id": r["custom_id"],
-                "params": {
-                    "model": r.get("model", default_model),
-                    "max_tokens": r["max_tokens"],
-                    "temperature": 0.3,
-                    "system": r["system"],
-                    "messages": [{"role": "user", "content": r["prompt"]}],
-                },
-            }
-            for r in sub
-        ])
+        batch = _submit_sub_batch(client, sub, default_model)
         if on_created:
             on_created(batch.id)
-        try:
-            while True:
-                status = client.messages.batches.retrieve(batch.id)
-                if on_progress:
-                    on_progress(status)
-                if status.processing_status == "ended":
-                    break
-                time.sleep(poll)
-        except KeyboardInterrupt:
-            try:
-                client.messages.batches.cancel(batch.id)
-            except Exception:
-                pass
-            raise
-        models = {r["custom_id"]: r.get("model", default_model) for r in sub}
-        for res in client.messages.batches.results(batch.id):
-            if res.result.type != "succeeded":
-                continue
-            msg = res.result.message
-            results[res.custom_id] = "".join(
-                b.text for b in msg.content if getattr(b, "type", None) == "text"
-            ).strip()
-            _tally(models.get(res.custom_id, default_model), msg, batch=True)
+        _poll_until_ended(client, batch.id, poll, on_progress)
+        _collect_results(client, batch.id, sub, default_model, results)
     return results
+
+
+def _submit_sub_batch(client, sub, default_model):
+    return client.messages.batches.create(requests=[
+        {
+            "custom_id": r["custom_id"],
+            "params": {
+                "model": r.get("model", default_model),
+                "max_tokens": r["max_tokens"],
+                "temperature": 0.3,
+                "system": r["system"],
+                "messages": [{"role": "user", "content": r["prompt"]}],
+            },
+        }
+        for r in sub
+    ])
+
+
+def _poll_until_ended(client, batch_id, poll, on_progress):
+    """Block until the batch ends, reporting progress each poll. On Ctrl-C the
+    in-flight batch is cancelled to stop spend, then the interrupt propagates."""
+    try:
+        while True:
+            status = client.messages.batches.retrieve(batch_id)
+            if on_progress:
+                on_progress(status)
+            if status.processing_status == "ended":
+                return
+            time.sleep(poll)
+    except KeyboardInterrupt:
+        try:
+            client.messages.batches.cancel(batch_id)
+        except Exception:
+            pass
+        raise
+
+
+def _collect_results(client, batch_id, sub, default_model, results):
+    """Merge this sub-batch's succeeded results into `results` and tally usage."""
+    models = {r["custom_id"]: r.get("model", default_model) for r in sub}
+    for res in client.messages.batches.results(batch_id):
+        if res.result.type != "succeeded":
+            continue
+        msg = res.result.message
+        results[res.custom_id] = "".join(
+            b.text for b in msg.content if getattr(b, "type", None) == "text"
+        ).strip()
+        _tally(models.get(res.custom_id, default_model), msg, batch=True)
 
 
 def _sub_batches(seq, max_count, max_bytes):

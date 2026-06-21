@@ -1,7 +1,6 @@
 import re
 
-from backends import llm
-from backends import prompt
+from backends import llm, prompt
 
 MOVES = [
     "HOOK_PROBLEM",

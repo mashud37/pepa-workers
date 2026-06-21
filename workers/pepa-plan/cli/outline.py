@@ -3,8 +3,7 @@ from datetime import datetime
 from pathlib import Path
 
 import config
-from cli import ui
-from cli import templates
+from cli import templates, ui
 from plan.outline import generate
 from plan.refine import refine
 from skeleton.build import load as load_library

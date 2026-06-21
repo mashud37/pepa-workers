@@ -3,9 +3,8 @@ from datetime import datetime
 from pathlib import Path
 
 import config
+from backends import llm, prompt
 from cli import ui
-from backends import llm
-from backends import prompt
 from skeleton.build import load as load_library
 
 

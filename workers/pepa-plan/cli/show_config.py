@@ -28,14 +28,16 @@ def run():
     if tmpls:
         ui.ok(f"{len(tmpls)} in {config.TEMPLATES_DIR.name}/: " + ", ".join(p.name for p in tmpls))
     else:
-        ui.warn(f"none in {config.TEMPLATES_DIR.name}/ — create one: python manage.py template --new <name>")
+        ui.warn(f"none in {config.TEMPLATES_DIR.name}/ — "
+                "create one: python manage.py template --new <name>")
 
     ui.step("Skeleton library")
     if config.SKELETONS_FILE.exists():
         import json
         lib = json.loads(config.SKELETONS_FILE.read_text(encoding="utf-8"))
         n = len(lib.get("skeletons", []))
-        ui.ok(f"present: {n} skeletons from {lib.get('n_papers', '?')} papers ({lib.get('generated', '?')[:10]})")
+        ui.ok(f"present: {n} skeletons from {lib.get('n_papers', '?')} papers "
+              f"({lib.get('generated', '?')[:10]})")
     else:
         ui.warn("none yet — run: python manage.py abstract")
 

@@ -117,6 +117,10 @@ def _blueprint_block(blueprint):
 
 def outline_prompt(idea, literature, skeleton, structure=None, blueprint=None):
     lit_block = f"\nLITERATURE NOTES:\n{literature}\n" if literature else ""
+    lit_note = (
+        "Where literature is provided, note which sources or claims each paragraph draws on. "
+        if literature else ""
+    )
     skel_block = (
         f"\nSTRUCTURAL TEMPLATE: {skeleton.get('name', '')} "
         f"({skeleton.get('paper_type', '')})\n"
@@ -137,7 +141,7 @@ def outline_prompt(idea, literature, skeleton, structure=None, blueprint=None):
             "Write the plan grouped under the same section headings. Under each heading, "
             "number the paragraphs and for each write:\n"
             "  <N>. [MOVE] — <the specific point this paragraph makes>\n"
-            + ("Where literature is provided, note which sources or claims each paragraph draws on. " if literature else "")
+            + lit_note
             + "Be specific about arguments, not just topics. Output the structured plan only."
         )
     return (
@@ -147,7 +151,7 @@ def outline_prompt(idea, literature, skeleton, structure=None, blueprint=None):
         "Write a numbered paragraph-by-paragraph plan. For each paragraph:\n"
         "  <N>. [MOVE] — <the specific point this paragraph makes>\n"
         "Follow the template's stage sequence. "
-        + ("Where literature is provided, note which sources or claims each paragraph draws on. " if literature else "")
+        + lit_note
         + "Be specific about arguments, not just topics. Output the numbered list only."
     )
 

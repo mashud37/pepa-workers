@@ -53,11 +53,21 @@ _ENV_OVERRIDE = {
 
 _PLACEHOLDERS = {"", "REPLACE_ME", "changeme"}
 
+# Parsed secrets are cached: get() runs on every API call (via the concurrency
+# governor), so re-reading and re-parsing the file each time would mean thousands
+# of disk reads during a large labelling run. Keyed by the file's mtime so an edit
+# between runs is still picked up; set_values() clears it after writing.
+_secrets_cache = {"mtime": None, "data": {}}
+
 
 def _secrets():
-    if SECRETS_FILE.exists():
-        return yaml.safe_load(SECRETS_FILE.read_text(encoding="utf-8")) or {}
-    return {}
+    if not SECRETS_FILE.exists():
+        return {}
+    mtime = SECRETS_FILE.stat().st_mtime
+    if _secrets_cache["mtime"] != mtime:
+        _secrets_cache["data"] = yaml.safe_load(SECRETS_FILE.read_text(encoding="utf-8")) or {}
+        _secrets_cache["mtime"] = mtime
+    return _secrets_cache["data"]
 
 
 def get(key, default=None):
@@ -118,6 +128,7 @@ def _clamped_int(key, default, lo, hi):
 
 
 def set_values(updates):
-    data = _secrets()
+    data = dict(_secrets())
     data.update(updates)
     SECRETS_FILE.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    _secrets_cache["mtime"] = None

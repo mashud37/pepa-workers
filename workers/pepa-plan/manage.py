@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-import sys
 import argparse
-from cli import menu, install, ui
+import sys
+
+from cli import install, menu, ui
 
 
 def main():

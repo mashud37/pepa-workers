@@ -48,7 +48,7 @@ def run(limit=None, sample=None, mode=None):
 
 def _write_report(library, path):
     lines = [
-        f"# Skeleton library\n",
+        "# Skeleton library\n",
         f"Generated: {library['generated']}  |  Papers analysed: {library['n_papers']}\n",
     ]
     for sk in library.get("skeletons", []):

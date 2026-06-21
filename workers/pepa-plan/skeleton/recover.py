@@ -17,7 +17,7 @@ import config
 from cli import ui
 from corpus.load import para_files
 from corpus.parse_para import parse as parse_para
-from skeleton import moves, build
+from skeleton import build, moves
 
 
 def _load_results(path):

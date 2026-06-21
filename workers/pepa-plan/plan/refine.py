@@ -1,5 +1,4 @@
-from backends import llm
-from backends import prompt
+from backends import llm, prompt
 
 
 def refine(outline, feedback, skeleton):

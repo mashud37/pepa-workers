@@ -1,14 +1,21 @@
 """Terminal UI helpers — colored output, symbols, and prompts.
 
-House style: a bold header rule, `step` markers for phases, and ✓ / ⚠ / · / ✗
-status lines, plus ask / ask_choice / confirm prompts. Colour and unicode
-degrade gracefully when stdout is not a TTY or NO_COLOR is set.
+Mirrors the house style of the GCloud Jobs Manager CLI: a bold header rule,
+`step` markers for phases, and ✓ / ⚠ / · / ✗ status lines, plus ask / ask_choice
+/ confirm prompts. Colour and unicode degrade gracefully when stdout is not a TTY
+or NO_COLOR is set.
 """
 import os
 import sys
 
-RESET = "\033[0m"; BOLD = "\033[1m"; DIM = "\033[2m"
-RED = "\033[31m"; GREEN = "\033[32m"; YELLOW = "\033[33m"; BLUE = "\033[34m"
+RESET = "\033[0m"
+BOLD = "\033[1m"
+DIM = "\033[2m"
+RED = "\033[31m"
+GREEN = "\033[32m"
+YELLOW = "\033[33m"
+BLUE = "\033[34m"
+
 WIDTH = 64
 
 
@@ -18,7 +25,8 @@ def _supports_color():
     if not sys.stdout.isatty():
         return False
     if os.name == "nt":
-        try:  # enable ANSI (Virtual Terminal) processing on the Windows console
+        # Enable ANSI (Virtual Terminal) processing on the Windows console.
+        try:
             import ctypes
             k = ctypes.windll.kernel32
             k.SetConsoleMode(k.GetStdHandle(-11), 7)  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
@@ -27,7 +35,8 @@ def _supports_color():
     return True
 
 
-try:  # render unicode even on legacy Windows code pages
+# Try to render unicode symbols even on legacy Windows code pages.
+try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
@@ -55,7 +64,10 @@ def _c(code, text):
 
 def header(text):
     rule = _SYM["rule"] * WIDTH
-    print(); print(_c(BLUE, rule)); print(_c(BOLD + BLUE, f"  {text}")); print(_c(BLUE, rule))
+    print()
+    print(_c(BLUE, rule))
+    print(_c(BOLD + BLUE, f"  {text}"))
+    print(_c(BLUE, rule))
 
 
 def rule():
@@ -63,17 +75,29 @@ def rule():
 
 
 def step(text):
-    print(); print(_c(BOLD + BLUE, f"{_SYM['step']} {text}"))
+    print()
+    print(_c(BOLD + BLUE, f"{_SYM['step']} {text}"))
 
 
-def ok(text):    print(f"  {_c(GREEN, _SYM['ok'])} {text}")
-def warn(text):  print(f"  {_c(YELLOW, _SYM['warn'])} {text}")
-def info(text):  print(f"  {_c(DIM, _SYM['info'])} {text}")
-def error(text): print(f"  {_c(RED, _SYM['err'])} {text}")
+def ok(text):
+    print(f"  {_c(GREEN, _SYM['ok'])} {text}")
+
+
+def warn(text):
+    print(f"  {_c(YELLOW, _SYM['warn'])} {text}")
+
+
+def info(text):
+    print(f"  {_c(DIM, _SYM['info'])} {text}")
+
+
+def error(text):
+    print(f"  {_c(RED, _SYM['err'])} {text}")
 
 
 def abort(text, code=1):
-    error(text); sys.exit(code)
+    error(text)
+    sys.exit(code)
 
 
 def ask(prompt, default=None):
@@ -81,7 +105,8 @@ def ask(prompt, default=None):
     try:
         raw = input(_c(BOLD, f"  {prompt}{suffix}: ")).lstrip("﻿").strip()
     except (EOFError, KeyboardInterrupt):
-        print(); return default
+        print()
+        return default
     return raw or default
 
 
@@ -106,9 +131,11 @@ def confirm(question, default_yes=True):
 
 
 def menu(title, options):
-    """Print a numbered menu and return a 0-based index, or None for Back/quit.
-    `options` is a list of (label, description) tuples or plain strings."""
-    print(); rule(); print(_c(BOLD, f"  {title}"))
+    """Print a numbered menu (reference style) and return a 0-based index, or
+    None for Back/quit. `options` is a list of (label, description) or plain str."""
+    print()
+    rule()
+    print(_c(BOLD, f"  {title}"))
     width = max((len(o[0]) if isinstance(o, tuple) else len(o)) for o in options)
     for i, o in enumerate(options, 1):
         if isinstance(o, tuple):

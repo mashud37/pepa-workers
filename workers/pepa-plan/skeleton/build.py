@@ -17,15 +17,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
 import config
+from backends import anthropic_client, llm, prompt
 from cli import ui
 from cli.progress import StepSpinner
 from corpus.load import para_files
 from corpus.parse_para import parse as parse_para
-from skeleton import moves
-from skeleton import examples
-from backends import llm
-from backends import prompt
-from backends import anthropic_client
+from skeleton import examples, moves
 
 
 def build(limit=None, sample=None, mode=None):
@@ -149,7 +146,10 @@ def _label_serial(parsed):
     n = len(parsed)
     for done, (base, sentences) in enumerate(parsed, 1):
         ui.info(f"[{done}/{n}] labelling {base}")
-        sequences.append({"base": base, "moves": moves.label(sentences)})
+        try:
+            sequences.append({"base": base, "moves": moves.label(sentences)})
+        except Exception as e:  # transient exhaustion for one paper: skip it
+            ui.error(f"[{done}/{n}] {base}: {e}")
     return sequences
 
 
@@ -241,8 +241,12 @@ def _collapse(move_list):
 
 def prepare_synthesis(sequences, char_budget=SYNTH_CHAR_BUDGET, seed=0):
     """Compact sequences for the synthesis call and, if still over budget, draw a
-    reproducible representative sample that fits. Returns (compact, n_total)."""
-    compact = [{"base": s["base"], "moves": _collapse(s["moves"])} for s in sequences]
+    reproducible representative sample that fits. Returns (compact, n_total).
+
+    Sorted by base first so the seeded sample is identical run-to-run: parallel
+    labelling appends in completion order, which the seed alone wouldn't pin down."""
+    ordered = sorted(sequences, key=lambda s: s["base"])
+    compact = [{"base": s["base"], "moves": _collapse(s["moves"])} for s in ordered]
     n_total = len(compact)
     if sum(len(c["moves"]) + len(c["base"]) + 16 for c in compact) <= char_budget:
         return compact, n_total
