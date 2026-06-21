@@ -1,0 +1,19 @@
+FROM vllm/vllm-openai:latest AS vllm
+
+FROM python:3.12-slim
+
+ARG DRAFT_MODEL=Qwen/Qwen3-32B-AWQ
+ENV DRAFT_MODEL=${DRAFT_MODEL}
+
+COPY --from=vllm /usr/local/bin/vllm /usr/local/bin/vllm
+COPY --from=vllm /usr/local/lib/python3.12/dist-packages /usr/local/lib/python3.12/dist-packages
+
+RUN pip install flask gunicorn
+
+COPY cloud/serve_vllm.py /app/serve_vllm.py
+
+WORKDIR /app
+
+# Start vLLM in background, then launch the Flask proxy
+CMD sh -c "vllm serve ${DRAFT_MODEL} --port 8001 --tensor-parallel-size 1 & \
+    gunicorn -w 1 -b 0.0.0.0:8080 serve_vllm:app"
