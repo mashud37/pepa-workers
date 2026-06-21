@@ -33,7 +33,7 @@ def run(outline_file=None, auto=False):
     if not works:
         raise SystemExit("No papers found in corpus. Check CORPUS_DIR configuration.")
 
-    outline = _get_outline(outline_file)
+    outline, outline_stem = _get_outline(outline_file)
     if not outline:
         raise SystemExit("No outline provided.")
     ui.ok(f"outline: {len(outline)} chars")
@@ -52,7 +52,7 @@ def run(outline_file=None, auto=False):
     else:
         review_text = _draft_synthesise(outline, selected, debates)
 
-    out_path = _write_review(review_text, selected, sig)
+    out_path = _write_review(review_text, selected, sig, outline_stem)
     ui.ok(f"saved to {out_path}")
     ui.rule()
     print(review_text)
@@ -80,7 +80,10 @@ def _select(outline, auto, works):
     except SystemExit:
         sp.done("error")
         raise
+    sp = progress.StepSpinner("grouping")
+    sp.start()
     groups = _group_candidates(candidates)
+    sp.done(f"{len(groups)} themes")
 
     if auto:
         return _dedupe(r for g in groups for r in g["records"])
@@ -95,7 +98,10 @@ def _select(outline, auto, works):
         sp.start()
         candidates = retrieve(query, k=config.REVIEW_CANDIDATE_K)
         sp.done(f"{len(candidates)} candidates")
+        sp = progress.StepSpinner("grouping")
+        sp.start()
         groups = _group_candidates(candidates)
+        sp.done(f"{len(groups)} themes")
 
     return _dedupe(r for g in groups for r in g["records"])
 
@@ -412,7 +418,7 @@ def _get_outline(outline_file):
         p = Path(outline_file)
         if not p.exists():
             raise SystemExit(f"File not found: {outline_file}")
-        return p.read_text(encoding="utf-8").strip()
+        return p.read_text(encoding="utf-8").strip(), p.stem
 
     input_files = sorted(config.INPUT_DIR.glob("*.md")) + sorted(config.INPUT_DIR.glob("*.txt"))
     options = [("Open in editor", "write outline in $EDITOR / notepad")]
@@ -420,10 +426,11 @@ def _get_outline(outline_file):
 
     choice = ui.menu("Outline source", options)
     if choice is None:
-        return None
+        return None, "draft"
     if choice == 0:
-        return _editor_input()
-    return input_files[choice - 1].read_text(encoding="utf-8").strip()
+        return _editor_input(), "draft"
+    f = input_files[choice - 1]
+    return f.read_text(encoding="utf-8").strip(), f.stem
 
 
 def _editor_input():
@@ -517,9 +524,9 @@ def _parse_map_threads(path):
 
 # ── output ────────────────────────────────────────────────────────────────────
 
-def _write_review(text, selected, sig=None):
+def _write_review(text, selected, sig=None, outline_stem="review"):
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out = config.OUTPUT_DIR / f"review_{ts}.md"
+    out = config.OUTPUT_DIR / f"review_{outline_stem}_{ts}.md"
     rows = []
     for w in selected:
         line = f"- {w['authors']} — {w['title']}"

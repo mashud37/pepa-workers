@@ -211,7 +211,8 @@ def _split_sections(text):
 
 def _write_gaps(sections, draft_name):
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out = config.OUTPUT_DIR / f"gaps_{ts}.md"
+    stem = Path(draft_name).stem
+    out = config.OUTPUT_DIR / f"gaps_{stem}_{ts}.md"
 
     lines = [f"# Gap Report for {draft_name}", ""]
     seen = {}
