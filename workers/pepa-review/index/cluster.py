@@ -112,30 +112,35 @@ def reduce_dims(features):
 
 # ── parameter selection (§2 validation) ──────────────────────────────────────
 
-def select_params(coords, n_threads=None):
+def select_params(coords, n_threads=None, min_threads=None, max_threads=None):
     """Pick thread count by silhouette over a band; return (min_cs, k, silhouette).
 
     Silhouette alone collapses to k=2 on a single-domain corpus, so the sweep is
     bounded to a useful band (config MAP_MIN/MAX_THREADS, scaled by n). HDBSCAN's
     min_cluster_size is then derived from k so its votes match that granularity.
+    The band floor/ceiling can be overridden (thread-level map re-clusters a small
+    set of works, where the corpus-scale floor of 6 would be too coarse).
+
+    The floor scales with n (n//40) but is clamped below the ceiling: on a large
+    corpus n//40 can exceed MAP_MAX_THREADS, which would otherwise invert the band
+    to empty and silently collapse the map to a fixed fallback k.
     """
     n = len(coords)
     if n_threads:
         k = int(n_threads)
         return _min_cs_for(n, k), k, _silhouette_for_k(coords, k)
 
-    lo = max(config.MAP_MIN_THREADS, n // 40)
-    hi = min(config.MAP_MAX_THREADS, max(lo + 1, n // 8))
+    floor = min_threads if min_threads is not None else config.MAP_MIN_THREADS
+    ceil = max_threads if max_threads is not None else config.MAP_MAX_THREADS
+    hi = min(ceil, max(floor + 1, n // 8), n - 1)
+    lo = min(max(floor, n // 40), hi)
     best = None
     for k in range(lo, hi + 1, 2):
-        if k >= n:
-            break
         sil = _silhouette_for_k(coords, k)
         if best is None or sil > best[2]:
             best = (_min_cs_for(n, k), k, sil)
     if best is None:
-        k = max(5, min(25, n // 15))
-        return _min_cs_for(n, k), k, _silhouette_for_k(coords, k)
+        return _min_cs_for(n, lo), lo, _silhouette_for_k(coords, lo)
     return best
 
 

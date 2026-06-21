@@ -28,8 +28,11 @@ def run(input_file=None):
     draft_text = Path(draft_path).read_text(encoding="utf-8", errors="replace")
     ui.ok(f"draft: {Path(draft_path).name} ({len(draft_text)} chars)")
 
+    sp = progress.StepSpinner("scanning corpus")
+    sp.start()
     from corpus.metadata import work_list
     all_works = work_list()
+    sp.done(f"{len(all_works)} works")
     cited_bases = _detect_cited(draft_text, all_works)
     ui.info(f"already cited: ~{len(cited_bases)} works detected in text")
 

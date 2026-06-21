@@ -14,9 +14,11 @@ def run(force=False):
             "Run: python manage.py install"
         )
 
+    scan = progress.StepSpinner("scanning corpus")
+    scan.start()
     from corpus.load import paper_count
     total = paper_count()
-    ui.info(f"corpus: {total} papers")
+    scan.done(f"{total} papers")
     ui.info(f"embed:  {provider}/{model}")
     if force:
         ui.warn("--force: rebuilding index from scratch")

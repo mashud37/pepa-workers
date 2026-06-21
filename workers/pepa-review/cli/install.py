@@ -74,6 +74,10 @@ def _check_corpus():
         ui.warn(f"CORPUS_DIR not found: {d}")
         ui.info("Set corpus_dir in secrets.yaml or PEPAREVIEW_CORPUS_DIR env var")
         return
+    from cli import progress
+    sp = progress.StepSpinner("scanning corpus")
+    sp.start()
     from corpus.load import paper_count
     count = paper_count()
+    sp.done()
     ui.ok(f"corpus ready: {count} papers in {d}")

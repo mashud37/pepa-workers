@@ -1,11 +1,9 @@
 """Interactive menu — the bare `python manage.py` entry point."""
-import config
 from cli import ui
 
 
 def main():
     ui.header("pepa-review")
-    _corpus_status()
 
     while True:
         choice = ui.menu("Main menu", [
@@ -13,6 +11,7 @@ def main():
             ("Gap-check a draft",    "find missed/underused works in your draft"),
             ("Explore literature",   "interactive discovery over the corpus"),
             ("Corpus map",           "cluster works into thematic threads, write report"),
+            ("Thread-level map",     "re-cluster one thread of a saved map in detail"),
             ("Build / refresh index","embed all sum_ briefs into the retrieval index"),
             ("Bibliographic data",   "ingest DOIs/refs, export document reference, citation graph"),
             ("Show config",          "paths, models, index status"),
@@ -34,14 +33,17 @@ def main():
             from cli import map as map_cmd
             map_cmd.run()
         elif choice == 4:
+            from cli import thread_map
+            thread_map.run()
+        elif choice == 5:
             from cli import index_cmd
             index_cmd.run()
-        elif choice == 5:
-            _biblio_menu()
         elif choice == 6:
+            _biblio_menu()
+        elif choice == 7:
             from cli import show_config
             show_config.run()
-        elif choice == 7:
+        elif choice == 8:
             from cli import install
             install.run()
 
@@ -68,21 +70,3 @@ def _biblio_menu():
             biblio_cmd.run("network", graph_type="coupling", fmt="html")
         elif sub == 4:
             biblio_cmd.run("ingest")
-
-
-def _corpus_status():
-    try:
-        from corpus.load import paper_count
-        count = paper_count()
-        ui.info(f"corpus: {count} papers  |  {config.corpus_dir().name}/")
-    except Exception:
-        ui.warn("corpus not found — run Install / setup to check paths")
-    if config.INDEX_FILE.exists():
-        import json
-        try:
-            idx = json.loads(config.INDEX_FILE.read_text(encoding="utf-8"))
-            ui.info(f"index:  {len(idx.get('records', []))} records  ({idx.get('provider','?')})")
-        except Exception:
-            pass
-    else:
-        ui.warn("no index yet — choose 'Build / refresh index'")

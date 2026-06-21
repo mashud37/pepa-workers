@@ -11,8 +11,13 @@ def run():
     d = config.corpus_dir()
     ui.info(f"corpus_dir:  {d}")
     try:
+        from cli import progress
         from corpus.load import paper_count
-        ui.info(f"papers:      {paper_count()}")
+        sp = progress.StepSpinner("scanning corpus")
+        sp.start()
+        count = paper_count()
+        sp.done()
+        ui.info(f"papers:      {count}")
     except Exception as e:
         ui.warn(f"could not count papers: {e}")
 

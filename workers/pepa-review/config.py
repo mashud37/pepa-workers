@@ -58,6 +58,10 @@ MAP_MULTI_MARGIN = 0.8         # second thread listed if its profile >= margin *
 MAP_MERGE_SIM = 0.9            # centroid cosine above which two threads may merge
 MAP_MERGE_TERM_J = 0.5         # plus top-term Jaccard above which two threads merge
 
+# Thread-level map (WS5) — re-cluster the works of one thread at finer granularity
+MAP_SUB_MIN_THREADS = 2        # band floor when re-clustering a single thread's works
+MAP_SUB_MAX_THREADS = 12       # band ceiling for the sub-clustering sweep
+
 _ENV_OVERRIDE = {
     "corpus_dir":       "PEPAREVIEW_CORPUS_DIR",
     "anthropic_api_key": "ANTHROPIC_API_KEY",

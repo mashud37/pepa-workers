@@ -26,6 +26,12 @@ def main():
     mp.add_argument("--threads", type=int, default=None, metavar="N",
                     help="Target thread count for k-means fallback (default: auto)")
 
+    tm = sub.add_parser("threadmap", help="Re-cluster one thread of a saved map in detail (WS5)")
+    tm.add_argument("--map", default=None, metavar="FILE",
+                    help="Corpus map file in output/ (default: pick interactively)")
+    tm.add_argument("--thread", default=None, metavar="N|NAME|all",
+                    help="Thread number, name substring, or 'all' (default: pick interactively)")
+
     ix = sub.add_parser("index", help="Build/refresh the embedding index")
     ix.add_argument("--force", action="store_true", help="Rebuild from scratch")
 
@@ -62,6 +68,9 @@ def main():
     elif args.command == "map":
         from cli import map as map_cmd
         map_cmd.run(n_threads=args.threads)
+    elif args.command == "threadmap":
+        from cli import thread_map
+        thread_map.run(map_file=args.map, thread=args.thread)
     elif args.command == "index":
         from cli import index_cmd
         index_cmd.run(force=args.force)

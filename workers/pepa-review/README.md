@@ -14,7 +14,7 @@ corpus/                load.py  parse_sum.py  metadata.py  — read pepa-sum out
 index/                 embeddings.py  store.py  — build and query the vector index
 backends/              anthropic_client.py  llm.py  prompt.py  — generation layer
 cli/                   ui.py  progress.py  menu.py  install.py  show_config.py
-                       index_cmd.py  review.py  gaps.py  explore.py  map.py
+                       index_cmd.py  review.py  gaps.py  explore.py  map.py  thread_map.py
 data/                  index.json  (gitignored, kept via .gitkeep)
 input/                 drop draft files and outlines here (gitignored)
 output/                generated reviews, gap reports, corpus maps (gitignored)
@@ -49,8 +49,9 @@ python manage.py index
 ## Menu
 
 ```
-1) Literature review    2) Gap-check a draft    3) Explore literature
-4) Corpus map           5) Build / refresh index   6) Show config   7) Install / setup
+1) Literature review    2) Gap-check a draft       3) Explore literature
+4) Corpus map           5) Thread-level map        6) Build / refresh index
+7) Bibliographic data   8) Show config             9) Install / setup
 ```
 
 ## Direct subcommands (scriptable)
@@ -60,6 +61,7 @@ python manage.py review  [--input <outline.md>] [--auto]
 python manage.py gaps    --input <draft.md>
 python manage.py explore [--query "<question>"]
 python manage.py map     [--threads N]
+python manage.py threadmap [--map <file>] [--thread N|NAME|all]
 python manage.py index   [--force]
 python manage.py config
 python manage.py install
@@ -121,11 +123,29 @@ python manage.py map               # auto-select thread count
 python manage.py map --threads 12  # force a target thread count
 ```
 
-Output is saved to `output/corpus_map_<timestamp>.md`. Install optional deps for the full
+Output is saved to `output/corpus_map_<timestamp>.md`, alongside a `corpus_map_<timestamp>.json`
+sidecar that records each thread's works by index id. Install optional deps for the full
 pipeline (without them the tool degrades to a plain k-means map):
 ```
 pip install scikit-learn umap-learn hdbscan
 ```
+
+## Thread-level map
+
+The corpus map's thread count is capped relative to corpus size, so a large thread can stay
+coarse. Rather than forcing the whole map finer (which thins every thread), drill into one
+thread: the same pipeline re-runs over just that thread's works at a finer granularity band.
+Pick a saved map, then one thread or all of them.
+
+```
+python manage.py threadmap                          # pick map + thread interactively
+python manage.py threadmap --thread all             # detail every thread of the newest map
+python manage.py threadmap --map corpus_map_<ts>.md --thread 3
+```
+
+Works are recovered from the map's `.json` sidecar; maps generated before the sidecar existed
+fall back to matching the rendered work list against the index. Output is saved to
+`output/thread_map_<thread>_<timestamp>.md`.
 
 ## Cost estimates
 
@@ -136,6 +156,7 @@ pip install scikit-learn umap-learn hdbscan
 | Literature review (10 works) | Claude Sonnet | ~$0.09 |
 | Discovery query | Claude Haiku | ~$0.002 |
 | Corpus map (per thread) | Claude Sonnet | ~$0.01 |
+| Thread-level map (per sub-thread) | Claude Sonnet | ~$0.01 |
 
 > Estimates only — verify current pricing in the vendor console before relying on them.
 > Embedding costs are negligible; generation costs dominate.

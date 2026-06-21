@@ -18,15 +18,77 @@ from backends import llm, prompt as prompts
 
 
 def run(n_threads=None):
-    ui.header("Corpus map")
-
     idx = _load_index()
-    records = idx["records"]
+    build_map(idx["records"], np.array(idx["vectors"], dtype=float), n_threads=n_threads,
+              title="Corpus map", stem="corpus_map", index_model=idx.get("model", ""))
+
+
+def build_map(records, vecs, n_threads=None, *, title="Corpus map", stem="corpus_map",
+              index_model="", min_threads=None, max_threads=None, source=None):
+    """Cluster `records` (parallel `vecs`) into threads, characterise each, write map + sidecar.
+
+    Shared by the corpus map (all works) and the thread-level map (one thread's works).
+    `min_threads`/`max_threads` override the granularity band; `stem` names the output
+    file family; `source` records the parent map a thread-level run drilled into.
+    """
+    ui.header(title)
+
     n = len(records)
     ui.info(f"corpus: {n} works")
 
-    vecs = np.array(idx["vectors"], dtype=float)
+    vecs = np.asarray(vecs, dtype=float)
     vecs_norm = vecs / (np.linalg.norm(vecs, axis=1, keepdims=True) + 1e-9)
+
+    cl = _cluster_with_progress(records, vecs_norm, (n_threads, min_threads, max_threads))
+    primary, secondary, outliers, terms, strength, sil = (
+        cl["primary"], cl["secondary"], cl["outliers"], cl["terms"], cl["strength"], cl["sil"])
+
+    thread_ids = sorted(set(primary.values()), key=lambda t: -sum(1 for v in primary.values() if v == t))
+    ui.info(f"{len(thread_ids)} threads · {len(outliers)} cross-cutting · "
+            f"{sum(1 for v in secondary.values() if v is not None)} multi-thread · "
+            f"mean consensus {np.mean(list(strength.values())):.2f}")
+
+    sp = progress.StepSpinner("loading methods/context fields")
+    sp.start()
+    try:
+        enriched_map = _load_enriched(records)
+        sp.done(f"{len(enriched_map)} records enriched")
+    except Exception:
+        sp.done("partial")
+        enriched_map = {}
+
+    clustering = {"primary": primary, "secondary": secondary, "terms": terms}
+    sections = _build_sections(thread_ids, records, clustering, vecs_norm, enriched_map)
+
+    outlier_recs = [records[i] for i in outliers]
+    stats = {"silhouette": sil, "consensus": float(np.mean(list(strength.values())))}
+    meta = {
+        "ts": datetime.now().strftime("%Y%m%d_%H%M%S"),
+        "title": title, "stem": stem, "total_works": n,
+        "stats": stats, "index_model": index_model, "source": source,
+    }
+    out = _write_map(sections, outlier_recs, meta)
+    sidecar = _write_sidecar(sections, outlier_recs, meta)
+    ui.ok(f"saved to {out.name}")
+    ui.info(f"index sidecar: {sidecar.name}")
+    ui.rule()
+    for i, s in enumerate(sections, 1):
+        extra = f" +{len(s['also'])} shared" if s["also"] else ""
+        ui.info(f"  {i:2}. {s['name']}  ({len(s['records'])} works{extra})")
+    if outlier_recs:
+        ui.info(f"  --. Cross-cutting / outliers  ({len(outlier_recs)} works)")
+    return out
+
+
+# ── clustering stages (with liveness) ─────────────────────────────────────────
+
+def _cluster_with_progress(records, vecs_norm, band):
+    """Run the clustering pipeline stage by stage, each behind its own spinner.
+
+    `band` is (n_threads, min_threads, max_threads) passed to select_params.
+    Returns primary/secondary/outliers maps, c-TF-IDF terms, strength, and silhouette.
+    """
+    n_threads, min_threads, max_threads = band
     texts = [cluster.pool_text(r) for r in records]
 
     sp = progress.StepSpinner("building ensemble features")
@@ -46,7 +108,7 @@ def run(n_threads=None):
     sp = progress.StepSpinner("selecting granularity")
     sp.start()
     try:
-        min_cs, k, sil = cluster.select_params(coords, n_threads)
+        min_cs, k, sil = cluster.select_params(coords, n_threads, min_threads, max_threads)
         sp.done(f"k={k}  min_cs={min_cs}  silhouette={sil:.3f}")
     except Exception as e:
         sp.done("error")
@@ -68,22 +130,16 @@ def run(n_threads=None):
     primary, secondary, terms = cluster.merge_threads(primary, secondary, coords, texts)
     sp.done(f"{len(set(primary.values()))} threads after merge")
 
-    thread_ids = sorted(set(primary.values()), key=lambda t: -sum(1 for v in primary.values() if v == t))
-    ui.info(f"{len(thread_ids)} threads · {len(outliers)} cross-cutting · "
-            f"{sum(1 for v in secondary.values() if v is not None)} multi-thread · "
-            f"mean consensus {np.mean(list(strength.values())):.2f}")
+    return {"primary": primary, "secondary": secondary, "outliers": outliers,
+            "terms": terms, "strength": strength, "sil": sil}
 
-    sp = progress.StepSpinner("loading methods/context fields")
-    sp.start()
-    try:
-        enriched_map = _load_enriched(records)
-        sp.done(f"{len(enriched_map)} records enriched")
-    except Exception:
-        sp.done("partial")
-        enriched_map = {}
 
+# ── per-thread characterisation ───────────────────────────────────────────────
+
+def _build_sections(thread_ids, records, clustering, vecs_norm, enriched_map):
+    """Ask the LLM to characterise each thread; return parsed section dicts."""
+    primary, secondary, terms = clustering["primary"], clustering["secondary"], clustering["terms"]
     base_to_idx = {r["base"]: i for i, r in enumerate(records)}
-
     sections = []
     total = len(thread_ids)
     for ci, tid in enumerate(thread_ids):
@@ -107,17 +163,7 @@ def run(n_threads=None):
         except Exception as e:
             sp.done("error")
             raise SystemExit(str(e))
-
-    outlier_recs = [records[i] for i in outliers]
-    stats = {"silhouette": sil, "consensus": float(np.mean(list(strength.values())))}
-    out = _write_map(sections, outlier_recs, n, stats)
-    ui.ok(f"saved to {out.name}")
-    ui.rule()
-    for i, s in enumerate(sections, 1):
-        extra = f" +{len(s['also'])} shared" if s["also"] else ""
-        ui.info(f"  {i:2}. {s['name']}  ({len(s['records'])} works{extra})")
-    if outlier_recs:
-        ui.info(f"  --. Cross-cutting / outliers  ({len(outlier_recs)} works)")
+    return sections
 
 
 # ── enrichment ───────────────────────────────────────────────────────────────
@@ -181,14 +227,15 @@ def _parse_response(response, records, also):
 
 # ── output ────────────────────────────────────────────────────────────────────
 
-def _write_map(sections, outliers, total_works, stats):
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out = config.OUTPUT_DIR / f"corpus_map_{ts}.md"
+def _write_map(sections, outliers, meta):
+    stats = meta["stats"]
+    out = config.OUTPUT_DIR / f"{meta['stem']}_{meta['ts']}.md"
 
     lines = [
-        "# Corpus Map",
+        f"# {meta['title']}",
         "",
-        f"_{total_works} works · {len(sections)} threads · generated {datetime.now().strftime('%Y-%m-%d')}_",
+        f"_{meta['total_works']} works · {len(sections)} threads · "
+        f"generated {datetime.now().strftime('%Y-%m-%d')}_",
         "",
         f"_Method: UMAP → consensus clustering (HDBSCAN + k-means + Ward) → c-TF-IDF. "
         f"Silhouette {stats['silhouette']:.3f} · mean consensus {stats['consensus']:.2f}._",
@@ -196,39 +243,73 @@ def _write_map(sections, outliers, total_works, stats):
         "---",
         "",
     ]
-
     for i, s in enumerate(sections, 1):
-        lines += [f"## {i}. {s['name']}", ""]
-
-        if s.get("discussion"):
-            lines += ["**Discussion:**", "", s["discussion"], ""]
-        if s.get("arguments"):
-            lines += ["**Key arguments:**"] + [f"- {a}" for a in s["arguments"]] + [""]
-        if s.get("concepts"):
-            lines += ["**Key concepts:**"] + [f"- {c}" for c in s["concepts"]] + [""]
-        if s.get("methods"):
-            lines += [f"**Methods:** {s['methods']}", ""]
-        if s.get("empirical"):
-            lines += [f"**Empirical contexts:** {s['empirical']}", ""]
-
-        lines += [f"**Works ({len(s['records'])}):**"]
-        for r in sorted(s["records"], key=lambda x: x.get("authors", "")):
-            lines.append(f"- {r.get('authors', '')} — {r.get('title', '')}")
-        if s.get("also"):
-            lines += ["", "**Also drawn on by this thread (shared with another):**"]
-            for r in sorted(s["also"], key=lambda x: x.get("authors", "")):
-                lines.append(f"- {r.get('authors', '')} — {r.get('title', '')}")
-        lines += ["", "---", ""]
+        lines += _render_section(i, s)
 
     if outliers:
         lines += [f"## Cross-cutting / outliers ({len(outliers)})", "",
                   "_Works that did not align strongly with any single thread._", ""]
-        for r in sorted(outliers, key=lambda x: x.get("authors", "")):
-            lines.append(f"- {r.get('authors', '')} — {r.get('title', '')}")
+        lines += [_work_line(r) for r in sorted(outliers, key=lambda x: x.get("authors", ""))]
         lines += [""]
 
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(lines), encoding="utf-8")
+    return out
+
+
+def _work_line(r):
+    return f"- {r.get('authors', '')} — {r.get('title', '')}"
+
+
+def _render_section(i, s):
+    lines = [f"## {i}. {s['name']}", ""]
+    if s.get("discussion"):
+        lines += ["**Discussion:**", "", s["discussion"], ""]
+    if s.get("arguments"):
+        lines += ["**Key arguments:**"] + [f"- {a}" for a in s["arguments"]] + [""]
+    if s.get("concepts"):
+        lines += ["**Key concepts:**"] + [f"- {c}" for c in s["concepts"]] + [""]
+    if s.get("methods"):
+        lines += [f"**Methods:** {s['methods']}", ""]
+    if s.get("empirical"):
+        lines += [f"**Empirical contexts:** {s['empirical']}", ""]
+
+    lines += [f"**Works ({len(s['records'])}):**"]
+    lines += [_work_line(r) for r in sorted(s["records"], key=lambda x: x.get("authors", ""))]
+    if s.get("also"):
+        lines += ["", "**Also drawn on by this thread (shared with another):**"]
+        lines += [_work_line(r) for r in sorted(s["also"], key=lambda x: x.get("authors", ""))]
+    return lines + ["", "---", ""]
+
+
+def _write_sidecar(sections, outliers, meta):
+    """Machine-readable sibling of the .md map: thread -> index `base` ids.
+
+    Lets the thread-level map (cli/thread_map.py) pull a thread's works back out of
+    the index without fuzzy-matching the rendered 'authors — title' lines.
+    """
+    out = config.OUTPUT_DIR / f"{meta['stem']}_{meta['ts']}.json"
+    payload = {
+        "title":       meta["title"],
+        "map_file":    f"{meta['stem']}_{meta['ts']}.md",
+        "generated":   datetime.now().strftime("%Y-%m-%d"),
+        "index_model": meta["index_model"],
+        "total_works": meta["total_works"],
+        "stats":       meta["stats"],
+        "source":      meta["source"],
+        "threads": [
+            {
+                "id":         i,
+                "name":       s["name"],
+                "bases":      [r["base"] for r in s["records"]],
+                "also_bases": [r["base"] for r in s.get("also", [])],
+            }
+            for i, s in enumerate(sections, 1)
+        ],
+        "outliers": [r["base"] for r in outliers],
+    }
+    config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     return out
 
 

@@ -26,7 +26,10 @@ from backends import llm, prompt as prompts
 def run(outline_file=None, auto=False):
     ui.header("Literature review")
 
+    sp = progress.StepSpinner("scanning corpus")
+    sp.start()
     works = work_list()
+    sp.done(f"{len(works)} works")
     if not works:
         raise SystemExit("No papers found in corpus. Check CORPUS_DIR configuration.")
 
@@ -35,7 +38,7 @@ def run(outline_file=None, auto=False):
         raise SystemExit("No outline provided.")
     ui.ok(f"outline: {len(outline)} chars")
 
-    selected = _select(outline, auto)
+    selected = _select(outline, auto, works)
     if not selected:
         raise SystemExit("No works selected.")
     ui.ok(f"selected: {len(selected)} works")
@@ -57,7 +60,7 @@ def run(outline_file=None, auto=False):
 
 # ── selection (map-driven, interactive) ───────────────────────────────────────
 
-def _select(outline, auto):
+def _select(outline, auto, works):
     from index.store import retrieve
 
     if not auto:
@@ -66,7 +69,7 @@ def _select(outline, auto):
             ("Search by keyword", "filter by author surname or title keyword, then pick"),
         ])
         if menu == 1:
-            return _keyword_select(work_list())
+            return _keyword_select(works)
 
     query = outline
     sp = progress.StepSpinner("retrieving candidates")
