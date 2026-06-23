@@ -19,7 +19,11 @@ def save(assignment: dict, path=None) -> None:
 
 
 def from_defaults(plan_items: list) -> dict:
-    """Build assignment from move-label defaults.
+    """Build assignment from move-label defaults, preserving plan order.
+
+    Scans items in their existing order and advances the current section
+    forward only — never backward. This produces contiguous section spans
+    that respect the plan's paragraph ordering.
 
     Args:
         plan_items: List of parsed plan items (from corpus/parse_plan.py).
@@ -28,12 +32,15 @@ def from_defaults(plan_items: list) -> dict:
         Dict mapping section key to list of item indices.
     """
     assignment = {k: [] for k in SECTION_KEYS}
+    current_idx = 0
     for item in plan_items:
         sec = item.get("default_section", "findings")
-        if sec in assignment:
-            assignment[sec].append(item["index"])
-        else:
-            assignment["findings"].append(item["index"])
+        if sec not in SECTION_KEYS:
+            sec = "findings"
+        item_sec_idx = SECTION_KEYS.index(sec)
+        if item_sec_idx > current_idx:
+            current_idx = item_sec_idx
+        assignment[SECTION_KEYS[current_idx]].append(item["index"])
     return assignment
 
 
