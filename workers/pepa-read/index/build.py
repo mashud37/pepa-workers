@@ -9,6 +9,7 @@ import time
 import config
 from cli import ui
 from index import scan
+from index.scan import SECTION_FIELDS
 from index.schema import ensure_schema
 
 _BATCH = 200
@@ -31,7 +32,8 @@ def _connect() -> sqlite3.Connection:
     config.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(config.DB_PATH)
     conn.execute("PRAGMA journal_mode=WAL")
-    ensure_schema(conn)
+    if ensure_schema(conn):
+        ui.warn("index schema upgraded — existing rows were cleared, doing a full reindex")
     return conn
 
 
@@ -42,9 +44,10 @@ def _existing_row(conn, stem, chapter):
     ).fetchone()
 
 
-def _upsert(conn, stem, chapter, title, authors, body, text_path, sum_path,
+def _upsert(conn, stem, chapter, title, authors, sections, text_path, sum_path,
             text_mtime, sum_mtime):
     now = time.time()
+    section_values = [sections.get(f, "") for f in SECTION_FIELDS]
     row = _existing_row(conn, stem, chapter)
     if row:
         doc_id = row[0]
@@ -52,21 +55,28 @@ def _upsert(conn, stem, chapter, title, authors, body, text_path, sum_path,
         # FTS5 re-tokenizes the CURRENT content-table row to know what to
         # remove, so this must run against the old values, not the new ones.
         conn.execute("DELETE FROM documents_fts WHERE rowid = ?", (doc_id,))
+        set_clause = ", ".join(f"{f}=?" for f in SECTION_FIELDS)
         conn.execute(
-            "UPDATE documents SET title=?, authors_raw=?, body=?, text_path=?, sum_path=?, "
-            "text_mtime=?, sum_mtime=?, indexed_at=? WHERE id=?",
-            (title, authors, body, text_path, sum_path, text_mtime, sum_mtime, now, doc_id),
+            f"UPDATE documents SET title=?, authors_raw=?, {set_clause}, text_path=?, "
+            "sum_path=?, text_mtime=?, sum_mtime=?, indexed_at=? WHERE id=?",
+            (title, authors, *section_values, text_path, sum_path, text_mtime, sum_mtime,
+             now, doc_id),
         )
     else:
+        col_names = ["stem", "chapter", "title", "authors_raw", *SECTION_FIELDS,
+                     "text_path", "sum_path", "text_mtime", "sum_mtime", "indexed_at"]
+        placeholders = ", ".join("?" * len(col_names))
         cur = conn.execute(
-            "INSERT INTO documents (stem, chapter, title, authors_raw, body, text_path, "
-            "sum_path, text_mtime, sum_mtime, indexed_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
-            (stem, chapter, title, authors, body, text_path, sum_path, text_mtime, sum_mtime, now),
+            f"INSERT INTO documents ({', '.join(col_names)}) VALUES ({placeholders})",
+            (stem, chapter, title, authors, *section_values, text_path, sum_path,
+             text_mtime, sum_mtime, now),
         )
         doc_id = cur.lastrowid
+    fts_col_names = ["rowid", "title", "authors_raw", *SECTION_FIELDS]
+    fts_placeholders = ", ".join("?" * len(fts_col_names))
     conn.execute(
-        "INSERT INTO documents_fts (rowid, title, authors_raw, body) VALUES (?,?,?,?)",
-        (doc_id, title or "", authors or "", body or ""),
+        f"INSERT INTO documents_fts ({', '.join(fts_col_names)}) VALUES ({fts_placeholders})",
+        (doc_id, title or "", authors or "", *section_values),
     )
     return doc_id
 
@@ -141,13 +151,11 @@ def run(force: bool = False):
             title = scan.title_from_text(text_path)
         if not title:
             title = book_stem
-        body = scan.body_from_sum(sum_path) if sum_path else ""
-        if not body:
-            body = title
+        sections = scan.parse_sum_sections(sum_path) if sum_path else {}
         authors = scan.authors_raw(book_stem)
 
         _upsert(
-            conn, book_stem, chapter, title, authors, body,
+            conn, book_stem, chapter, title, authors, sections,
             str(text_path) if text_path else None,
             str(sum_path) if sum_path else None,
             text_mtime, sum_mtime,

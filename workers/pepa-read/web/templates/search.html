@@ -8,18 +8,62 @@
 </head>
 <body>
   <div class="search-page">
-    <h1>pepa-reader</h1>
-    <div class="search-bar">
-      <input id="q" type="text" placeholder="Search title, authors, summary... (try author:name)" autofocus>
+    <div class="page-header">
+      <h1>pepa-reader</h1>
+      <button id="theme-toggle" class="theme-toggle" title="Toggle light/dark theme"
+              aria-label="Toggle theme">&#9789;</button>
     </div>
+    <div class="search-bar">
+      <input id="q" type="text" placeholder="Search title, authors, summary..." autofocus>
+    </div>
+    <p class="hint">
+      Filter a field with <code>field:word</code>, e.g. <code>lit:foucault author:aaker brand</code>.
+      <button type="button" id="help-btn" class="link-btn">See all search operators &#9432;</button>
+    </p>
     <p id="status" class="status"></p>
     <table id="results">
       <thead>
-        <tr><th>Title</th><th>Author</th><th>Text</th><th>Summary</th><th></th><th></th></tr>
+        <tr>
+          <th>Document</th><th>Title</th><th>Author</th><th>Text</th><th>Summary</th>
+        </tr>
       </thead>
       <tbody></tbody>
     </table>
+    <div id="pager" class="pager"></div>
   </div>
+
+  <dialog id="help-modal">
+    <div class="help-modal-header">
+      <h2>Search operators</h2>
+      <button type="button" id="help-close" class="link-btn">&times; Close</button>
+    </div>
+    <p>
+      Plain words match anywhere. Prefix a word with <code>field:</code> to match only within
+      that field. Combine any number of field tokens and free words — they're all ANDed together.
+      Each field token takes exactly one word (no spaces/quotes after the colon).
+    </p>
+    <table class="help-table">
+      <thead><tr><th>Token</th><th>Matches</th></tr></thead>
+      <tbody>
+        <tr><td><code>author:</code></td><td>Author (parsed from the filename)</td></tr>
+        <tr><td><code>title:</code></td><td>Title</td></tr>
+        <tr><td><code>context:</code></td><td>Question &amp; context</td></tr>
+        <tr><td><code>empirical:</code></td><td>Empirical context</td></tr>
+        <tr><td><code>lit:</code></td><td>Literature drawn on</td></tr>
+        <tr><td><code>methods:</code></td><td>Methods</td></tr>
+        <tr><td><code>arguments:</code></td><td>Arguments</td></tr>
+        <tr><td><code>conclusions:</code></td><td>Key conclusions</td></tr>
+        <tr><td><code>discussion:</code></td><td>Discussion items</td></tr>
+      </tbody>
+    </table>
+    <p class="hint">
+      The last seven only match documents that have a pepa-sum summary — a pepa-prep-only
+      document is searchable by <code>title:</code> and free text only.
+    </p>
+    <p class="hint">Example: <code>lit:foucault author:aaker brand personality</code></p>
+  </dialog>
+
+  <script src="{{ url_for('static', filename='theme.js') }}"></script>
   <script src="{{ url_for('static', filename='search.js') }}"></script>
 </body>
 </html>

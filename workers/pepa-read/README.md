@@ -68,17 +68,29 @@ local web UI, and opens it in your browser. Ctrl-C stops the server. In a non-in
 | `python manage.py index [--force]` | scan pepa-prep + pepa-sum and (re)build the index |
 | `python manage.py search "query" [--author X] [--limit N] [--json]` | one-shot search to stdout |
 | `python manage.py serve [--port N] [--no-browser]` | explicit, scriptable form of the bare action |
-| `python manage.py open <id>` | open a document's file in its default Windows app |
+| `python manage.py open <id> [--which text\|sum]` | open a document's file in its default Windows app |
 | `python manage.py install` | check dependencies and that source directories are reachable |
 
-A query can filter by author inline, e.g. `python manage.py search "author:aaker brand"`, or via
-`--author aaker`.
+A query can filter by field inline: `author:`, `title:`, `context:` (question & context),
+`empirical:`, `lit:` (literature drawn on), `methods:`, `arguments:`, `conclusions:` (key
+conclusions), `discussion:` (discussion items) — combinable with free text and each other, e.g.
+`python manage.py search "lit:foucault author:aaker brand"`. `author:` is also available as an
+explicit `--author aaker` flag.
+
+`open <id>` picks the summary file if one exists, else the raw text; pass `--which text` or
+`--which sum` to pick explicitly when a document has both. The web UI's Text/Summary columns do
+the same via dedicated buttons, since a document can have either or both files.
 
 ## Notes
 
 - Chapter-split books (`text_<stem>_01.md`, `_02.md`, ...) are indexed as independent rows, one
   per chapter — not rolled up into a single parent work.
-- The search index stores the curated pepa-sum sections as the searchable body when a summary
-  exists; a pepa-prep-only document (no summary yet) is still discoverable by its title.
+- The search index stores each pepa-sum section (question & context, empirical context, literature
+  drawn on, methods, arguments, key conclusions, discussion items) as its own searchable field, so a
+  query can target one specifically (see the field-token list above). A pepa-prep-only document (no
+  summary yet) is still discoverable by its title.
+- Upgrading pepa-reader to a newer index schema clears the existing index automatically (it's fully
+  rebuildable from the source files) and reindexes from scratch on the next `index` run — expect
+  that to take as long as the original build.
 - Indexing is incremental: a file is only re-parsed when its modified time changes, or `--force`
   is passed.

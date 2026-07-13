@@ -2,21 +2,37 @@
 import re
 import sqlite3
 
-_AUTHOR_TOKEN_RE = re.compile(r"\bauthor:(\S+)")
+# User-facing query prefixes -> real FTS5 column names. FTS5 natively supports
+# `column:term` filters (applying to the single term that follows), so this is
+# just an alias rewrite — the rest of the query's implicit-AND grammar handles
+# combining a field filter with ordinary free-text terms, e.g.
+# "lit:foucault author:aaker brand" -> "literature:foucault authors_raw:aaker AND brand".
+_FIELD_ALIASES = {
+    "author": "authors_raw",
+    "title": "title",
+    "context": "question_context",   # pepa-sum "Question & context"
+    "empirical": "empirical_context",  # pepa-sum "Empirical context"
+    "lit": "literature",             # pepa-sum "Literature drawn on"
+    "methods": "methods",
+    "arguments": "arguments",
+    "conclusions": "conclusions",    # pepa-sum "Key conclusions"
+    "discussion": "discussion",      # pepa-sum "Discussion items"
+}
+_FIELD_TOKEN_RE = re.compile(r"\b(" + "|".join(_FIELD_ALIASES) + r"):(\S+)")
+
+# Column order/count must match documents_fts (index/schema.py) for bm25()
+# weights and snippet()'s column index to line up.
+_BM25_WEIGHTS = "5.0, 2.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0"
 
 
-def _split_inline_author(text: str) -> tuple[str, str | None]:
-    m = _AUTHOR_TOKEN_RE.search(text)
-    if not m:
-        return text.strip(), None
-    remainder = (text[:m.start()] + text[m.end():]).strip()
-    return remainder, m.group(1)
+def _rewrite_field_tokens(text: str) -> str:
+    return _FIELD_TOKEN_RE.sub(lambda m: f"{_FIELD_ALIASES[m.group(1)]}:{m.group(2)}", text)
 
 
 def _match_expr(text: str, author: str | None) -> str:
     parts = []
     if text:
-        parts.append(_AUTHOR_TOKEN_RE.sub(lambda m: f'authors_raw:{m.group(1)}', text))
+        parts.append(_rewrite_field_tokens(text.strip()))
     if author:
         parts.append(f'authors_raw:"{author}"')
     return " AND ".join(p for p in parts if p)
@@ -25,6 +41,7 @@ def _match_expr(text: str, author: str | None) -> str:
 def _result(row, score=None, snippet=""):
     return {
         "id": row["id"],
+        "stem": row["stem"],
         "title": row["title"],
         "authors_raw": row["authors_raw"],
         "has_text": bool(row["text_path"]),
@@ -36,15 +53,37 @@ def _result(row, score=None, snippet=""):
     }
 
 
-def search(db_path, query: str = "", author: str | None = None, limit: int = 20) -> list[dict]:
+def count(db_path, query: str = "", author: str | None = None) -> int:
+    """Total rows matching `query`/`author`, ignoring `limit`/`offset` — for pagination."""
+    conn = sqlite3.connect(db_path)
+    try:
+        match_expr = _match_expr(query or "", author)
+        if match_expr:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM documents_fts WHERE documents_fts MATCH ?",
+                (match_expr,),
+            ).fetchone()
+        else:
+            row = conn.execute("SELECT COUNT(*) FROM documents").fetchone()
+        return row[0]
+    finally:
+        conn.close()
+
+
+def search(db_path, query: str = "", author: str | None = None,
+           limit: int = 20, offset: int = 0) -> list[dict]:
     """Rank documents by BM25 relevance to `query`, optionally filtered by author.
 
     Args:
         db_path: Path to the reader.db SQLite file.
-        query: Free-text query. An inline `author:name` token is honored the
-            same as the explicit `author` arg (FTS5 column-filter syntax).
-        author: Explicit author filter, ANDed with any inline token.
+        query: Free-text query. Supports field-scoped tokens (FTS5 column
+            filters under the hood) — `author:`, `title:`, `context:`,
+            `empirical:`, `lit:`, `methods:`, `arguments:`, `conclusions:`,
+            `discussion:` — combinable with free text and each other, e.g.
+            `lit:foucault author:aaker brand`.
+        author: Explicit author filter, ANDed with any inline `author:` token.
         limit: Maximum number of rows to return.
+        offset: Rows to skip, for paging past `limit` (see `count()` for the total).
 
     Returns:
         Result dicts ordered most-relevant first. `score` is the raw FTS5
@@ -55,33 +94,30 @@ def search(db_path, query: str = "", author: str | None = None, limit: int = 20)
         sqlite3.OperationalError: if the free-text query is not valid FTS5
             MATCH syntax (e.g. unbalanced quotes).
     """
-    text, inline_author = _split_inline_author(query or "")
-    author = author or inline_author
-
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     try:
-        match_expr = _match_expr(text, author)
+        match_expr = _match_expr(query or "", author)
         if match_expr:
             rows = conn.execute(
-                """
-                SELECT d.id, d.title, d.authors_raw, d.text_path, d.sum_path,
-                       bm25(documents_fts, 5.0, 2.0, 1.0) AS score,
-                       snippet(documents_fts, 2, '[', ']', ' ... ', 12) AS snippet
+                f"""
+                SELECT d.id, d.stem, d.title, d.authors_raw, d.text_path, d.sum_path,
+                       bm25(documents_fts, {_BM25_WEIGHTS}) AS score,
+                       snippet(documents_fts, -1, '[', ']', ' ... ', 12) AS snippet
                 FROM documents_fts
                 JOIN documents d ON d.id = documents_fts.rowid
                 WHERE documents_fts MATCH ?
                 ORDER BY score
-                LIMIT ?
+                LIMIT ? OFFSET ?
                 """,
-                (match_expr, limit),
+                (match_expr, limit, offset),
             ).fetchall()
             return [_result(r, r["score"], r["snippet"]) for r in rows]
 
         rows = conn.execute(
-            "SELECT id, title, authors_raw, text_path, sum_path FROM documents "
-            "ORDER BY title LIMIT ?",
-            (limit,),
+            "SELECT id, stem, title, authors_raw, text_path, sum_path FROM documents "
+            "ORDER BY title LIMIT ? OFFSET ?",
+            (limit, offset),
         ).fetchall()
         return [_result(r) for r in rows]
     finally:

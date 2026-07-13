@@ -19,6 +19,25 @@
   }
 }
 
+/* Manual toggle (web/static/theme.js) always wins over the OS preference above. */
+:root[data-theme="dark"] {
+  --fg: #e8e8e8;
+  --bg: #1b1c1f;
+  --muted: #9a9a9a;
+  --border: #3a3b3f;
+  --accent: #6d94ff;
+  --row-hover: #26282e;
+}
+
+:root[data-theme="light"] {
+  --fg: #1a1a1a;
+  --bg: #ffffff;
+  --muted: #666;
+  --border: #ddd;
+  --accent: #2b5fd9;
+  --row-hover: #f4f6fb;
+}
+
 * { box-sizing: border-box; }
 
 body {
@@ -37,6 +56,111 @@ body {
 h1 {
   font-size: 1.4rem;
   margin-bottom: 1rem;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.page-header h1 {
+  margin: 0;
+}
+
+.theme-toggle {
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0.35rem 0.6rem;
+}
+
+.link-btn {
+  border: none;
+  background: none;
+  color: var(--accent);
+  padding: 0;
+  font-size: inherit;
+  cursor: pointer;
+}
+
+.link-btn:hover {
+  text-decoration: underline;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin: 0.2rem 0 0.6rem;
+}
+
+.hint code {
+  background: var(--row-hover);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+
+/* inline-flex on a span, not the <td> itself: overriding a table cell's own
+   display to flex/block strips its table-cell layout, so the browser's table
+   column-width algorithm miscomputes that column (often collapsing it),
+   making the content spill into the neighboring cell instead of staying put. */
+.actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  white-space: nowrap;
+}
+
+dialog#help-modal {
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  max-width: 560px;
+  width: 90vw;
+  padding: 1.25rem 1.5rem;
+}
+
+dialog#help-modal::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.help-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.help-modal-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.help-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  margin: 0.75rem 0;
+}
+
+.help-table th, .help-table td {
+  text-align: left;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.pager button {
+  font-size: 0.85rem;
 }
 
 .search-bar input {
@@ -117,6 +241,11 @@ button:disabled {
 .viewer .meta {
   color: var(--muted);
   margin-top: -0.5rem;
+}
+
+.open-actions {
+  display: flex;
+  gap: 0.5rem;
 }
 
 .viewer .content {

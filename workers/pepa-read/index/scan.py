@@ -18,6 +18,23 @@ _PREP_SUFFIXES = (".md", ".markdown", ".txt")
 _SUM_PREFIX = "sum_"
 _CHAPTER_RE = re.compile(r"^(.+)_(\d{2,3})$")
 
+# pepa-sum's fixed sum_ template (see pepa-sum/README.md "sum_ template"): every
+# brief has these seven top-level bold-labelled bullets, always in this order.
+# Mapping label text -> column/FTS field name, so each section is searchable
+# on its own (e.g. `lit:foucault`) instead of only as one concatenated blob.
+SECTION_LABELS = {
+    "question & context": "question_context",
+    "empirical context": "empirical_context",
+    "literature drawn on": "literature",
+    "methods": "methods",
+    "arguments": "arguments",
+    "key conclusions": "conclusions",
+    "discussion items": "discussion",
+}
+SECTION_FIELDS = tuple(SECTION_LABELS.values())
+
+_TOP_BULLET_RE = re.compile(r"^-\s+\*\*([^*]+?):\*\*\s*(.*)$")
+
 
 def paper_stem(source_name: str) -> str:
     p = Path(source_name)
@@ -64,21 +81,42 @@ def title_from_sum(path: Path) -> str | None:
     return None
 
 
-def body_from_sum(path: Path) -> str:
+def parse_sum_sections(path: Path) -> dict[str, str]:
+    """Split a sum_ file into its seven labelled sections (SECTION_FIELDS).
+
+    Each top-level bullet `- **Label:** ...` starts a new section; indented
+    lines (sub-bullets, numbered arguments) that follow belong to it until the
+    next recognized top-level bullet. Unrecognized top-level bullets reset the
+    current section to none, so any stray content is dropped rather than
+    bleeding into the wrong field.
+    """
     try:
         lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
     except OSError:
-        return ""
-    cleaned = []
-    for line in lines[1:]:
+        return {}
+    sections: dict[str, list[str]] = {}
+    current = None
+    for line in lines:
+        m = _TOP_BULLET_RE.match(line)
+        if m:
+            current = SECTION_LABELS.get(m.group(1).strip().lower())
+            if current is None:
+                continue
+            rest = m.group(2).strip()
+            sections.setdefault(current, [])
+            if rest:
+                sections[current].append(rest)
+            continue
+        if current is None:
+            continue
         s = line.strip()
-        if not s or s.startswith("#"):
+        if not s:
             continue
         s = re.sub(r"^[-*]\s+", "", s)
         s = re.sub(r"^\d+\.\s+", "", s)
         s = s.replace("**", "")
-        cleaned.append(s)
-    return re.sub(r"\s+", " ", " ".join(cleaned)).strip()
+        sections[current].append(s)
+    return {k: re.sub(r"\s+", " ", " ".join(v)).strip() for k, v in sections.items()}
 
 
 def text_stem_and_chapter(text_filename: str) -> tuple[str, str | None]:

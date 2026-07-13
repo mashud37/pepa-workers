@@ -13,22 +13,30 @@ def _cmd_index(args):
 
 def _cmd_search(args):
     import config
-    from search.query import search
+    from search.query import count, search
     try:
-        results = search(config.DB_PATH, args.query, author=args.author, limit=args.limit)
+        results = search(config.DB_PATH, args.query, author=args.author,
+                          limit=args.limit, offset=args.offset)
+        total = count(config.DB_PATH, args.query, author=args.author)
     except Exception as e:
         raise SystemExit(str(e))
 
     if args.json:
-        print(json.dumps(results, indent=2))
+        print(json.dumps({"results": results, "total": total, "offset": args.offset}, indent=2))
         return
     if not results:
         print("no results", file=sys.stderr)
         return
     for r in results:
         flags = ("T" if r["has_text"] else "-") + ("S" if r["has_sum"] else "-")
-        print(f"[{r['id']:>5}] {flags}  {r['title']}  -- {r['authors_raw'] or '?'}")
+        print(f"[{r['id']:>5}] {flags}  {r['stem']}")
+        print(f"          {r['title']}  -- {r['authors_raw'] or '?'}")
         print(f"          {r['sum_path'] or r['text_path']}")
+
+    shown_from = args.offset + 1
+    shown_to = args.offset + len(results)
+    more = f"  (--offset {shown_to} for more)" if shown_to < total else ""
+    print(f"\nshowing {shown_from}-{shown_to} of {total}{more}", file=sys.stderr)
 
 
 def _cmd_serve(args):
@@ -39,7 +47,7 @@ def _cmd_serve(args):
 
 def _cmd_open(args):
     from web.routes import open_document
-    print(open_document(args.id))
+    print(open_document(args.id, which=args.which))
 
 
 def _cmd_install(args):
@@ -76,9 +84,12 @@ def main():
     ix.add_argument("--force", action="store_true", help="Reindex every file, ignoring mtimes")
 
     se = sub.add_parser("search", help="One-shot keyword search")
-    se.add_argument("query", help='Free-text query, e.g. "brand personality" or author:aaker')
+    se.add_argument("query", help='Free-text query, e.g. "brand personality" or '
+                                   '"lit:foucault author:aaker" (field tokens: author/title/'
+                                   'context/empirical/lit/methods/arguments/conclusions/discussion)')
     se.add_argument("--author", default=None, metavar="NAME", help="Filter by author")
     se.add_argument("--limit", type=int, default=20, metavar="N")
+    se.add_argument("--offset", type=int, default=0, metavar="N", help="Skip the first N results")
     se.add_argument("--json", action="store_true", help="Emit JSON instead of a table")
 
     sv = sub.add_parser("serve", help="Start the local web UI")
@@ -87,6 +98,8 @@ def main():
 
     op = sub.add_parser("open", help="Open a document in its default Windows app")
     op.add_argument("id", type=int)
+    op.add_argument("--which", choices=["text", "sum"], default=None,
+                     help="Which file to open when both exist (default: summary, else text)")
 
     sub.add_parser("install", help="Check dependencies and source directories")
 

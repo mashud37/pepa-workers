@@ -17,6 +17,13 @@ def create_app() -> Flask:
         template_folder=str(_ROOT / "templates"),
         static_folder=str(_ROOT / "static"),
     )
+    # Local single-user dev tool: always pick up template/static edits on the
+    # next request instead of caching them for the life of the process, since
+    # debug=False (required — never expose the Werkzeug debugger) would
+    # otherwise leave TEMPLATES_AUTO_RELOAD off and static files cached.
+    app.config["TEMPLATES_AUTO_RELOAD"] = True
+    app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
+
     from web.routes import bp
     app.register_blueprint(bp)
     return app
