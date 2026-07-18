@@ -257,3 +257,71 @@ button:disabled {
   white-space: pre-wrap;
   word-wrap: break-word;
 }
+
+.chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-right: 0.4rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: var(--row-hover);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.chip-x {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 0.9rem;
+  line-height: 1;
+  color: var(--muted);
+}
+
+.chip-x:hover {
+  color: var(--accent);
+}
+
+.list-select, .list-new-input {
+  font-size: 0.78rem;
+  padding: 0.15rem 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--fg);
+  max-width: 9rem;
+}
+
+#list-manager {
+  margin-top: 2rem;
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+
+#list-manager summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+#list-manager-table {
+  margin-top: 0.75rem;
+}
+
+.list-name-input {
+  font-size: 0.9rem;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--fg);
+  width: 100%;
+}

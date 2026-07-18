@@ -3,13 +3,24 @@ import os
 import sqlite3
 from pathlib import Path
 
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, Response, jsonify, render_template, request
 from markupsafe import escape
 
 import config
+from index import lists as list_store
+from index.schema import ensure_schema
 from search.query import count, search
 
 bp = Blueprint("reader", __name__)
+
+
+def _connect():
+    conn = sqlite3.connect(config.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    # Cheap and idempotent (CREATE TABLE IF NOT EXISTS) — covers reader.db files
+    # built before the lists/list_items tables existed, without a full reindex.
+    ensure_schema(conn)
+    return conn
 
 _VIEW_PAGE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>{title}</title>
@@ -50,8 +61,7 @@ document.querySelectorAll(".open-btn").forEach((btn) => {{
 
 
 def _doc_row(doc_id: int):
-    conn = sqlite3.connect(config.DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = _connect()
     try:
         return conn.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
     finally:
@@ -103,6 +113,13 @@ def api_search():
         total = count(config.DB_PATH, q, author=author)
     except sqlite3.OperationalError as e:
         return jsonify({"error": str(e)}), 400
+    conn = _connect()
+    try:
+        memberships = list_store.memberships_for(conn, [r["id"] for r in results])
+    finally:
+        conn.close()
+    for r in results:
+        r["lists"] = memberships.get(r["id"], [])
     return jsonify({"results": results, "total": total, "offset": offset, "limit": limit})
 
 
@@ -161,3 +178,101 @@ def open_route(doc_id):
     except SystemExit as e:
         return jsonify({"ok": False, "error": str(e)}), 404
     return jsonify({"ok": True, "path": str(path)})
+
+
+# ── literature lists ───────────────────────────────────────────────────────
+
+@bp.route("/api/lists", methods=["GET"])
+def api_lists():
+    conn = _connect()
+    try:
+        return jsonify({"lists": list_store.list_summaries(conn)})
+    finally:
+        conn.close()
+
+
+@bp.route("/api/lists", methods=["POST"])
+def api_lists_create():
+    name = (request.get_json(silent=True) or {}).get("name", "")
+    conn = _connect()
+    try:
+        list_id = list_store.create_list(conn, name)
+    except (ValueError, list_store.DuplicateListName) as e:
+        return jsonify({"ok": False, "error": str(e)}), 409
+    finally:
+        conn.close()
+    return jsonify({"ok": True, "id": list_id, "name": name.strip()})
+
+
+@bp.route("/api/lists/<int:list_id>", methods=["PATCH"])
+def api_lists_rename(list_id):
+    name = (request.get_json(silent=True) or {}).get("name", "")
+    conn = _connect()
+    try:
+        list_store.rename_list(conn, list_id, name)
+    except (ValueError, list_store.DuplicateListName) as e:
+        return jsonify({"ok": False, "error": str(e)}), 409
+    finally:
+        conn.close()
+    return jsonify({"ok": True})
+
+
+@bp.route("/api/lists/<int:list_id>", methods=["DELETE"])
+def api_lists_delete(list_id):
+    conn = _connect()
+    try:
+        list_store.delete_list(conn, list_id)
+    finally:
+        conn.close()
+    return jsonify({"ok": True})
+
+
+@bp.route("/api/lists/<int:list_id>/items", methods=["GET"])
+def api_list_items(list_id):
+    conn = _connect()
+    try:
+        items = list_store.list_items(conn, list_id)
+        memberships = list_store.memberships_for(conn, [i["id"] for i in items])
+    finally:
+        conn.close()
+    for i in items:
+        i["lists"] = memberships.get(i["id"], [])
+    return jsonify({"items": items})
+
+
+@bp.route("/api/lists/<int:list_id>/items/<int:doc_id>", methods=["POST"])
+def api_list_item_add(list_id, doc_id):
+    conn = _connect()
+    try:
+        list_store.add_item(conn, list_id, doc_id)
+    finally:
+        conn.close()
+    return jsonify({"ok": True})
+
+
+@bp.route("/api/lists/<int:list_id>/items/<int:doc_id>", methods=["DELETE"])
+def api_list_item_remove(list_id, doc_id):
+    conn = _connect()
+    try:
+        list_store.remove_item(conn, list_id, doc_id)
+    finally:
+        conn.close()
+    return jsonify({"ok": True})
+
+
+@bp.route("/list/<int:list_id>/export")
+def list_export(list_id):
+    conn = _connect()
+    try:
+        row = list_store.get_list_by_id(conn, list_id)
+        if row is None:
+            return f"no list with id {list_id}", 404
+        stems = list_store.export_stems(conn, list_id)
+    finally:
+        conn.close()
+    body = "\n".join(stems) + ("\n" if stems else "")
+    return Response(
+        body,
+        mimetype="text/plain",
+        headers={"Content-Disposition": f'attachment; filename="{row["name"]}.txt"'},
+    )

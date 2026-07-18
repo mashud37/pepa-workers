@@ -55,6 +55,85 @@ def _cmd_install(args):
     run()
 
 
+def _list_conn():
+    import sqlite3
+
+    import config
+    from index.schema import ensure_schema
+    conn = sqlite3.connect(config.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    ensure_schema(conn)
+    return conn
+
+
+def _find_list(conn, name):
+    from index import lists as list_store
+    row = list_store.get_list_by_name(conn, name)
+    if row is None:
+        raise SystemExit(f"no list named '{name}'")
+    return row
+
+
+def _cmd_lists(args):
+    from index import lists as list_store
+    conn = _list_conn()
+    try:
+        summaries = list_store.list_summaries(conn)
+    finally:
+        conn.close()
+    if not summaries:
+        print("no lists yet", file=sys.stderr)
+        return
+    for s in summaries:
+        print(f"{s['name']}  ({s['count']} item{'s' if s['count'] != 1 else ''})")
+
+
+def _cmd_list_show(args):
+    from index import lists as list_store
+    conn = _list_conn()
+    try:
+        row = _find_list(conn, args.name)
+        items = list_store.list_items(conn, row["id"])
+    finally:
+        conn.close()
+    if not items:
+        print("(empty)", file=sys.stderr)
+        return
+    for it in items:
+        print(f"{it['stem']}  {it['title']}  -- {it['authors_raw'] or '?'}")
+
+
+def _cmd_list_export(args):
+    from index import lists as list_store
+    conn = _list_conn()
+    try:
+        row = _find_list(conn, args.name)
+        stems = list_store.export_stems(conn, row["id"])
+    finally:
+        conn.close()
+    body = "\n".join(stems) + ("\n" if stems else "")
+    if args.output:
+        from pathlib import Path
+        Path(args.output).write_text(body, encoding="utf-8")
+        print(f"wrote {len(stems)} stem(s) to {args.output}", file=sys.stderr)
+    else:
+        print(body, end="")
+
+
+def _cmd_list_delete(args):
+    from cli import ui
+    from index import lists as list_store
+    conn = _list_conn()
+    try:
+        row = _find_list(conn, args.name)
+        if not ui.confirm(f"Delete list '{args.name}' ({row['id']})?", default_yes=False):
+            return
+        list_store.delete_list(conn, row["id"])
+    finally:
+        conn.close()
+    ui.ok(f"deleted list '{args.name}'")
+
+
 def _bare(args):
     if not sys.stdout.isatty():
         print(
@@ -103,6 +182,19 @@ def main():
 
     sub.add_parser("install", help="Check dependencies and source directories")
 
+    sub.add_parser("lists", help="Show all literature lists and their item counts")
+
+    ls = sub.add_parser("list-show", help="Show the documents in a literature list")
+    ls.add_argument("name", help="List name")
+
+    le = sub.add_parser("list-export", help="Export a list's document stems, one per line")
+    le.add_argument("name", help="List name")
+    le.add_argument("-o", "--output", default=None, metavar="FILE",
+                     help="Write to this file instead of stdout")
+
+    ld = sub.add_parser("list-delete", help="Delete a literature list")
+    ld.add_argument("name", help="List name")
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -117,6 +209,14 @@ def main():
         _cmd_open(args)
     elif args.command == "install":
         _cmd_install(args)
+    elif args.command == "lists":
+        _cmd_lists(args)
+    elif args.command == "list-show":
+        _cmd_list_show(args)
+    elif args.command == "list-export":
+        _cmd_list_export(args)
+    elif args.command == "list-delete":
+        _cmd_list_delete(args)
     return 0
 
 

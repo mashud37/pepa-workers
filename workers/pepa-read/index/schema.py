@@ -37,6 +37,27 @@ CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
 )
 """
 
+# User-curated literature lists — kept out of the SCHEMA_VERSION migration
+# below (which drops/rebuilds `documents`/`documents_fts`, both fully
+# rebuildable from source files) because list membership is user state that
+# a reindex or schema bump must never wipe.
+CREATE_LISTS = """
+CREATE TABLE IF NOT EXISTS lists (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    created_at REAL
+)
+"""
+
+CREATE_LIST_ITEMS = """
+CREATE TABLE IF NOT EXISTS list_items (
+    list_id INTEGER NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
+    document_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    added_at REAL,
+    PRIMARY KEY (list_id, document_id)
+)
+"""
+
 
 def ensure_schema(conn) -> bool:
     """Create the schema, wiping stale tables from an older SCHEMA_VERSION first.
@@ -53,5 +74,7 @@ def ensure_schema(conn) -> bool:
         conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
     conn.execute(CREATE_DOCUMENTS)
     conn.execute(CREATE_FTS)
+    conn.execute(CREATE_LISTS)
+    conn.execute(CREATE_LIST_ITEMS)
     conn.commit()
     return migrated
