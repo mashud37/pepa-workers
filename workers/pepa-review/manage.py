@@ -13,6 +13,8 @@ def main():
                    help="Path to outline file (default: pick from input/ or editor)")
     r.add_argument("--auto", action="store_true",
                    help="Auto-select works by similarity instead of prompting")
+    r.add_argument("--list", default=None, metavar="FILE",
+                   help="Path to a stem list (e.g. exported from pepa-reader) to select works from")
 
     g = sub.add_parser("gaps", help="Gap-check a draft against the corpus (WS2)")
     g.add_argument("--input", default=None, metavar="FILE",
@@ -58,7 +60,7 @@ def main():
         return menu.main()
     if args.command == "review":
         from cli import review
-        review.run(outline_file=args.input, auto=args.auto)
+        review.run(outline_file=args.input, auto=args.auto, list_file=args.list)
     elif args.command == "gaps":
         from cli import gaps
         gaps.run(input_file=args.input)

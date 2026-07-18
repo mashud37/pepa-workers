@@ -1,7 +1,8 @@
 """WS1 — Literature review assembly.
 
-The user gives an outline or rough prompt; works are selected through a map-driven,
-interactive loop (themes shown, free-text feedback re-queries the corpus and re-groups);
+The user gives an outline or rough prompt; works are selected either through a map-driven,
+interactive loop (themes shown, free-text feedback re-queries the corpus and re-groups), by
+searching author/title keywords, or by importing a stem list (e.g. exported from pepa-reader);
 then the review is either drafted along the user's outline or synthesised into 3–4 sections
 built from the literature's key terms and tensions. When bibliographic data is enabled,
 older highly-cited anchors are paired with nearer recent works to stage debates.
@@ -23,7 +24,7 @@ from corpus.metadata import work_list, display_label
 from backends import llm, prompt as prompts
 
 
-def run(outline_file=None, auto=False):
+def run(outline_file=None, auto=False, list_file=None):
     ui.header("Literature review")
 
     sp = progress.StepSpinner("scanning corpus")
@@ -38,7 +39,10 @@ def run(outline_file=None, auto=False):
         raise SystemExit("No outline provided.")
     ui.ok(f"outline: {len(outline)} chars")
 
-    selected = _select(outline, auto, works)
+    if list_file:
+        selected = _list_select(works, list_file)
+    else:
+        selected = _select(outline, auto, works)
     if not selected:
         raise SystemExit("No works selected.")
     ui.ok(f"selected: {len(selected)} works")
@@ -67,9 +71,15 @@ def _select(outline, auto, works):
         menu = ui.menu("Work selection", [
             ("Map-guided",        "group relevant works into themes, refine by feedback"),
             ("Search by keyword", "filter by author surname or title keyword, then pick"),
+            ("Import list",       "load stems exported from pepa-reader"),
         ])
         if menu == 1:
             return _keyword_select(works)
+        if menu == 2:
+            path = ui.ask("Path to literature list file")
+            if not path:
+                raise SystemExit("No list file given.")
+            return _list_select(works, path)
 
     query = outline
     sp = progress.StepSpinner("retrieving candidates")
@@ -201,6 +211,30 @@ def _keyword_select(works):
         return _dedupe(r for g in _group_candidates(retrieve("academic research", k=15))
                        for r in g["records"])
     # enrich keyword picks with brief fields from the index for downstream drafting
+    return _attach_briefs(selected)
+
+
+def _list_select(works, list_file):
+    """Load a plain-text stem list (one `base` per line, as exported by pepa-reader)."""
+    path = Path(list_file)
+    if not path.exists():
+        raise SystemExit(f"File not found: {list_file}")
+    stems = [line.strip() for line in path.read_text(encoding="utf-8").splitlines()]
+    stems = [s for s in stems if s and not s.startswith("#")]
+    if not stems:
+        raise SystemExit(f"No stems found in {list_file}")
+
+    by_base = {w["base"]: w for w in works}
+    selected = []
+    for s in stems:
+        w = by_base.get(s)
+        if w is None:
+            ui.warn(f"No work matches stem '{s}' — skipping")
+            continue
+        selected.append(w)
+    if not selected:
+        raise SystemExit("None of the listed stems matched a work in the corpus.")
+    ui.ok(f"matched {len(selected)}/{len(stems)} stems")
     return _attach_briefs(selected)
 
 

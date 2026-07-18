@@ -57,7 +57,7 @@ python manage.py index
 ## Direct subcommands (scriptable)
 
 ```
-python manage.py review  [--input <outline.md>] [--auto]
+python manage.py review  [--input <outline.md>] [--auto] [--list <stems.txt>]
 python manage.py gaps    --input <draft.md>
 python manage.py explore [--query "<question>"]
 python manage.py map     [--threads N]
@@ -76,11 +76,16 @@ draft a thematically organised review with inline citations.
 ```
 python manage.py review --input input/my-outline.md
 python manage.py review --auto        # auto-selects top-10 works by similarity
+python manage.py review --list my-list.txt   # select works from a stem list
 ```
 
-Works can be selected by typing author surnames or title keywords — the tool
-filters the list, shows numbered results, and lets you pick by number. Repeat
-until you have the right set.
+Works can be selected three ways: map-guided (themes retrieved from the outline, refined by
+free-text feedback), by typing author surnames or title keywords (the tool filters the list,
+shows numbered results, and lets you pick by number — repeat until you have the right set), or by
+importing a stem list — a plain-text file with one document `base` per line, as exported by
+pepa-reader's literature-list feature (`manage.py list-export NAME`) or its web UI. Pass
+`--list FILE` to skip the menu, or choose "Import list" from the interactive prompt. Unmatched
+stems are warned about and skipped rather than aborting the run.
 
 ## Gap-check a draft
 
