@@ -1,19 +1,60 @@
 # pepa-prep
 
-Local pipeline that converts a folder of PDFs to clean markdown files. Handles born-digital papers, multi-chapter books (via PDF outline or heading detection), and scanned PDFs (OCR). All processing is local and deterministic — no API calls.
+pepa-prep exists because everything downstream in the pepa suite depends on clean, uniform text, and PDFs almost never come that way. It takes a folder of PDFs, whether born-digital papers, multi-chapter books, or scanned volumes, and turns each one into clean markdown, so the later stages can work on the content instead of fighting the layout. Everything runs locally and deterministically, with no API calls, so the source material never leaves the machine.
+
+## Data flow
+
+```mermaid
+flowchart TD
+    IN[/"input/ &nbsp; source PDFs"/] --> CAT{"Categorise<br/>first pass"}
+
+    CAT -->|"born-digital, &le; threshold pages"| STRAIGHT["straight route<br/><code>text_name.md</code>"]
+    CAT -->|"born-digital, &gt; threshold pages"| BOOK["book route<br/><code>text_name_01.md</code> ..."]
+    CAT -->|"no text layer (scanned)"| OCR["ocr route<br/>Tesseract"]
+
+    STRAIGHT --> GEOM["Recover paragraphs by geometry<br/>strip headers/footers/refs<br/>stitch hyphenation + columns"]
+    OCR --> GEOM
+    BOOK --> GEOM
+
+    GEOM --> ISBOOK{"book route?"}
+    ISBOOK -->|no| MD[("output/text/<br/>markdown")]
+
+    ISBOOK -->|yes| BND["Boundary detection<br/>(first strategy that verifies)"]
+    BND --> S1["1. Verified outline"]
+    BND --> S2["2. Printed table of contents"]
+    BND --> S3["3. Heading pattern"]
+    S1 --> PRIOR["Shape priors<br/>drop contents/figure pages<br/>merge sub-minimum units<br/>reject implausible splits"]
+    S2 --> PRIOR
+    S3 --> PRIOR
+    PRIOR --> MD
+
+    MD --> VAL["validate<br/>grade chapters, quarantine junk,<br/>renumber &rarr; report.md"]
+    MD --> SPLIT["split<br/>manual chapter markers<br/>for single-block books"]
+    MD --> REF["refine<br/>repair boundaries from text<br/>ToC anchor, seam repair, zoning"]
+
+    VAL --> FINAL[("Clean chaptered<br/>markdown corpus")]
+    SPLIT --> FINAL
+    REF --> FINAL
+
+    FINAL -.evaluated by.-> EVAL["evaluate/<br/>segmentation | chapters | refine<br/>label &rarr; correct &rarr; score"]
+
+    classDef store fill:#e8f0fe,stroke:#4285f4,color:#1a1a1a;
+    classDef route fill:#e6f4ea,stroke:#34a853,color:#1a1a1a;
+    class IN,MD,FINAL store;
+    class STRAIGHT,BOOK,OCR route;
+```
 
 ## Layout
 
 ```
-manage.py              entrypoint — no args = interactive menu
-config.yaml            input/output paths and extraction options
-requirements.txt       runtime dependencies
-
-cli/                   menu, install check, config and command UI
-extract/               extraction engine (categorise, text, chapter, ocr, workers, validate)
-evaluate/              segmentation accuracy harness (lines, predict, metrics, review, harness)
-input/                 drop PDFs here (gitignored)
-output/text/           extracted markdown written here (gitignored)
+manage.py       entrypoint (no args opens the menu)
+config.yaml     input/output paths and extraction options
+extract/        the extraction engine: categorise, geometry, boundary detection, OCR
+refine/         post-processing that repairs chapter files from the text alone
+evaluate/       accuracy harnesses that grade the pipeline against gold sets
+cli/            menu and per-command UI
+input/          drop PDFs here (gitignored)
+output/text/    extracted markdown lands here (gitignored)
 ```
 
 ## Setup
@@ -23,92 +64,59 @@ pip install -r requirements.txt
 python manage.py install
 ```
 
-Drop your PDFs into `input/`, then run the menu or call subcommands directly.
+Then drop your PDFs into `input/` and run `python manage.py` for the menu, or call any command directly.
 
-## Menu
+## Commands
 
-```
-python manage.py
-```
+Run `python manage.py` with no arguments for the interactive menu, or call any action directly:
 
-1. Extract PDFs — categorise and convert to markdown
-2. Validate output — grade book chapters, quarantine junk, renumber
-3. Split chapters — manually mark chapter boundaries in single-block books
-4. Fetch bibliography — match Zotero + Crossref metadata for pepa-sum papers
-5. Fetch bibliography + citations — also download citation networks from OpenCitations
-6. Label for evaluation — create correctable segmentation tag files
-7. Score evaluation — grade segmentation against corrected tag files
-8. Configure — set input/output paths, workers, OCR options
-9. Install / check deps — verify PyMuPDF, pytesseract, Pillow
-
-## Direct subcommands
-
-```
-python manage.py extract
-python manage.py validate
-python manage.py validate --dry-run
-python manage.py split
-python manage.py split --file "van Dijck_The Culture of Connectivity"
-python manage.py label
-python manage.py label --input ./gold_pdfs
-python manage.py score
-python manage.py install
-```
+| Action | Command |
+|---|---|
+| Convert PDFs to clean markdown | `manage.py extract` |
+| Grade, quarantine, and renumber a book's chapters | `manage.py validate` (`-n` to preview) |
+| Mark chapter boundaries by hand | `manage.py split` |
+| Repair chapter boundaries from the text | `manage.py refine` (`--apply` to write) |
+| Fetch bibliography metadata for pepa-sum papers | `manage.py biblio` (`--cite` for citation networks) |
+| Check dependencies | `manage.py install` |
+| Label and score paragraph/heading/list segmentation | `manage.py label` / `score` |
+| Label and score chapter detection | `manage.py label-chapters` / `score-chapters` |
+| Label and score refinement | `manage.py label-refine` / `score-refine` |
 
 ## How extraction works
 
-Each PDF is categorised on first pass:
+Each PDF gets categorised on a first pass. A born-digital paper under the page threshold takes the straight route and becomes a single `text_<name>.md`; a longer born-digital file is treated as a book and split into numbered chapter files; a scanned PDF with no text layer goes through Tesseract OCR and is then handled like the others.
 
-| Route | Condition | Output |
+Whichever route it took, paragraphs are recovered from the page geometry, the bounding-box gaps and indentation, rather than by trusting the PDF's own text blocks, which are usually wrong. Along the way the running headers and footers, page numbers, and reference lists are stripped, hyphenated line breaks are rejoined, and sentences split across columns are stitched back together.
+
+For books there is one more problem: where do the chapters begin. pepa-prep tries three strategies in turn and takes the first that actually verifies against the printed page.
+
+1. **Verified outline.** If the PDF carries an embedded outline, every level of it is checked against the headings actually printed in the body, matching titles fuzzily and assembling multi-line ones. The shallowest chapter-shaped level wins. An outline whose titles never appear in the body, or that lists one entry per page, is rejected rather than trusted.
+2. **Printed table of contents.** Failing that, the contents pages are found structurally, as rows of titles with page numbers, and each printed page number is converted to a real PDF page through a calibrated offset. This still works on OCR-noisy scans, where misread digits are repaired and titles matched fuzzily.
+3. **Heading pattern.** As a last resort, `Chapter`/`Kapitel`/`Part`/`Teil` headings are detected, whether numbered, roman, or spelled out. A run of headings with no real body text between them (a contents page, a block of endnotes) is not treated as a set of boundaries.
+
+Whatever the strategy finds is then held to a set of shape priors, because a plausible-looking split is often still wrong. Contents and figure-list pages are dropped, title-page fragments before the first real chapter are discarded, units below a minimum size merge into their neighbour, boundaries pull back over blank pages and title-only dividers, and a wildly implausible split (dozens of units a few pages long) is thrown out so the next strategy can try. Each book's result line names the strategy it used and the share of titles that verified, and warns about ordinal gaps ("no chapter 7"), numbering restarts, and suspicious unit shapes. If nothing verifies at all, the book is written as a single file with a warning.
+
+## Getting the chapters right
+
+Splitting a book cleanly is the hard part, and it does not always come out right on the first pass. Three commands deal with what is left over, and they run from the automatic to the manual.
+
+`validate` is the automatic tidy-up. It grades a book's chapter files against each other by length, paragraph density, and how much of the file is citation lines, moves anything that reads like a reference list or an empty fragment into `output/_review/`, and renumbers the survivors. A file that still holds two or more `Chapter`/`Part` headings is flagged as a likely missed split but left in place. Add `-n` to see the verdicts without moving anything.
+
+`refine` is the repair pass, and it works from the markdown alone, no source PDF needed, which matters because re-extracting a large OCR corpus is slow. It re-finds the printed contents page in the text and re-anchors the split to it, demotes a "heading" that turns out to be a running head repeated on every page, rejoins boundaries that fall mid-sentence, and quarantines front and back matter (indexes, bibliographies, copyright pages) by their textual density rather than by any keyword list. Every repair is gated by the same shape priors, so nothing is allowed to make a book's shape less plausible. On its own it only diagnoses and writes a report; add `--apply` to commit the repairs, and `--book STEM` to limit it to one book.
+
+`split` is the manual escape hatch for when a book has no outline and no recognisable headings, so it comes out as a single block. The command opens the file in your editor; you scroll through and drop a `<!-- chapter -->` line wherever a chapter should begin, save, and it writes the numbered files.
+
+## Evaluation
+
+Every part of the pipeline that makes a judgement can be scored against a hand-checked gold set, so that a change to the extractor can be measured rather than eyeballed across a few files. The three harnesses all work the same way: `label` writes a correctable file seeded with the tool's current guesses, those guesses get corrected by hand, and `score` re-runs the live pipeline and compares it to the corrections. Because scoring re-runs the real pipeline, later improvements re-score without any relabelling.
+
+| Harness | What it grades | Reports |
 |---|---|---|
-| straight | born-digital, ≤ threshold pages | `text_<name>.md` |
-| book | born-digital, > threshold pages | `text_<name>_01.md`, `_02.md`, … |
-| ocr | no text layer (scanned) | same as above, via Tesseract |
+| Segmentation | paragraph, heading, and list boundaries | precision/recall/F1, over- vs under-segmentation, Pk and WindowDiff |
+| Chapter detection | book chapter boundaries | F1 at 1-page tolerance, exact-page rate, strategy used, page offset |
+| Refinement | boundary repair, from the markdown only | a before/after match score against the corrected chapter starts |
 
-Paragraphs are recovered by geometry (bounding-box gaps and indentation), not by trusting the PDF's raw text blocks. Running headers/footers, page numbers, and reference lists are stripped. Hyphenated line breaks and cross-column sentence splits are stitched.
-
-Books split on the PDF's own outline; if none is present, `Chapter`/`Part` headings — numbered, roman, or spelled-out (`Chapter 7`, `Part IV`, `Chapter One`) — are used. Consecutive headings without enough body text (contents pages, endnotes) are not treated as chapter boundaries. If no boundaries are found at all, the whole book is written as a single file and a warning is shown.
-
-## Validate
-
-After extraction, `validate` grades each book's chapter files against each other by character count, paragraph density, and citation-line share. Files that look like reference lists, orphan fragments, or are nearly empty are moved to `output/_review/` and the survivors are renumbered. A chapter file that still contains two or more `Chapter`/`Part` headings is flagged `multiple-chapters` (a likely missed split) but kept in place. A `report.md` is written to the output folder.
-
-Use `--dry-run` to preview verdicts without moving any files.
-
-## Split
-
-When a book can't be chapter-split automatically (no embedded outline, no recognisable `Chapter`/`Part` headings), extraction writes it as a single file named `text_<stem>_01.md`. The `split` command lets you set the boundaries manually:
-
-```
-python manage.py split
-```
-
-The command lists every single-block book file. Pick one, confirm, and your editor opens (`$EDITOR` on POSIX, Notepad on Windows). At the top of the file you'll see a short instruction block. Scroll through the text and insert a line containing exactly:
-
-```
-<!-- chapter -->
-```
-
-at each point where a new chapter should begin. Save the file and close the editor. The command splits on those markers and writes numbered output files — `text_<stem>_01.md`, `_02.md`, and so on — using the same zero-padded numbering scheme as automatic extraction. The original single-block file is replaced.
-
-To split a specific book without going through the interactive list:
-
-```
-python manage.py split --file "Baudrillard_Simulations"
-```
-
-`--file` accepts the book stem (everything between `text_` and `_01.md` in the filename), or the full path to the file.
-
-## Evaluate segmentation accuracy
-
-`label` and `score` measure how well paragraph, heading, and list boundaries are recovered, so changes to the extractor can be A/B tested instead of eyeballed.
-
-1. **Select** — list the gold-set documents in `data/eval/selection.tsv`, one per line as `filename<TAB>page-spec`. The page-spec is 1-based (`1-4`, `1-3,9`, or `*`/blank for the whole document), so a long book contributes a bounded page window instead of thousands of lines. Header/footer detection still runs over the whole document; only the output is sliced. (Without a manifest, pass `--input FOLDER` to label every PDF in a folder whole.)
-2. **Label** — `label` writes a correction file per document to `data/eval/review/<name>.tags.md`: one source line per row, prefixed with the extractor's guess (`⟦HEAD⟧` / `⟦PARA⟧` / `⟦CONT⟧` / `⟦LIST⟧`).
-3. **Correct** — open each tag file and fix only the wrong tags. Use `⟦DROP⟧` for any line that should not be in the output at all (a running header/footer that slipped through, page noise, OCR garbage). Do not add, delete, reorder, or edit the line text; correcting is retagging, not retyping. Existing correction files are never overwritten on re-`label`.
-4. **Score** — `score` re-runs the predictor and compares it to your corrections, writing `data/eval/report.md` with per-file boundary precision/recall/F1, over- vs under-segmentation counts, dropped-junk-line counts, heading/paragraph/list type accuracy, and the standard Pk and WindowDiff segmentation scores.
-
-The report shows each file twice: the raw geometry/OCR baseline and the same predictor *after* the production continuation merge, so the merge's effect is measured rather than assumed. The selection manifest, streams, and correction files live under `data/eval/` (gitignored).
+Refinement is the clearest case: on the current reference set it lifts the match score from the low thirties into the high fifties, measured before and after the repair pass.
 
 ## Configuration
 
@@ -117,20 +125,22 @@ Edit `config.yaml` or use the Configure menu:
 | Key | Default | Description |
 |---|---|---|
 | `input_folder` | `./input` | Folder of source PDFs |
-| `output_folder` | `./output` | Parent output folder; extracted markdown lands in `<output_folder>/text/` |
+| `output_folder` | `./output` | Parent output folder; markdown lands in `<output_folder>/text/` |
 | `workers` | `4` | Parallel extraction threads |
-| `book_page_threshold` | `100` | Pages above this → book route |
+| `book_page_threshold` | `100` | Pages above this take the book route |
+| `max_chapters` | `80` | Splits with more units than this are rejected as spurious |
+| `toc_headings` | `contents, ...` | Words that mark a contents-page heading (lowers the bar; never required) |
 | `ocr_dpi` | `300` | Rasterisation DPI for scanned pages |
-| `tesseract_cmd` | `""` | Full path to tesseract binary, or blank to use PATH |
+| `tesseract_cmd` | `""` | Full path to the tesseract binary, or blank to use PATH |
 
-Already-extracted files are skipped automatically on re-run.
+Already-extracted files are skipped on a re-run.
 
-## OCR dependencies
+## OCR
 
-OCR is optional. To enable it:
+OCR is optional, and only kicks in for scanned PDFs with no text layer. To enable it:
 
 ```
 pip install pytesseract Pillow
 ```
 
-Install the Tesseract binary separately (see <https://tesseract-ocr.github.io/>). Set `tesseract_cmd` in config if the binary is not on PATH.
+Install the Tesseract binary separately (see <https://tesseract-ocr.github.io/>), and set `tesseract_cmd` in the config if it is not on your PATH.

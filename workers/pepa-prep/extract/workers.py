@@ -2,9 +2,10 @@
 from pathlib import Path
 
 from .categorise import import_fitz
-from .chapter import split_into_chapters, toc_chapters, write_chapters
+from .chapter import detect_chapters, split_into_chapters, write_chapters
 from .ocr import ocr_pages
 from .text import (
+    doc_dims,
     doc_lines,
     doc_stats,
     drop_keys,
@@ -54,17 +55,25 @@ def extract_book(path: Path, out_dir: Path, cfg: dict) -> tuple[str, list]:
     with fitz.open(str(path)) as doc:
         page_count = doc.page_count
         pages = doc_lines(doc, range(page_count), _text_flags(fitz))
+        dims = doc_dims(doc, range(page_count))
         body, heads, lh = doc_stats(pages)
         dk = drop_keys(pages)
-        toc = toc_chapters(doc)
+        bounds, meta = detect_chapters(doc, pages, dims, (body, heads, lh), cfg)
     whole = segment(pages, body, heads, dk, lh)
-    if toc:
-        chapters = [segment(pages[rng.start:rng.stop], body, heads, dk, lh)
-                    for _, rng in toc]
+    if meta["strategy"] in ("outline", "toc") and len(bounds) >= 2:
+        starts = [b["page"] for b in bounds]
+        chapters = [segment(pages[a:z], body, heads, dk, lh)
+                    for a, z in zip(starts, starts[1:] + [page_count])]
     else:
         chapters = split_into_chapters(whole)
     chapters, warnings = _resolve_chapters(chapters, whole, cfg, page_count, "pages")
-    return write_chapters(path.stem, out_dir, chapters), warnings
+    warnings = [f"{meta['strategy']}: {w}" for w in meta["notes"]] + warnings
+    result = write_chapters(path.stem, out_dir, chapters)
+    if len(chapters) >= 2:
+        verified = (f", {meta['verified']:.0%} verified"
+                    if meta.get("verified") is not None else "")
+        result += f" via {meta['strategy']}{verified}"
+    return result, warnings
 
 
 def extract_ocr(path: Path, out_dir: Path, cfg: dict, progress=None) -> tuple[str, list]:

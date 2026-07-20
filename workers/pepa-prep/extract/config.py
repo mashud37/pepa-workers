@@ -11,6 +11,7 @@ _DEFAULT: dict = {
     "workers": 4,
     "book_page_threshold": 100,
     "max_chapters": 80,
+    "toc_headings": ["contents", "table of contents", "inhalt", "inhaltsverzeichnis"],
     "ocr_dpi": 300,
     "tesseract_cmd": "",
     # Bibliography enrichment (python manage.py biblio)

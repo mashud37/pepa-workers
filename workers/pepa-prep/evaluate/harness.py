@@ -107,9 +107,12 @@ def write_report(rows: list) -> None:
     out = [
         "# Segmentation evaluation report",
         "",
-        f"{mrg['files']} file(s) · macro-F1 {mrg['f1'] * 100:.1f}% with merge "
-        f"({base['f1'] * 100:.1f}% pre-merge, {(mrg['f1'] - base['f1']) * 100:+.1f}) · "
-        f"median WindowDiff {mrg['windowdiff']:.3f} · "
+        "Compares detected line boundaries against your corrections.",
+        "",
+        "Match score (0-100%, higher is better):",
+        f"{mrg['files']} file(s) · average {mrg['f1'] * 100:.1f}% with merge "
+        f"({base['f1'] * 100:.1f}% pre-merge, {(mrg['f1'] - base['f1']) * 100:+.1f} points) · "
+        f"median WindowDiff {mrg['windowdiff']:.3f} (lower is better) · "
         f"over-splits {base['over_seg']}→{mrg['over_seg']} · "
         f"{mrg['under_seg']} missed · {mrg['junk']} junk lines",
         "",

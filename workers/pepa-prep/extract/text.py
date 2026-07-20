@@ -69,6 +69,10 @@ def doc_lines(doc, page_range, flags=None) -> list:
     return [page_lines(doc[pno], flags) for pno in page_range]
 
 
+def doc_dims(doc, page_range) -> list:
+    return [(doc[pno].rect.width, doc[pno].rect.height) for pno in page_range]
+
+
 def doc_stats(pages: list) -> tuple:
     """One pass over every line: body size, heading sizes, and median line height."""
     sizes: dict = {}
