@@ -1,4 +1,5 @@
-"""Interactive key configuration — writes values to secrets.yaml."""
+"""Configure keys interactively and write the values to secrets.yaml.
+"""
 import config
 from cli import ui
 
@@ -12,26 +13,29 @@ _KEYS = [
 ]
 
 
-def _masked(val: str) -> str:
-    if not val or len(val) < 8:
-        return "not set"
-    return val[:4] + "..." + val[-4:]
-
-
 def _prompt_key(key: str, label: str, required: bool) -> str | None:
     current = config.get(key)
-    hint = f"current: {_masked(current)}" if current else ("required" if required else "optional, skip to leave blank")
+    if current and len(current) >= 8:
+        masked = current[:4] + "..." + current[-4:]
+    else:
+        masked = "not set"
+    if current:
+        hint = f"current: {masked}"
+    elif required:
+        hint = "required"
+    else:
+        hint = "optional, skip to leave blank"
     value = ui.ask(f"{label} [{hint}]")
     if not value and current:
         return None
     if not value and required:
-        ui.warn(f"{label} is required — leaving blank, set it manually in secrets.yaml")
+        ui.warn(f"{label} is required, leaving blank, set it manually in secrets.yaml")
         return None
     return value or None
 
 
 def run() -> None:
-    ui.header("pepa-draft — setup")
+    ui.header("pepa-draft: setup")
     ui.info("Configure API keys and paths. Existing values are not overwritten.")
 
     updates = {}
@@ -41,7 +45,7 @@ def run() -> None:
             updates[key] = value
 
     if not updates:
-        ui.info("no changes — all keys already set or skipped")
+        ui.info("no changes: all keys already set or skipped")
         return
 
     try:

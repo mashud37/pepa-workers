@@ -33,7 +33,7 @@ def _list(profile: str = None) -> None:
     samples = list_samples(name)
     ui.info(f"profile '{name}':")
     if not samples:
-        ui.info("  no style samples indexed — use 'add' to index a writing sample")
+        ui.info("  no style samples indexed, use 'add' to index a writing sample")
         return
     ui.info(f"  {len(samples)} sample file(s):")
     for s in samples:
@@ -64,7 +64,7 @@ def _switch(name: str = None) -> None:
     profiles = config.list_style_profiles()
     if not name:
         if not profiles:
-            ui.warn("no profiles found — add samples first")
+            ui.warn("no profiles found, add samples first")
             return
         choices = [(p, f"Switch to profile '{p}'") for p in profiles]
         idx = ui.menu("Switch active profile", choices)
@@ -79,7 +79,7 @@ def _list_profiles() -> None:
     profiles = config.list_style_profiles()
     active = config.active_style_profile()
     if not profiles:
-        ui.info("no profiles found — add samples to create one")
+        ui.info("no profiles found, add samples to create one")
         return
     ui.info(f"{len(profiles)} profile(s)  (active: '{active}'):")
     for p in profiles:
@@ -98,27 +98,28 @@ _ACTION_MAP = {
 
 
 def run(action: str = None, file_path: str = None, profile: str = None) -> None:
-    ui.header("pepa-draft — author style")
+    ui.header("pepa-draft: author style")
     active = config.active_style_profile()
     ui.info(f"active profile: '{active}'")
     if action is None:
-        choice = ui.menu("Style samples", [
-            ("Add sample",      "Index a writing sample file into the active profile"),
-            ("List samples",    "Show indexed sample files for the active profile"),
-            ("Build index",     "Rebuild style index for the active profile"),
-            ("Switch profile",  "Change the active author style profile"),
-            ("List profiles",   "Show all available author style profiles"),
-        ])
-        _MENU_ACTIONS = [
+        menu_actions = [
             lambda: _add(file_path, profile),
             lambda: _list(profile),
             lambda: _build_all(profile),
             lambda: _switch(profile),
             _list_profiles,
         ]
-        if choice is not None:
-            _MENU_ACTIONS[choice]()
-        return
+        while True:
+            choice = ui.menu("Style samples", [
+                ("Add sample",      "Index a writing sample file into the active profile"),
+                ("List samples",    "Show indexed sample files for the active profile"),
+                ("Build index",     "Rebuild style index for the active profile"),
+                ("Switch profile",  "Change the active author style profile"),
+                ("List profiles",   "Show all available author style profiles"),
+            ])
+            if choice is None:
+                return
+            ui.run_action(menu_actions[choice])
     handler = _ACTION_MAP.get(action)
     if handler:
         handler(file_path, profile)

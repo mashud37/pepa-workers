@@ -44,11 +44,12 @@ def _draft_section(key, label, items, review_text, opts):
     t0 = time.perf_counter()
     text, words = "", 0
     try:
-        text, words = draft_section(key, items, context, target=opts.get("targets", {}).get(key), backend=backend)
+        drafted = draft_section(key, items, context, target=opts.get("targets", {}).get(key), backend=backend)
+        text, words = drafted["text"], drafted["words"]
     finally:
         elapsed = time.perf_counter() - t0
         sp.done(f"{words} words ({elapsed:.0f}s)")
-    return text, words
+    return {"text": text, "words": words}
 
 
 def run(plan_items: list, assignment: dict, review_parsed: dict, opts: dict = None) -> dict:
@@ -65,12 +66,13 @@ def run(plan_items: list, assignment: dict, review_parsed: dict, opts: dict = No
     """
     from corpus.parse_review import full_prose
 
-    opts = opts or {}
-    word_targets = targets(opts.get("targets"))
-    opts["targets"] = word_targets
+    given_opts = opts or {}
+    word_targets = targets(given_opts.get("targets"))
+    run_opts = dict(given_opts)
+    run_opts["targets"] = word_targets
     review_text = full_prose(review_parsed)
 
-    ui.step("Manuscript draft — step plan")
+    ui.step("Manuscript draft: step plan")
     for s in SECTIONS:
         items = items_for_section(s["key"], assignment, plan_items)
         ui.info(f"  {s['label']:<20} {len(items)} moves  ·  target {word_targets[s['key']]} words")
@@ -81,12 +83,12 @@ def run(plan_items: list, assignment: dict, review_parsed: dict, opts: dict = No
         items = items_for_section(key, assignment, plan_items)
         ui.info(f"\n[{i}/{len(SECTIONS)}] {label}")
         if not items:
-            ui.warn(f"No plan items assigned to {label} — skipping")
+            ui.warn(f"No plan items assigned to {label}, skipping")
             sections_out.append({"key": key, "label": label, "text": "", "words": 0})
             continue
-        text, words = _draft_section(key, label, items, review_text, opts)
-        total += words
-        sections_out.append({"key": key, "label": label, "text": text, "words": words})
+        drafted = _draft_section(key, label, items, review_text, run_opts)
+        total += drafted["words"]
+        sections_out.append({"key": key, "label": label, "text": drafted["text"], "words": drafted["words"]})
 
     return {"sections": sections_out, "total_words": total}
 

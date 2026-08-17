@@ -40,6 +40,20 @@ MOVE_TO_SECTION = {
 }
 
 
+def _flush_item(items, current_index, current_move, current_lines):
+    if current_index is None:
+        return
+    move_clean = current_move.strip()
+    text = " ".join(" ".join(current_lines).split())
+    default = _infer_section(move_clean)
+    items.append({
+        "index": current_index,
+        "move": move_clean,
+        "text": text,
+        "default_section": default,
+    })
+
+
 def parse(path: Path) -> list[dict]:
     """Parse plan outline into a list of paragraph items.
 
@@ -54,28 +68,16 @@ def parse(path: Path) -> list[dict]:
     current_move = None
     current_lines = []
 
-    def flush():
-        if current_index is not None:
-            move_clean = current_move.strip()
-            text = " ".join(" ".join(current_lines).split())
-            default = _infer_section(move_clean)
-            items.append({
-                "index": current_index,
-                "move": move_clean,
-                "text": text,
-                "default_section": default,
-            })
-
     for line in path.read_text(encoding="utf-8").splitlines():
         m = _ITEM_RE.match(line.strip())
         if m:
-            flush()
+            _flush_item(items, current_index, current_move, current_lines)
             current_index = int(m.group(1))
             current_move = m.group(2)
             current_lines = [m.group(3).strip()]
         elif line.strip() and current_index is not None:
             current_lines.append(line.strip())
-    flush()
+    _flush_item(items, current_index, current_move, current_lines)
     return items
 
 

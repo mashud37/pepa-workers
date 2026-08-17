@@ -12,9 +12,8 @@ def _handle_draft(args):
         skip.add("retrieval")
     if args.no_style:
         skip.add("style")
-    draft_cmd.run(review_file=args.review, plan_file=args.plan,
-                  sections_file=args.sections, backend=args.backend, skip=skip,
-                  style_profile=args.style_profile)
+    paths = {"review_file": args.review, "plan_file": args.plan, "sections_file": args.sections}
+    draft_cmd.run(paths=paths, backend=args.backend, skip=skip, style_profile=args.style_profile)
 
 
 def _handle_sections(args):
@@ -48,7 +47,7 @@ _HANDLERS = {
 
 
 def main():
-    parser = argparse.ArgumentParser(prog="manage.py", description="pepa-draft — academic manuscript drafting")
+    parser = argparse.ArgumentParser(prog="manage.py", description="pepa-draft: academic manuscript drafting")
     sub = parser.add_subparsers(dest="command")
 
     dr = sub.add_parser("draft", help="Write a full manuscript draft")

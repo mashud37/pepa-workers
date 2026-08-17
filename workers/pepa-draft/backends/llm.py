@@ -1,8 +1,10 @@
 """Unified LLM interface: route to configured backend."""
 import config
 
+DEFAULT_MAX_TOKENS = 4000
 
-def complete(system: str, prompt: str, max_tokens: int = 4000, backend: str = None) -> str:
+
+def complete(system: str, prompt: str, max_tokens: int = DEFAULT_MAX_TOKENS, backend: str = None) -> str:
     """Route a completion request to the configured backend.
 
     Args:

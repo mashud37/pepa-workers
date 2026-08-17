@@ -21,7 +21,11 @@ def _move_item(assignment: dict, plan_items: list) -> None:
             ui.warn(f"Skipping invalid index: {p!r}")
             continue
         idx = int(p)
-        item = next((i for i in plan_items if i["index"] == idx), None)
+        item = None
+        for i in plan_items:
+            if i["index"] == idx:
+                item = i
+                break
         if not item:
             ui.warn(f"No item with index {idx}")
             continue
@@ -49,7 +53,10 @@ def _move_item(assignment: dict, plan_items: list) -> None:
 
 
 def _show_unassigned(assignment: dict, plan_items: list) -> None:
-    all_assigned = {i for indices in assignment.values() for i in indices}
+    all_assigned = set()
+    for indices in assignment.values():
+        for i in indices:
+            all_assigned.add(i)
     unassigned = [item for item in plan_items if item["index"] not in all_assigned]
     if not unassigned:
         ui.ok("all items assigned")
@@ -73,8 +80,35 @@ def _show_section(assignment: dict, plan_items: list) -> None:
         ui.info(f"  {item['index']}. [{item['move']}] {item['text'][:80]}")
 
 
-def edit_loop(assignment: dict, plan_items: list, sec_path, draft_mode: bool = False) -> tuple:
-    """Run the interactive section editor. Returns (assignment, proceed_to_draft).
+def _reset_assignment(_assignment, plan_items):
+    from draft.sections import from_defaults
+    ui.ok("reset to move-label defaults (not yet saved)")
+    return from_defaults(plan_items)
+
+
+def _edit_loop_menu(draft_mode: bool) -> dict:
+    if draft_mode:
+        options = [
+            ("Proceed to draft",   "Save and continue to manuscript generation"),
+            ("Move item",          "Move one or more plan items to a different section"),
+            ("Show unassigned",    "List items not in any section"),
+            ("Show section items", "List items for a specific section"),
+            ("Reset to defaults",  "Rebuild from move-label defaults (unsaved changes lost)"),
+        ]
+        actions = {1: _move_item, 2: _show_unassigned, 3: _show_section, 4: _reset_assignment}
+    else:
+        options = [
+            ("Move item",          "Move one or more plan items to a different section"),
+            ("Show unassigned",    "List items not in any section"),
+            ("Show section items", "List items for a specific section"),
+            ("Reset to defaults",  "Rebuild from move-label defaults (unsaved changes lost)"),
+        ]
+        actions = {0: _move_item, 1: _show_unassigned, 2: _show_section, 3: _reset_assignment}
+    return {"options": options, "actions": actions}
+
+
+def edit_loop(assignment: dict, plan_items: list, sec_path, draft_mode: bool = False) -> dict:
+    """Run the interactive section editor.
 
     Args:
         assignment: Current section assignment dict (modified in place or replaced on reset).
@@ -83,68 +117,35 @@ def edit_loop(assignment: dict, plan_items: list, sec_path, draft_mode: bool = F
         draft_mode: When True, show a 'Proceed to draft' option as [1].
 
     Returns:
-        (assignment, proceed_to_draft) — proceed_to_draft is True only when the user
+        Dict with keys assignment and proceed. proceed is True only when the user
         explicitly chose to continue to the draft.
     """
-    from draft.sections import from_defaults
     from draft.sections import save as save_assignment
 
-    def _reset():
-        nonlocal assignment
-        assignment = from_defaults(plan_items)
-        ui.ok("reset to move-label defaults (not yet saved)")
-
-    def _save_and_exit():
-        save_assignment(assignment, sec_path)
-        ui.ok(f"saved to {sec_path.name}")
+    menu = _edit_loop_menu(draft_mode)
 
     while True:
         _show_current(assignment)
-
-        if draft_mode:
-            options = [
-                ("Proceed to draft",   "Save and continue to manuscript generation"),
-                ("Move item",          "Move one or more plan items to a different section"),
-                ("Show unassigned",    "List items not in any section"),
-                ("Show section items", "List items for a specific section"),
-                ("Reset to defaults",  "Rebuild from move-label defaults (unsaved changes lost)"),
-            ]
-            _ACTIONS = {
-                1: lambda: _move_item(assignment, plan_items),
-                2: lambda: _show_unassigned(assignment, plan_items),
-                3: lambda: _show_section(assignment, plan_items),
-                4: _reset,
-            }
-        else:
-            options = [
-                ("Move item",          "Move one or more plan items to a different section"),
-                ("Show unassigned",    "List items not in any section"),
-                ("Show section items", "List items for a specific section"),
-                ("Reset to defaults",  "Rebuild from move-label defaults (unsaved changes lost)"),
-            ]
-            _ACTIONS = {
-                0: lambda: _move_item(assignment, plan_items),
-                1: lambda: _show_unassigned(assignment, plan_items),
-                2: lambda: _show_section(assignment, plan_items),
-                3: _reset,
-            }
-
-        choice = ui.menu("Edit assignment", options, back_label="Save and exit")
+        choice = ui.menu("Edit assignment", menu["options"], back_label="Save and exit")
 
         if choice is None:
-            _save_and_exit()
-            return assignment, False
+            save_assignment(assignment, sec_path)
+            ui.ok(f"saved to {sec_path.name}")
+            return {"assignment": assignment, "proceed": False}
 
         if draft_mode and choice == 0:
-            _save_and_exit()
-            return assignment, True
+            save_assignment(assignment, sec_path)
+            ui.ok(f"saved to {sec_path.name}")
+            return {"assignment": assignment, "proceed": True}
 
-        if choice in _ACTIONS:
-            _ACTIONS[choice]()
+        if choice in menu["actions"]:
+            result = menu["actions"][choice](assignment, plan_items)
+            if result is not None:
+                assignment = result
 
 
 def run(plan_file: str = None, reset: bool = False) -> None:
-    ui.header("pepa-draft — section assignment")
+    ui.header("pepa-draft: section assignment")
 
     from corpus.load import pick_plan, sections_path_for_plan
     from corpus.parse_plan import parse as parse_plan

@@ -22,7 +22,7 @@ def from_defaults(plan_items: list) -> dict:
     """Build assignment from move-label defaults, preserving plan order.
 
     Scans items in their existing order and advances the current section
-    forward only — never backward. This produces contiguous section spans
+    forward only, never backward. This produces contiguous section spans
     that respect the plan's paragraph ordering.
 
     Args:

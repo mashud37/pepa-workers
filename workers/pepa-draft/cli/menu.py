@@ -1,4 +1,6 @@
-"""Interactive menu for pepa-draft."""
+"""Show the interactive menu for pepa-draft, looping until closed; every
+action returns here when it finishes or fails.
+"""
 from cli import ui
 
 
@@ -47,4 +49,4 @@ def main():
         ])
         if choice is None:
             break
-        _ACTIONS[choice]()
+        ui.run_action(_ACTIONS[choice])

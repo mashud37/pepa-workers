@@ -1,11 +1,6 @@
-"""Cloud Run service — token-guarded proxy in front of a local vLLM server.
-
-POST /generate?token=...  {messages: [...]}  -> {text}
-GET  /healthz             liveness probe (returns immediately)
-
-/healthz returns OK the moment the proxy is up — it does NOT wait for vLLM —
-so Cloud Run's startup probe passes while vLLM loads in the background.
-/generate returns 503 until vLLM's own /health is ready.
+"""Proxy a local vLLM server on Cloud Run behind a token-guarded
+/generate endpoint. /healthz returns OK immediately so Cloud Run's
+startup probe passes while vLLM loads.
 """
 import json
 import os

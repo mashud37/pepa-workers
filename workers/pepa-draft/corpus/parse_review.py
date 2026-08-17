@@ -14,7 +14,8 @@ def _start_section(line, sub, section, sections, text_parts):
     sub = _flush_sub(sub, section, sections, text_parts)
     if section:
         sections.append(section)
-    return {"heading": line[3:].strip().rstrip(":"), "subsections": []}, sub
+    heading = {"heading": line[3:].strip().rstrip(":"), "subsections": []}
+    return {"section": heading, "sub": sub}
 
 
 def _process_line(line, state):
@@ -23,23 +24,24 @@ def _process_line(line, state):
         _flush_sub(sub, sec, sections, text_parts)
         if sec:
             sections.append(sec)
-        return None, None, True
+        return {"section": None, "sub": None, "in_works": True}
     if in_works:
         w = line.strip().lstrip("-").strip()
         if w:
             works.append(w)
-        return sec, sub, in_works
+        return {"section": sec, "sub": sub, "in_works": in_works}
     if line.startswith("## "):
-        sec, sub = _start_section(line, sub, sec, sections, text_parts)
-        return sec, sub, in_works
+        started = _start_section(line, sub, sec, sections, text_parts)
+        return {"section": started["section"], "sub": started["sub"], "in_works": in_works}
     if line.startswith("### ") and sec is not None:
         _flush_sub(sub, sec, sections, text_parts)
-        return sec, {"heading": line[4:].strip(), "text": ""}, in_works
+        new_sub = {"heading": line[4:].strip(), "text": ""}
+        return {"section": sec, "sub": new_sub, "in_works": in_works}
     if sec is not None:
         if sub is None:
             sub = {"heading": "", "text": ""}
         sub["text"] += line + "\n"
-    return sec, sub, in_works
+    return {"section": sec, "sub": sub, "in_works": in_works}
 
 
 def parse(path: Path) -> dict:
@@ -54,8 +56,8 @@ def parse(path: Path) -> dict:
     sections, works, text_parts = [], [], []
     sec, sub, in_works = None, None, False
     for line in path.read_text(encoding="utf-8").splitlines():
-        result = _process_line(line, (sec, sub, sections, works, text_parts, in_works))
-        sec, sub, in_works = result
+        state = _process_line(line, (sec, sub, sections, works, text_parts, in_works))
+        sec, sub, in_works = state["section"], state["sub"], state["in_works"]
     _flush_sub(sub, sec, sections, text_parts)
     if sec:
         sections.append(sec)
@@ -64,5 +66,9 @@ def parse(path: Path) -> dict:
 
 def full_prose(parsed: dict) -> str:
     """Return all prose text concatenated for context retrieval."""
-    parts = [sub["text"].strip() for s in parsed["sections"] for sub in s["subsections"] if sub["text"].strip()]
+    parts = []
+    for s in parsed["sections"]:
+        for sub in s["subsections"]:
+            if sub["text"].strip():
+                parts.append(sub["text"].strip())
     return "\n\n".join(parts)

@@ -48,6 +48,14 @@ _ENV_OVERRIDE = {
     "review_index": "PEPADRAFT_REVIEW_INDEX",
 }
 
+DEFAULTS = {
+    "anthropic_api_key": "",
+    "gemini_api_key": "",
+    "ollama_base_url": "http://localhost:11434",
+    "vllm_base_url": "",
+    "vllm_token": "",
+}
+
 @lru_cache(maxsize=1)
 def _load_secrets() -> dict:
     if not SECRETS_FILE.exists() or not _HAS_YAML:
@@ -69,11 +77,9 @@ def get(key: str, default=None):
     secrets = _load_secrets()
     if key in secrets:
         return secrets[key]
-    return default
-
-
-def anthropic_api_key() -> str:
-    return get("anthropic_api_key", "")
+    if default is not None:
+        return default
+    return DEFAULTS.get(key, default)
 
 
 def draft_model() -> str:
@@ -84,35 +90,19 @@ def bulk_model() -> str:
     return DRAFT_MODEL_BULK
 
 
-def gemini_api_key() -> str:
-    return get("gemini_api_key", "")
-
-
-def ollama_base_url() -> str:
-    return get("ollama_base_url", "http://localhost:11434")
-
-
-def embed_config() -> tuple:
-    """Return (provider, model) for the active embedding backend.
+def embed_config() -> dict:
+    """Return the active embedding backend settings.
 
     Returns:
-        Tuple of (provider_str, model_str), or (None, None) if unconfigured.
+        Dict with keys provider and model, both None if unconfigured.
     """
     model_override = get("embed_model")
-    if gemini_api_key():
-        return ("gemini", model_override or EMBED_MODEL_GEMINI)
+    if get("gemini_api_key"):
+        return {"provider": "gemini", "model": model_override or EMBED_MODEL_GEMINI}
     base = get("ollama_base_url")
     if base:
-        return ("ollama", model_override or EMBED_MODEL_OLLAMA)
-    return (None, None)
-
-
-def vllm_base_url() -> str:
-    return get("vllm_base_url", "")
-
-
-def vllm_token() -> str:
-    return get("vllm_token", "")
+        return {"provider": "ollama", "model": model_override or EMBED_MODEL_OLLAMA}
+    return {"provider": None, "model": None}
 
 
 def active_style_profile() -> str:

@@ -49,11 +49,11 @@ def retrieve(query: str, k: int = None, restrict_bases: set = None, index_path: 
 
 
 def _embed_one(text: str, provider: str) -> list[float]:
-    provider_active, model = config.embed_config()
-    if provider_active == "gemini":
-        return _gemini_embed(text, model)
-    if provider_active == "ollama":
-        return _ollama_embed(text, model)
+    embed = config.embed_config()
+    if embed["provider"] == "gemini":
+        return _gemini_embed(text, embed["model"])
+    if embed["provider"] == "ollama":
+        return _ollama_embed(text, embed["model"])
     raise SystemExit(
         "No embedding provider configured. Add gemini_api_key or ollama_base_url to secrets.yaml."
     )
@@ -62,7 +62,7 @@ def _embed_one(text: str, provider: str) -> list[float]:
 def _gemini_embed(text: str, model: str) -> list[float]:
     import json as _json
     import urllib.request
-    key = config.gemini_api_key()
+    key = config.get("gemini_api_key")
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:embedContent?key={key}"
     body = _json.dumps({"model": f"models/{model}", "content": {"parts": [{"text": text}]}}).encode()
     req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
@@ -73,7 +73,7 @@ def _gemini_embed(text: str, model: str) -> list[float]:
 def _ollama_embed(text: str, model: str) -> list[float]:
     import json as _json
     import urllib.request
-    base = config.ollama_base_url().rstrip("/")
+    base = config.get("ollama_base_url").rstrip("/")
     body = _json.dumps({"model": model, "prompt": text}).encode()
     req = urllib.request.Request(f"{base}/api/embeddings", data=body, headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=30) as resp:

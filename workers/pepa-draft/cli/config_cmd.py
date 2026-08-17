@@ -4,13 +4,13 @@ from cli import ui
 
 
 def run():
-    ui.header("pepa-draft — configuration")
+    ui.header("pepa-draft: configuration")
     ui.info(f"anthropic_model : {config.draft_model()}")
     ui.info(f"bulk_model      : {config.bulk_model()}")
-    provider, model = config.embed_config()
-    ui.info(f"embed_provider  : {provider or '(none)'}")
-    ui.info(f"embed_model     : {model or '(none)'}")
-    ui.info(f"vllm_base_url   : {config.vllm_base_url() or '(none)'}")
+    embed = config.embed_config()
+    ui.info(f"embed_provider  : {embed['provider'] or '(none)'}")
+    ui.info(f"embed_model     : {embed['model'] or '(none)'}")
+    ui.info(f"vllm_base_url   : {config.get('vllm_base_url') or '(none)'}")
     ui.info(f"review_index    : {config.review_index_file()}")
     ui.info(f"  exists        : {config.review_index_file().exists()}")
     ui.info(f"style_index     : {config.STYLE_INDEX_FILE}")

@@ -1,9 +1,11 @@
-"""Claude (Anthropic) client — primary generation backend."""
+"""Call Claude as the primary generation backend.
+"""
 import time
 
 import config
 
 _RETRYABLE = (429, 500, 502, 503, 529)
+DEFAULT_MAX_TOKENS = 4000
 
 
 def _call_once(client, model, system, prompt, max_tokens):
@@ -16,7 +18,7 @@ def _call_once(client, model, system, prompt, max_tokens):
     return "".join(b.text for b in msg.content if getattr(b, "type", None) == "text").strip()
 
 
-def complete(system: str, prompt: str, max_tokens: int = 4000, model: str = None) -> str:
+def complete(system: str, prompt: str, max_tokens: int = DEFAULT_MAX_TOKENS, model: str = None) -> str:
     """Send a completion request to the Anthropic API.
 
     Args:
@@ -33,7 +35,7 @@ def complete(system: str, prompt: str, max_tokens: int = 4000, model: str = None
     except ImportError:
         raise SystemExit("anthropic package missing. Run: pip install -r requirements.txt")
 
-    key = config.anthropic_api_key()
+    key = config.get("anthropic_api_key")
     if not key:
         raise SystemExit("No ANTHROPIC_API_KEY. Set it in secrets.yaml or env var.")
 

@@ -13,7 +13,7 @@ def _load_inputs(review_file, plan_file):
     plan_path = pick_plan(plan_file)
     ui.info(f"review: {review_path.name}")
     ui.info(f"plan:   {plan_path.name}")
-    return review_path, plan_path
+    return {"review_path": review_path, "plan_path": plan_path}
 
 
 def _parse_inputs(review_path, plan_path):
@@ -26,7 +26,7 @@ def _parse_inputs(review_path, plan_path):
         plan_items = parse_plan(plan_path)
     finally:
         sp.done(f"{len(plan_items)} plan items")
-    return review_parsed, plan_items
+    return {"review_parsed": review_parsed, "plan_items": plan_items}
 
 
 def _show_plan_assignment(assignment, plan_items):
@@ -50,7 +50,7 @@ def _resolve_assignment(plan_items, plan_path, sections_file):
     if assignment:
         return assignment
 
-    ui.info("no section assignment found — building from move-label defaults")
+    ui.info("no section assignment found: building from move-label defaults")
     assignment = from_defaults(plan_items)
     _show_plan_assignment(assignment, plan_items)
 
@@ -62,10 +62,10 @@ def _resolve_assignment(plan_items, plan_path, sections_file):
         raise SystemExit("Cancelled.")
     if choice == 1:
         from cli.sections_cmd import edit_loop
-        result, proceed = edit_loop(assignment, plan_items, sec_path, draft_mode=True)
-        if not proceed:
+        outcome = edit_loop(assignment, plan_items, sec_path, draft_mode=True)
+        if not outcome["proceed"]:
             raise SystemExit("Cancelled.")
-        return result
+        return outcome["assignment"]
 
     save_assignment(assignment, sec_path)
     ui.ok(f"saved assignment to {sec_path.name}")
@@ -79,7 +79,7 @@ def _run_checks(manuscript):
         if sec["text"]:
             issues = check(sec["text"])
             for issue in issues[:3]:
-                ui.warn(f"{sec['label']}: {issue['type']} — {issue['detail']}")
+                ui.warn(f"{sec['label']}: {issue['type']}: {issue['detail']}")
             all_issues.extend(issues)
     if not all_issues:
         ui.ok("no issues found")
@@ -96,13 +96,15 @@ def _print_summary(manuscript, word_targets, total_target, out_path):
         ui.info(f"  {sec['label']:<20} {sec['words']:>5} words  ({sign}{diff})")
 
 
-def run(review_file=None, plan_file=None, sections_file=None, backend=None, skip=None, style_profile=None):
+def run(paths=None, backend=None, skip=None, style_profile=None):
+    paths = paths or {}
     skip = skip or set()
-    ui.header("pepa-draft — draft manuscript")
+    ui.header("pepa-draft: draft manuscript")
 
-    review_path, plan_path = _load_inputs(review_file, plan_file)
-    review_parsed, plan_items = _parse_inputs(review_path, plan_path)
-    assignment = _resolve_assignment(plan_items, plan_path, sections_file)
+    loaded = _load_inputs(paths.get("review_file"), paths.get("plan_file"))
+    parsed = _parse_inputs(loaded["review_path"], loaded["plan_path"])
+    review_parsed, plan_items = parsed["review_parsed"], parsed["plan_items"]
+    assignment = _resolve_assignment(plan_items, loaded["plan_path"], paths.get("sections_file"))
 
     from draft.template import targets
     word_targets = targets()

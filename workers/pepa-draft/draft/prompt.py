@@ -42,7 +42,7 @@ The outline for this section specifies the following paragraph moves:
 {plan_items}
 
 Write the full section now, following the moves in order.
-Do not include a section heading — start directly with the prose.
+Do not include a section heading: start directly with the prose.
 """
 
 EXPAND_PROMPT = """\

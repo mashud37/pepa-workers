@@ -66,13 +66,13 @@ def list_samples(profile: str = None) -> list[str]:
 
 
 def _embed_one(text: str) -> list[float]:
-    provider, model = config.embed_config()
-    if provider == "gemini":
+    embed = config.embed_config()
+    if embed["provider"] == "gemini":
         from index.retrieve import _gemini_embed
-        return _gemini_embed(text, model)
-    if provider == "ollama":
+        return _gemini_embed(text, embed["model"])
+    if embed["provider"] == "ollama":
         from index.retrieve import _ollama_embed
-        return _ollama_embed(text, model)
+        return _ollama_embed(text, embed["model"])
     raise SystemExit("No embedding provider configured. Add gemini_api_key or ollama_base_url to secrets.yaml.")
 
 

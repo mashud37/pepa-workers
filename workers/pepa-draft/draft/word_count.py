@@ -10,17 +10,27 @@ _PATTERN = re.compile(
 )
 
 
-def guard(text: str) -> tuple[str, dict]:
+def guard(text: str) -> dict:
+    """Replace quoted passages with placeholder tokens.
+
+    Args:
+        text: Input text that may contain quoted passages.
+
+    Returns:
+        Dict with keys masked_text (text with quotes replaced by tokens)
+        and qmap (token to original quoted text).
+    """
     qmap = {}
-    counter = [0]
-
-    def _replace(m):
-        token = f"§Q{counter[0]}§"
-        qmap[token] = m.group(0)
-        counter[0] += 1
-        return token
-
-    return _PATTERN.sub(_replace, text), qmap
+    pieces = []
+    last_end = 0
+    for match in _PATTERN.finditer(text):
+        token = f"§Q{len(qmap)}§"
+        qmap[token] = match.group(0)
+        pieces.append(text[last_end:match.start()])
+        pieces.append(token)
+        last_end = match.end()
+    pieces.append(text[last_end:])
+    return {"masked_text": "".join(pieces), "qmap": qmap}
 
 
 def unguard(text: str, qmap: dict) -> str:
@@ -31,8 +41,8 @@ def unguard(text: str, qmap: dict) -> str:
 
 def count(text: str) -> int:
     """Return word count, treating quoted passages as their natural word count."""
-    _, qmap = guard(text)
-    return len(unguard(text, qmap).split())
+    guarded = guard(text)
+    return len(unguard(text, guarded["qmap"]).split())
 
 
 def trim_to_target(text: str, target: int) -> str:

@@ -1,4 +1,5 @@
-"""Cloud Run vLLM client — bulk generation backend."""
+"""Call the Cloud Run vLLM service as the bulk generation backend.
+"""
 import json
 import time
 import urllib.error
@@ -8,6 +9,7 @@ import config
 
 _TIMEOUT = 300
 _READY_WAIT = 280
+DEFAULT_MAX_TOKENS = 4000
 
 
 def _vllm_ready(base_url: str) -> bool:
@@ -18,7 +20,7 @@ def _vllm_ready(base_url: str) -> bool:
         return False
 
 
-def complete(system: str, prompt: str, max_tokens: int = 4000, model: str = None) -> str:
+def complete(system: str, prompt: str, max_tokens: int = DEFAULT_MAX_TOKENS, model: str = None) -> str:
     """Send a completion request to the vLLM proxy service.
 
     Args:
@@ -30,8 +32,8 @@ def complete(system: str, prompt: str, max_tokens: int = 4000, model: str = None
     Returns:
         Response text string.
     """
-    base = config.vllm_base_url()
-    token = config.vllm_token()
+    base = config.get("vllm_base_url")
+    token = config.get("vllm_token")
     if not base:
         raise SystemExit("No vLLM service URL. Set vllm_base_url in secrets.yaml.")
 

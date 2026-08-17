@@ -21,16 +21,16 @@ def _build_prompt(section_key, plan_items, context, target):
         )
         parts.append(P.RETRIEVAL_PREAMBLE.format(passages=passages))
     plan_text = "\n".join(
-        f"{item['index']}. [{item['move']}] — {item['text']}" for item in plan_items
+        f"{item['index']}. [{item['move']}]: {item['text']}" for item in plan_items
     )
     review_ctx = f"Literature review context:\n{context.get('review_text', '')[:2000]}\n"
     user = "".join(parts) + P.SECTION_PROMPT.format(
         section_label=label, review_context=review_ctx, plan_items=plan_text
     )
-    return system, user, label
+    return {"system": system, "user": user, "label": label}
 
 
-def draft(section_key: str, plan_items: list, context: dict = None, target: int = None, backend: str = None) -> tuple:
+def draft(section_key: str, plan_items: list, context: dict = None, target: int = None, backend: str = None) -> dict:
     """Draft a single manuscript section.
 
     Args:
@@ -41,13 +41,14 @@ def draft(section_key: str, plan_items: list, context: dict = None, target: int 
         backend: LLM backend ('anthropic' or 'vllm').
 
     Returns:
-        Tuple of (drafted_text, actual_word_count).
+        Dict with keys text and words.
     """
     from backends import llm
 
     context = context or {}
     target = target or config.SECTION_TARGETS.get(section_key, 500)
-    system, user, label = _build_prompt(section_key, plan_items, context, target)
+    prompt = _build_prompt(section_key, plan_items, context, target)
+    system, user, label = prompt["system"], prompt["user"], prompt["label"]
 
     text = llm.complete(system, user, max_tokens=target * 3, backend=backend)
     actual = wc.count(text)
@@ -66,4 +67,4 @@ def draft(section_key: str, plan_items: list, context: dict = None, target: int 
         text = text.rstrip() + "\n\n" + addition.strip()
         actual = wc.count(text)
 
-    return text, actual
+    return {"text": text, "words": actual}
