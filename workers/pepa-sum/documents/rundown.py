@@ -1,8 +1,6 @@
-"""para_<name>.md — one sentence per paragraph, in document order.
-
-Two methods, chosen by the PARA_METHOD setting: `llm` condenses each paragraph
-abstractively (batched so it scales and works on either backend); `extractive`
-picks each paragraph's most central sentence verbatim, with no model call.
+"""Build para_<name>.md, one sentence per paragraph in document order,
+using either the `llm` method (abstractive, batched) or `extractive` (most
+central sentence, no model call).
 """
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -23,7 +21,7 @@ def build(text):
     paragraphs = _paragraphs(text)
     if not paragraphs:
         return NO_PARAGRAPHS
-    bullets = (extractive_rundown(paragraphs) if config.para_method() == "extractive"
+    bullets = (extractive_rundown(paragraphs) if config.load('PARA_METHOD') == "extractive"
                else _llm_rundown(paragraphs))
     return _format(bullets)
 
@@ -62,12 +60,16 @@ def _llm_rundown(paragraphs):
 def _bullets_from(texts):
     bullets = []
     for text in texts:
-        bullets.extend(_parse_numbered(text))
+        lines = text.splitlines()
+        items = [re.match(r"\s*\d+[.)]\s*(.+)", line) for line in lines]
+        items = [m.group(1).strip() for m in items if m]
+        bullets.extend(items or [line.strip() for line in lines if line.strip()])
     return bullets
 
 
-# --- batch path: same chunking, prompts, max_tokens, and parsing as above, so a
-# batch-built rundown is identical in shape to the live one. ---
+# ---- Batch path ----
+# Same chunking, prompts, max_tokens, and parsing as above, so a batch-built
+# rundown is identical in shape to the live one.
 
 def chunk_paragraphs(text):
     """The paragraph chunks for one paper, each becoming one batch request."""
@@ -75,16 +77,15 @@ def chunk_paragraphs(text):
 
 
 def chunk_request(chunk):
-    """(system, prompt, max_tokens) for one chunk — mirrors _complete_chunk."""
-    return RUNDOWN_SYSTEM, build_rundown_prompt(chunk), _chunk_max_tokens(chunk)
+    """The `system`, `prompt` and `max_tokens` for one chunk, mirrors _complete_chunk."""
+    return {
+        "system": RUNDOWN_SYSTEM,
+        "prompt": build_rundown_prompt(chunk),
+        "max_tokens": _chunk_max_tokens(chunk),
+    }
 
 
 def assemble_rundown(chunk_texts):
     """Stitch the chunk responses (in order) into the final numbered rundown."""
     return _format(_bullets_from(chunk_texts))
 
-
-def _parse_numbered(text):
-    items = [re.match(r"\s*\d+[.)]\s*(.+)", line) for line in text.splitlines()]
-    items = [m.group(1).strip() for m in items if m]
-    return items or [line.strip() for line in text.splitlines() if line.strip()]

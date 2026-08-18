@@ -1,13 +1,12 @@
-"""Write an output document: <prefix>_<paper-stem>.md.
-
-Line one is the original source filename (so the source is unambiguous when the
-file is read on its own); the document body follows.
+"""Write an output document named <prefix>_<paper-stem>.md, with the
+original source filename as line one so the file is unambiguous read on
+its own.
 """
 from pathlib import Path
 
 # pepa-prep emits its extracted markdown as text_<stem>.md (and text_<stem>_NN.md
 # per chapter). Stripping that prefix off a text input makes a preprocessed paper
-# produce sum_<stem>.md — identical to summarising the PDF directly — instead of
+# produce sum_<stem>.md (identical to summarising the PDF directly) instead of
 # sum_text_<stem>.md.
 _PREP_PREFIX = "text_"
 _PREP_SUFFIXES = (".md", ".markdown", ".txt")

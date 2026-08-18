@@ -1,24 +1,19 @@
-"""System prompts and prompt builders for the LLM-generated documents.
-
-summary  — the structured brief (the template below), with an empirical-context
-           field and explanatory, specific phrasing.
-rundown  — one concise sentence per paragraph, in document order.
-
-(The quote document is built deterministically — see extract/passages.py and
-documents/quotes.py — so it has no prompt here.)
+"""Define system prompts and prompt builders for the LLM-generated
+documents: the structured summary brief and the one-sentence-per-paragraph
+rundown. The quote document is built deterministically and needs no prompt.
 """
 import config
 
 # The fixed summary contract. The model fills the bracketed fields and returns
-# only this block — the renderer prepends the original filename as line one.
+# only this block: the renderer prepends the original filename as line one.
 SUMMARY_TEMPLATE = """## <one-line title of the paper>
 
 - **Question & context:** <the problem the paper addresses and why it matters>
-- **Empirical context:** <country/region, time period, the people and societies studied, sites, and data sources — or "N/A (conceptual/theoretical)">
+- **Empirical context:** <country/region, time period, the people and societies studied, sites, and data sources, or "N/A (conceptual/theoretical)">
 - **Literature drawn on:** <the bodies of work and key prior authors it builds on, and what it takes from each>
-- **Methods:** <data, design, and techniques used — or "N/A (conceptual)">
+- **Methods:** <data, design, and techniques used, or "N/A (conceptual)">
 - **Arguments:**
-  1. <first argument, explained in detail — what is claimed and on what basis>
+  1. <first argument, explained in detail: what is claimed and on what basis>
   2. <second argument, explained in detail>
   3. <further arguments as needed>
 - **Key conclusions:** <what the paper establishes>
@@ -27,7 +22,7 @@ SUMMARY_TEMPLATE = """## <one-line title of the paper>
 
 SUMMARY_SYSTEM = (
     "You are a precise academic summariser. You read one paper and return a "
-    "structured Markdown brief, filling the template EXACTLY — same headings, "
+    "structured Markdown brief, filling the template EXACTLY: same headings, "
     "same bullet order, every field present. Be explanatory and specific: state "
     "WHAT is argued and on what grounds, not merely that an argument is made, and "
     "name the actual concepts, places, and findings rather than gesturing at them. "
@@ -76,7 +71,7 @@ def build_summary_prompt(text, signals, passages, budget=None):
 
     return (
         "Deterministic signals extracted locally to guide you (keywords, named "
-        "entities, and argument triplets — use them to locate the spine of the "
+        "entities, and argument triplets: use them to locate the spine of the "
         "paper, but rely on the text for the wording):\n\n"
         f"{signal_block}\n\n"
         f"{body}\n\n"

@@ -1,10 +1,6 @@
-"""Deploy the summariser service to Cloud Run.
-
-Prompts for the GCP project (never silently uses the active gcloud config),
-then runs the platform's deploy script — deploy.ps1 on Windows, deploy.sh
-elsewhere. Both are the same two-pass deploy: build the image, deploy the
-service, then write the resulting BASE_URL back into env.yaml. Region defaults
-to europe-west1; gcloud_app.yaml records the same config declaratively.
+"""Deploy the summariser service to Cloud Run by prompting for the GCP
+project, then running the platform's deploy script, which builds the image,
+deploys, and writes BASE_URL into env.yaml.
 """
 import os
 import shutil
@@ -17,7 +13,7 @@ from cli import ui
 def run():
     ui.header("Deploy summariser service")
     if not shutil.which("gcloud"):
-        raise SystemExit("gcloud CLI not found — install it first (run: python manage.py install).")
+        raise SystemExit("gcloud CLI not found, install it first (run: python manage.py install).")
 
     project = _select_project()
     ui.ok(f"deploying to project: {project}  (region europe-west1)")
@@ -68,5 +64,5 @@ def _deploy_command():
     if not script.exists():
         raise SystemExit("deploy.sh not found.")
     if not shutil.which("bash"):
-        raise SystemExit("bash not found — run `bash deploy.sh` from a shell that has it.")
+        raise SystemExit("bash not found, run `bash deploy.sh` from a shell that has it.")
     return ["bash", str(script)]

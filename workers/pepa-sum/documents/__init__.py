@@ -1,8 +1,6 @@
-"""Builds the three output documents from a paper's text and signals.
-
-summary  -> sum_<name>.md   the structured brief
-rundown  -> para_<name>.md  one sentence per paragraph, in order
-quotes   -> quote_<name>.md the most expressive verbatim quotes (verified)
+"""Build the three output documents from a paper's text and signals: sum_
+the structured brief, para_ the paragraph rundown, quote_ the verified
+verbatim quotes.
 """
 from documents.summary import build as build_summary, has_template
 from documents.rundown import build as build_rundown

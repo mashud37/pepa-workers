@@ -1,7 +1,6 @@
-"""Idempotent setup: create env.yaml, fill settings/keys, check dependencies.
-
-Safe to re-run — only missing/blank/placeholder values are filled; a real
-ANTHROPIC_API_KEY, JOB_TOKEN, or BASE_URL is never overwritten.
+"""Idempotent setup: creates env.yaml, fills settings and keys, checks
+dependencies. Safe to rerun: only missing, blank, or placeholder values are
+filled, a real key is never overwritten.
 """
 import getpass
 import secrets
@@ -29,7 +28,7 @@ def run():
     _check_deps()
     _check_spacy_model()
     ui.step("Next")
-    if config.backend() == "anthropic":
+    if config.load('BACKEND') == "anthropic":
         ui.info("Drop PDFs in input/ and run:  python manage.py summarize")
     else:
         ui.info("Deploy the self-hosted service:  python manage.py deploy")
@@ -63,7 +62,7 @@ def _ensure_env():
         changed = True
         ui.ok("generated JOB_TOKEN (self-hosted fallback)")
 
-    if data.get("BACKEND") == "anthropic" and not config.anthropic_api_key():
+    if data.get("BACKEND") == "anthropic" and not config.load('ANTHROPIC_API_KEY'):
         key = _prompt_api_key()
         if key:
             data["ANTHROPIC_API_KEY"] = key
@@ -78,7 +77,7 @@ def _ensure_env():
 
 def _prompt_api_key():
     if not sys.stdin.isatty():
-        ui.warn("ANTHROPIC_API_KEY not set — paste it during an interactive install "
+        ui.warn("ANTHROPIC_API_KEY not set, paste it during an interactive install "
                 "or set the ANTHROPIC_API_KEY env var")
         return None
     return getpass.getpass("  Anthropic API key (blank to skip): ").strip()
@@ -89,7 +88,7 @@ def _check_deps():
     import importlib
     missing = [m for m in _CORE_DEPS if not _importable(importlib, m)]
     if missing:
-        ui.warn(f"missing packages: {', '.join(missing)} — pip install -r requirements.txt")
+        ui.warn(f"missing packages: {', '.join(missing)}, pip install -r requirements.txt")
     else:
         ui.ok("python dependencies present")
 
@@ -114,4 +113,4 @@ def _check_spacy_model():
         ui.ok("spaCy model en_core_web_sm present")
     except Exception:
         sp.done("missing")
-        ui.warn("spaCy model missing — python -m spacy download en_core_web_sm")
+        ui.warn("spaCy model missing, python -m spacy download en_core_web_sm")

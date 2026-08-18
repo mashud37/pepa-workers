@@ -1,11 +1,6 @@
-"""TREC-style passage retrieval: surface the information-rich passages.
-
-The paper is split into paragraph passages and scored with BM25 against a
-salience query built from the document's own top noun phrases plus generic
-academic cue phrases ("we argue", "our contribution", "results show"). The
-highest-scoring passages — plus any explicitly labelled section (abstract,
-methods, conclusion) — are returned in document order, focusing the model on
-argument-bearing text rather than front-matter and references.
+"""Score paragraph passages with BM25 against a salience query built from
+the paper's own noun phrases and academic cue phrases, returning top
+passages and labelled sections in document order.
 """
 import re
 
@@ -30,16 +25,20 @@ _SECTION_RE = re.compile(
 
 _SENT_SPLIT = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"'(])")
 
+_TOP_SALIENT_SENTENCES = 12
+_MIN_SENTENCE_WORDS = 8
+_MAX_SENTENCE_WORDS = 60
+_MIN_PASSAGE_CHARS = 200
+_MAX_PASSAGE_CHARS = 1500
+_TOP_PASSAGES = 12
+
 
 def _tokenize(text):
     return re.sub(r"[^a-z0-9\s]", " ", text.lower()).split()
 
 
-def _split_sentences(text):
-    return [s.strip() for s in _SENT_SPLIT.split(text) if s.strip()]
-
-
-def salient_sentences(text, signals, k=12, min_words=8, max_words=60):
+def salient_sentences(text, signals, k=_TOP_SALIENT_SENTENCES,
+                       min_words=_MIN_SENTENCE_WORDS, max_words=_MAX_SENTENCE_WORDS):
     """The k most information-rich whole sentences, verbatim, most-salient first.
 
     Each sentence is whitespace-normalised to a single line, screened for
@@ -47,8 +46,9 @@ def salient_sentences(text, signals, k=12, min_words=8, max_words=60):
     own key terms (noun phrases + entities) plus the academic cue phrases, so
     the picks carry the paper's concepts and arguments. Length bounds drop
     fragments and runaway sentences. Verbatim by construction."""
+    sentences = [s.strip() for s in _SENT_SPLIT.split(text) if s.strip()]
     candidates = []
-    for s in _split_sentences(text):
+    for s in sentences:
         s = re.sub(r"(?<=[a-z])-\s*\n\s*(?=[a-z])", "", s)   # join line-broken words
         s = re.sub(r"\s+", " ", s).strip()                   # collapse wraps to one line
         if min_words <= len(s.split()) <= max_words and not _looks_noisy(s):
@@ -64,8 +64,8 @@ def salient_sentences(text, signals, k=12, min_words=8, max_words=60):
 
 
 def _looks_noisy(s):
-    """Reject footnotes, interview logs, page headers, and citation dumps —
-    the text pypdf interleaves into the body — as quote candidates."""
+    """Reject footnotes, interview logs, page headers, and citation dumps
+    (the text pypdf interleaves into the body) as quote candidates."""
     if not s[:1].isalpha() or not s[0].isupper():
         return True
     if s[-1] not in ".!?\"'”’":
@@ -81,7 +81,7 @@ def _looks_noisy(s):
     return False
 
 
-def _split_passages(text, min_chars=200, max_chars=1500):
+def _split_passages(text, min_chars=_MIN_PASSAGE_CHARS, max_chars=_MAX_PASSAGE_CHARS):
     """Paragraph passages, merging runts and splitting overlong blocks."""
     blocks = [b.strip() for b in re.split(r"\n\s*\n", text) if b.strip()]
     passages, buffer = [], ""
@@ -95,7 +95,7 @@ def _split_passages(text, min_chars=200, max_chars=1500):
     return passages
 
 
-def select_passages(text, signals, k=12):
+def select_passages(text, signals, k=_TOP_PASSAGES):
     """Top-k information-rich passages in document order, sections kept whole.
 
     Returns a list of passage strings. Falls back to the head of the document

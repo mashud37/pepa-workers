@@ -1,8 +1,5 @@
-"""Client for the Cloud Run summariser service (stdlib HTTP, per policy).
-
-POSTs {system, prompt} to {BASE_URL}/summarize?token=JOB_TOKEN and returns the
-model's Markdown. The service runs the instruction-tuned model and scales to
-zero between calls, so the first request after idle pays a cold start.
+"""Post {system, prompt} to the Cloud Run summariser service and return its
+Markdown, using stdlib HTTP.
 """
 import json
 import urllib.error
@@ -15,8 +12,8 @@ _TIMEOUT = 900
 
 
 def summarize(system, prompt):
-    base = config.base_url()
-    token = config.job_token()
+    base = config.load('BASE_URL')
+    token = config.load('JOB_TOKEN')
     if not base:
         raise SystemExit(
             "No summariser endpoint configured. Deploy the service "

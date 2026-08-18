@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-"""pepa-sum — summarise academic PDFs into structured, comparable Markdown.
-
-No arguments launches the interactive menu; any subcommand runs directly.
+"""Summarise academic PDFs into structured, comparable Markdown. No
+arguments launches the interactive menu; any subcommand runs directly.
 """
 import sys
 import argparse
@@ -22,7 +21,7 @@ def main():
     s.add_argument("-o", "--output", type=Path, help="Output folder for documents")
     s.add_argument("-f", "--force", action="store_true", help="Redo papers already processed")
     s.add_argument("--mode", choices=["auto", "serial", "parallel", "batch"],
-                   help="Execution mode (default: auto — chosen by estimated time)")
+                   help="Execution mode (default: auto, chosen by estimated time)")
 
     c = sub.add_parser("clean", help="Delete failed outputs (sum_ files missing the template) + their pairs")
     c.add_argument("-o", "--output", type=Path, help="Output folder to clean")

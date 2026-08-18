@@ -1,12 +1,11 @@
-"""Paragraph segmentation and a deterministic one-sentence-per-paragraph rundown.
-
-PDF text extraction gives messy line breaks, so paragraphs are recovered from
-blank-line gaps, with runts merged and overlong blocks split on sentences. The
-extractive rundown picks each paragraph's most central sentence (highest cosine
-similarity to the rest) — verbatim, no model, the free alternative to the LLM
-rundown. See cs_ir_stats_reference.md §1.7 (cosine) for the centrality idea.
+"""Recover paragraphs from blank-line gaps in messy PDF text, merging runts
+and splitting overlong blocks, then extract each paragraph's most central
+sentence verbatim as a free, model-free rundown.
 """
 import re
+
+_MIN_PARAGRAPH_CHARS = 200
+_MAX_PARAGRAPH_CHARS = 1500
 
 _SENT_SPLIT = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9])")
 
@@ -32,7 +31,7 @@ def body_span(text):
 
     Used for the paragraph rundown so abstract/metadata at the front and
     trailing matter at the back don't become bullets. Both boundaries are
-    optional — when a marker isn't found that edge is left untouched."""
+    optional: when a marker isn't found that edge is left untouched."""
     start = 0
     intro = _INTRO_RE.search(text)
     if intro and intro.start() <= len(text) * 0.4:
@@ -47,7 +46,7 @@ def body_span(text):
     return text[start:end].strip()
 
 
-def split_paragraphs(text, min_chars=200, max_chars=1500):
+def split_paragraphs(text, min_chars=_MIN_PARAGRAPH_CHARS, max_chars=_MAX_PARAGRAPH_CHARS):
     blocks = [b.strip() for b in re.split(r"\n\s*\n", text) if b.strip()]
     paragraphs, buffer = [], ""
     for block in blocks:
@@ -80,11 +79,8 @@ def _sentences(para):
 
 
 def extractive_rundown(paragraphs):
-    return [_collapse(_central_sentence(p)) for p in paragraphs]
-
-
-def _collapse(s):
-    return re.sub(r"\s+", " ", s).strip()
+    sentences = [_central_sentence(p) for p in paragraphs]
+    return [re.sub(r"\s+", " ", s).strip() for s in sentences]
 
 
 def _central_sentence(para):

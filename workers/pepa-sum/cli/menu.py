@@ -1,6 +1,6 @@
-"""Interactive menu shown when manage.py is run with no arguments.
-
-Mirrors the subcommands one-to-one, ordered by frequency of use."""
+"""Show the interactive menu when manage.py runs with no arguments, looping
+until closed; every action returns here when it finishes or fails.
+"""
 from cli import ui, summarize, cleanup, settings, install, show_config, deploy
 
 _ACTIONS = [
@@ -18,4 +18,4 @@ def main():
         choice = ui.menu("pepa-sum", [(label, desc) for label, desc, _ in _ACTIONS])
         if choice is None:
             return 0
-        _ACTIONS[choice][2]()
+        ui.run_action(_ACTIONS[choice][2])

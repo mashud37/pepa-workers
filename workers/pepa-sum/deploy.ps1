@@ -1,7 +1,7 @@
-# deploy.ps1 — build + deploy the pepa-sum summariser service to Cloud Run (Windows).
+# deploy.ps1: build + deploy the pepa-sum summariser service to Cloud Run (Windows).
 # Usage: set $env:PROJECT (or `gcloud config set project ...`), then: .\deploy.ps1
 #
-# Native PowerShell mirror of deploy.sh — keep the two in sync. gcloud_app.yaml
+# Native PowerShell mirror of deploy.sh, keep the two in sync. gcloud_app.yaml
 # records the same deployment config declaratively.
 
 $ErrorActionPreference = "Continue"

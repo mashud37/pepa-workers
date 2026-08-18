@@ -1,6 +1,6 @@
-"""Choose the backend and paragraph-rundown method; persist them to env.yaml.
-
-A saved setting applies to every later run until changed."""
+"""Choose the backend and paragraph-rundown method and persist them to
+env.yaml. A saved setting applies to every later run until changed.
+"""
 import config
 from cli import ui
 
@@ -9,19 +9,19 @@ def run():
     ui.header("Settings")
 
     backend = ui.ask_choice(
-        f"Backend {list(config.BACKENDS)}", list(config.BACKENDS), default=config.backend()
+        f"Backend {list(config.BACKENDS)}", list(config.BACKENDS), default=config.load('BACKEND')
     )
     para = ui.ask_choice(
         f"Paragraph rundown {list(config.PARA_METHODS)}", list(config.PARA_METHODS),
-        default=config.para_method(),
+        default=config.load('PARA_METHOD'),
     )
     on_existing = ui.ask_choice(
         f"When a paper is already done {list(config.ON_EXISTING_MODES)}",
-        list(config.ON_EXISTING_MODES), default=config.on_existing(),
+        list(config.ON_EXISTING_MODES), default=config.load('ON_EXISTING'),
     )
     run_mode = ui.ask_choice(
         f"Run mode {list(config.MODES)} (auto picks by estimated time)",
-        list(config.MODES), default=config.mode(),
+        list(config.MODES), default=config.load('MODE'),
     )
     speed = ui.ask_choice(
         f"Parallel speed {list(config.SPEED_TIERS)} (API + local throughput; "
@@ -34,15 +34,20 @@ def run():
         list(config.OCR_MODES), default=config.ocr_mode(),
     )
 
-    config.set_values({"BACKEND": backend, "PARA_METHOD": para,
-                       "ON_EXISTING": on_existing, "MODE": run_mode, "SPEED": speed,
-                       "OCR": ocr})
+    config.set_values({
+        "BACKEND": backend,
+        "PARA_METHOD": para,
+        "ON_EXISTING": on_existing,
+        "MODE": run_mode,
+        "SPEED": speed,
+        "OCR": ocr,
+    })
     ui.ok(f"saved: backend={backend}, para_method={para}, on_existing={on_existing}, "
           f"mode={run_mode}, speed={speed}, ocr={ocr}")
     ui.info(f"{speed} → {config.paper_workers()} papers · "
             f"{config.max_concurrency()} LLM calls · {config.local_workers()} read process(es) "
             f"· up to {config.local_batch()} read ahead")
 
-    if backend == "anthropic" and not config.anthropic_api_key():
-        ui.warn("ANTHROPIC_API_KEY not set — run: python manage.py install")
+    if backend == "anthropic" and not config.load('ANTHROPIC_API_KEY'):
+        ui.warn("ANTHROPIC_API_KEY not set, run: python manage.py install")
     return 0

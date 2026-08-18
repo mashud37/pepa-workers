@@ -1,8 +1,6 @@
-"""Remove failed summaries from output/: any sum_*.md whose body never received
-the structured template (a plain-text model error rather than a real brief),
-together with its paired para_/quote_ files. A cleaned paper has no sum_ left, so
-the next summarise run retries it. This clears the backlog that write-time
-validation now prevents from ever being written.
+"""Remove failed summaries from output/: sum_*.md files missing the
+structured template, plus their paired para_/quote_ files, so the next
+run retries them.
 """
 import config
 from cli import ui
@@ -29,24 +27,24 @@ def _failed(out_dir):
 
 def run(output_dir=None, dry_run=False, force=False):
     out_dir = output_dir or config.OUTPUT_DIR
-    ui.header("pepa-sum — clean failed outputs")
+    ui.header("pepa-sum: clean failed outputs")
     if not out_dir.is_dir():
         raise SystemExit(f"Output folder not found: {out_dir}")
 
     ui.step(f"Scanning {out_dir}")
     failed = _failed(out_dir)
     if not failed:
-        ui.ok("no failed outputs — every sum_ has the template")
+        ui.ok("no failed outputs: every sum_ has the template")
         return 0
 
     total = len(failed)
     n_files = sum(len(paths) for _, paths in failed)
-    ui.warn(f"{total} failed summary(ies) — {n_files} file(s) to remove")
+    ui.warn(f"{total} failed summary(ies), {n_files} file(s) to remove")
 
     if dry_run:
         for i, (base, paths) in enumerate(failed, 1):
             ui.info(f"[{i}/{total}] {base}  ({', '.join(p.name for p in paths)})")
-        ui.ok(f"dry run — {total} paper(s) would be cleaned, nothing deleted")
+        ui.ok(f"dry run: {total} paper(s) would be cleaned, nothing deleted")
         return 0
 
     if not force and not ui.confirm(

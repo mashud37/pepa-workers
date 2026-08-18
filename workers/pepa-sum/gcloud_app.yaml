@@ -9,7 +9,7 @@ artifact_registry:
 
 service_account:
   name: pepa-sa
-  display: "pepa-sum — summariser service"
+  display: "pepa-sum: summariser service"
   roles: [roles/run.invoker]
 
 env_file: env.yaml

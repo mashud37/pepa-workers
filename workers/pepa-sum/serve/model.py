@@ -1,7 +1,6 @@
-"""Run the instruction-tuned GGUF model on CPU via llama-cpp-python.
-
-The model is loaded once, lazily, on the first request (so a cold instance
-starts fast and only pays the load when actually used)."""
+"""Run the instruction-tuned GGUF model on CPU via llama-cpp-python,
+loading it once lazily on first request so a cold instance starts fast.
+"""
 import os
 from functools import lru_cache
 

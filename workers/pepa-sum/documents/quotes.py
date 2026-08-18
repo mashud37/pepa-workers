@@ -1,8 +1,6 @@
-"""quote_<name>.md — the most information-rich sentences, verbatim.
-
-Deterministic: the sentences are scored and selected by BM25 salience and
-copied out exactly, so every quote is guaranteed to appear in the source. No
-model call, no hallucination risk.
+"""Select the most information-rich sentences by BM25 salience and copy them
+out verbatim into quote_<name>.md, with no model call and no hallucination
+risk.
 """
 from extract.passages import salient_sentences
 

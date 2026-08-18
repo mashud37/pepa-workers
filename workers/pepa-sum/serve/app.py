@@ -1,10 +1,6 @@
-"""Cloud Run summariser service — a thin HTTP wrapper over the local model.
-
-POST /summarize?token=...  {system, prompt} -> {summary}
-GET  /healthz              liveness probe
-
-The token guards the endpoint (same value as JOB_TOKEN in env.yaml). The
-service is configured with min-instances=0, so it scales to zero between runs.
+"""Serve the summariser as a thin Flask HTTP wrapper over the local model,
+with /summarize taking a token-guarded {system, prompt} request and
+/healthz for liveness.
 """
 import os
 

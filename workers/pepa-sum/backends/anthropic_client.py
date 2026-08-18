@@ -1,10 +1,6 @@
-"""Claude (Anthropic) client for the comprehension layer — the default backend.
-
-Pay-per-use, so idle cost is zero; far better quality and speed than the
-self-hosted CPU model. The API key comes from ANTHROPIC_API_KEY (env or
-env.yaml). A global semaphore caps how many requests are ever in flight at once
-(so the batch's nested pools can't outrun the account's rate limit), and
-transient overload/rate-limit is ridden out with backoff that honors Retry-After.
+"""Call Claude for the comprehension layer, the default backend, capping
+in-flight requests with a global semaphore and retrying transient errors
+with backoff.
 """
 import random
 import threading
@@ -14,9 +10,17 @@ import config
 
 _RETRYABLE = (429, 500, 502, 503, 529)
 _MAX_ATTEMPTS = 5
+DEFAULT_MAX_TOKENS = 2000
+
+# API ceiling is 100k requests per batch; stay under it.
+_BATCH_MAX_REQUESTS = 90000
+# API caps total request size at 256 MB. sum_ prompts embed the full paper text,
+# so a large run hits the size ceiling long before the count one: split on both.
+# Conservative byte budget (margin under 256 MB, and chars under-count UTF-8).
+_BATCH_MAX_BYTES = 180_000_000
 
 # Anthropic models expose a 200k-token context window. A prompt that, with its
-# reserved output, would exceed it returns a fatal 400 mid-run — and a single
+# reserved output, would exceed it returns a fatal 400 mid-run, and a single
 # oversized paper would otherwise abort the whole batch (serial re-raises the
 # SystemExit; a batch request just fails silently and re-fails on every re-run).
 # A cheap characters-based estimate (dense academic text runs ~3.5 chars/token)
@@ -30,6 +34,16 @@ _CONTEXT_MARGIN_TOKENS = 1_000
 class PromptTooLong(Exception):
     """A request would exceed the model's context window. Recoverable per paper:
     the caller logs it and moves on, the paper is simply not produced."""
+
+
+class Truncated(Exception):
+    """The model stopped at max_tokens with the output unfinished. Carries the
+    partial text (`.text`) so the caller can save it for eval before treating the
+    paper as a per-paper failure and letting a re-run regenerate it."""
+
+    def __init__(self, text):
+        super().__init__("output stopped at the max_tokens limit")
+        self.text = text
 
 
 def _estimate_tokens(text):
@@ -59,7 +73,7 @@ _usage = {"input": 0, "output": 0, "calls": 0, "batch_input": 0, "batch_output":
 
 
 def usage_snapshot():
-    """Cumulative token usage tallied from API responses since the last reset —
+    """Cumulative token usage tallied from API responses since the last reset:
     the basis for the run's cost estimate. Safe to read from any thread."""
     with _usage_lock:
         return dict(_usage)
@@ -89,7 +103,7 @@ def _client():
     except ImportError:
         raise SystemExit("anthropic package missing. Run: pip install -r requirements.txt")
 
-    key = config.anthropic_api_key()
+    key = config.load('ANTHROPIC_API_KEY')
     if not key:
         raise SystemExit(
             "No ANTHROPIC_API_KEY. Set it in env.yaml or the ANTHROPIC_API_KEY env "
@@ -123,12 +137,16 @@ def _retry_after(error):
         return None
 
 
-def complete(system, prompt, max_tokens=2000):
+def complete(system, prompt, max_tokens=DEFAULT_MAX_TOKENS, flag_truncation=False):
+    """One live completion. With flag_truncation, a response that stops at the
+    max_tokens limit raises Truncated (carrying the partial text) instead of
+    returning a silently cut-off body; used by the sum_ brief, whose trailing
+    fields (conclusion, future research) are the first thing a short cap drops."""
     if would_overflow(system, prompt, max_tokens):
         est = request_token_estimate(system, prompt, max_tokens)
         raise PromptTooLong(
             f"prompt ~{est:,} tokens exceeds the {CONTEXT_LIMIT_TOKENS:,}-token "
-            "context window — paper skipped (lower the text budget to shorten it)"
+            "context window: paper skipped (lower the text budget to shorten it)"
         )
     client = _client()
     import anthropic
@@ -138,7 +156,7 @@ def complete(system, prompt, max_tokens=2000):
         try:
             with _governor():
                 msg = client.messages.create(
-                    model=config.anthropic_model(),
+                    model=config.load('ANTHROPIC_MODEL'),
                     max_tokens=max_tokens,
                     temperature=0.2,
                     system=system,
@@ -150,17 +168,20 @@ def complete(system, prompt, max_tokens=2000):
                     _usage["input"] += getattr(u, "input_tokens", 0) or 0
                     _usage["output"] += getattr(u, "output_tokens", 0) or 0
                     _usage["calls"] += 1
-            return "".join(
+            text = "".join(
                 b.text for b in msg.content if getattr(b, "type", None) == "text"
             ).strip()
+            if flag_truncation and getattr(msg, "stop_reason", None) == "max_tokens":
+                raise Truncated(text)
+            return text
         except anthropic.APIStatusError as e:
             status = getattr(e, "status_code", None)
             detail = str(getattr(e, "message", e))
             if status == 400 and "too long" in detail.lower():
                 # Estimate missed it: skip this paper rather than abort the run.
-                raise PromptTooLong(f"prompt rejected as too long — paper skipped ({detail})")
+                raise PromptTooLong(f"prompt rejected as too long: paper skipped ({detail})")
             if status not in _RETRYABLE:
-                # A non-transient API error (bad request, auth, model) — fatal.
+                # A non-transient API error (bad request, auth, model): fatal.
                 raise SystemExit(f"Anthropic API error {status}: {detail}")
             last = e
             if attempt < _MAX_ATTEMPTS - 1:
@@ -171,33 +192,38 @@ def complete(system, prompt, max_tokens=2000):
                 time.sleep(_backoff(attempt))
 
     # Transient errors exhausted retries: recoverable per paper, not fatal to the
-    # whole batch — the caller logs it and moves on (re-run picks the paper up).
+    # whole batch: the caller logs it and moves on (re-run picks the paper up).
     raise RuntimeError(f"Anthropic API unavailable after {_MAX_ATTEMPTS} attempts: {last}")
 
 
 # Message Batches API: same model and request shape as complete() above
 # (model, max_tokens, temperature=0.2, system, single user message), so a paper
 # summarised via a batch is drawn from the identical model and configuration as
-# the live path — only the transport differs. 50% cheaper, asynchronous.
-_BATCH_MAX_REQUESTS = 90000       # API ceiling is 100k; stay under it
-# API caps total request size at 256 MB. sum_ prompts embed the full paper text,
-# so a large run hits the size ceiling long before the count one — split on both.
-# Conservative byte budget (margin under 256 MB, and chars under-count UTF-8).
-_BATCH_MAX_BYTES = 180_000_000
+# the live path, only the transport differs. 50% cheaper, asynchronous.
 
 
 def run_batch(requests, on_progress=None):
     """Run many LLM calls through the Messages Batches API.
 
-    `requests` is a list of {custom_id, system, prompt, max_tokens}. Returns
-    {custom_id: text} for every request that succeeded; failed/expired ones are
-    simply absent (the caller treats a missing id as a per-paper failure and the
-    paper is retried on the next run). Polls until the batch ends; on Ctrl-C the
-    in-flight batch is cancelled to stop spend, then the interrupt propagates."""
+    Args:
+        requests: list of {custom_id, system, prompt, max_tokens}.
+        on_progress: called with each poll's status while the batch runs.
+
+    Returns:
+        `results`, {custom_id: text} for every request that succeeded (failed or
+        expired ones are simply absent, so the caller treats a missing id as a
+        per-paper failure retried next run), and `truncated`, the set of
+        custom_ids whose output stopped at the max_tokens limit (present in
+        results but cut off).
+
+    Polls until the batch ends; on Ctrl-C the in-flight batch is cancelled to
+    stop spend, then the interrupt propagates.
+    """
     client = _client()
-    model = config.anthropic_model()
+    model = config.load('ANTHROPIC_MODEL')
     poll = config.batch_poll_seconds()
     results = {}
+    truncated = set()
     for sub in _sub_batches(requests, _BATCH_MAX_REQUESTS, _BATCH_MAX_BYTES):
         batch = client.messages.batches.create(requests=[
             {
@@ -212,34 +238,57 @@ def run_batch(requests, on_progress=None):
             }
             for r in sub
         ])
+        _wait_for_batch(client, batch.id, poll, on_progress)
+        collected = _collect_batch(client, batch.id)
+        results.update(collected["results"])
+        truncated |= collected["truncated"]
+    return {"results": results, "truncated": truncated}
+
+
+def _wait_for_batch(client, batch_id, poll, on_progress):
+    """Poll until the batch ends, cancelling it if the user interrupts."""
+    try:
+        while True:
+            status = client.messages.batches.retrieve(batch_id)
+            if on_progress:
+                on_progress(status)
+            if status.processing_status == "ended":
+                return
+            time.sleep(poll)
+    except KeyboardInterrupt:
         try:
-            while True:
-                status = client.messages.batches.retrieve(batch.id)
-                if on_progress:
-                    on_progress(status)
-                if status.processing_status == "ended":
-                    break
-                time.sleep(poll)
-        except KeyboardInterrupt:
-            try:
-                client.messages.batches.cancel(batch.id)
-            except Exception:
-                pass
-            raise
-        for res in client.messages.batches.results(batch.id):
-            if res.result.type != "succeeded":
-                continue
-            msg = res.result.message
-            results[res.custom_id] = "".join(
-                b.text for b in msg.content if getattr(b, "type", None) == "text"
-            ).strip()
-            u = getattr(msg, "usage", None)
-            if u is not None:
-                with _usage_lock:
-                    _usage["batch_input"] += getattr(u, "input_tokens", 0) or 0
-                    _usage["batch_output"] += getattr(u, "output_tokens", 0) or 0
-                    _usage["calls"] += 1
-    return results
+            client.messages.batches.cancel(batch_id)
+        except Exception:
+            pass
+        raise
+
+
+def _record_usage(msg):
+    """Add one finished message's token counts to the run's usage totals."""
+    u = getattr(msg, "usage", None)
+    if u is None:
+        return
+    with _usage_lock:
+        _usage["batch_input"] += getattr(u, "input_tokens", 0) or 0
+        _usage["batch_output"] += getattr(u, "output_tokens", 0) or 0
+        _usage["calls"] += 1
+
+
+def _collect_batch(client, batch_id):
+    """The finished batch's succeeded `results`, and the `truncated` ids cut off at max_tokens."""
+    results = {}
+    truncated = set()
+    for res in client.messages.batches.results(batch_id):
+        if res.result.type != "succeeded":
+            continue
+        msg = res.result.message
+        results[res.custom_id] = "".join(
+            b.text for b in msg.content if getattr(b, "type", None) == "text"
+        ).strip()
+        if getattr(msg, "stop_reason", None) == "max_tokens":
+            truncated.add(res.custom_id)
+        _record_usage(msg)
+    return {"results": results, "truncated": truncated}
 
 
 def _sub_batches(seq, max_count, max_bytes):
@@ -247,14 +296,16 @@ def _sub_batches(seq, max_count, max_bytes):
     A single request larger than max_bytes still goes out on its own (one paper's
     text is well under the limit); the size guard only prevents many papers from
     summing past it. Size is estimated from prompt+system chars plus per-request
-    overhead — cheap, and the budget keeps margin for the under-count vs UTF-8."""
+    overhead: cheap, and the budget keeps margin for the under-count vs UTF-8."""
+    batches = []
     batch, size = [], 0
     for r in seq:
         r_bytes = len(r["system"]) + len(r["prompt"]) + 256
         if batch and (len(batch) >= max_count or size + r_bytes > max_bytes):
-            yield batch
+            batches.append(batch)
             batch, size = [], 0
         batch.append(r)
         size += r_bytes
     if batch:
-        yield batch
+        batches.append(batch)
+    return batches
