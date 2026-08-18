@@ -6,11 +6,6 @@ import sys
 from cli import ui
 
 
-def _cmd_index(args):
-    from index.build import run
-    run(force=args.force)
-
-
 def _cmd_search(args):
     import config
     from search.query import count, search
@@ -37,22 +32,6 @@ def _cmd_search(args):
     shown_to = args.offset + len(results)
     more = f"  (--offset {shown_to} for more)" if shown_to < total else ""
     print(f"\nshowing {shown_from}-{shown_to} of {total}{more}", file=sys.stderr)
-
-
-def _cmd_serve(args):
-    import config
-    from web.app import run
-    run(port=args.port or config.PORT, open_browser=not args.no_browser)
-
-
-def _cmd_open(args):
-    from web.routes import open_document
-    print(open_document(args.id, which=args.which))
-
-
-def _cmd_install(args):
-    from cli.install import run
-    run()
 
 
 def _list_conn():
@@ -137,7 +116,7 @@ def _cmd_list_delete(args):
 def _bare(args):
     if not sys.stdout.isatty():
         print(
-            "pepa-reader: not an interactive terminal. Use "
+            "pepa-read: not an interactive terminal. Use "
             '`python manage.py serve --no-browser` or `python manage.py search "..."`.',
             file=sys.stderr,
         )
@@ -152,7 +131,7 @@ def _bare(args):
     return 0
 
 
-def main():
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="manage.py",
         description="Read-only keyword search over pepa-prep and pepa-sum markdown output",
@@ -195,20 +174,30 @@ def main():
     ld = sub.add_parser("list-delete", help="Delete a literature list")
     ld.add_argument("name", help="List name")
 
+    return parser
+
+
+def main():
+    parser = _build_parser()
     args = parser.parse_args()
 
     if args.command is None:
         return _bare(args)
     if args.command == "index":
-        _cmd_index(args)
+        from index.build import run
+        run(force=args.force)
     elif args.command == "search":
         _cmd_search(args)
     elif args.command == "serve":
-        _cmd_serve(args)
+        import config
+        from web.app import run
+        run(port=args.port or config.PORT, open_browser=not args.no_browser)
     elif args.command == "open":
-        _cmd_open(args)
+        from web.routes import open_document
+        print(open_document(args.id, which=args.which))
     elif args.command == "install":
-        _cmd_install(args)
+        from cli.install import run
+        run()
     elif args.command == "lists":
         _cmd_lists(args)
     elif args.command == "list-show":

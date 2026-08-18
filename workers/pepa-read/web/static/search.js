@@ -100,6 +100,7 @@ function _fileActions(id, which, label) {
     <a href="/view/${id}?which=${which}" title="Read ${label} inside pepa-reader">Preview</a>
     <button class="open-btn" data-id="${id}" data-which="${which}"
             title="Launch ${label} in its default Windows app">Open</button>
+    <a href="/download/${id}?which=${which}" download title="Download ${label}">Download</a>
   `;
 }
 

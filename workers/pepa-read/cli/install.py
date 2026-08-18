@@ -10,31 +10,27 @@ _OPTIONAL_DEPS = ["markdown"]
 
 def run():
     ui.header("Install / setup")
-    _ensure_dirs()
-    _check_deps()
-    _check_sources()
-    ui.step("Next steps")
-    ui.info("1) python manage.py index   — build the search index")
-    ui.info("2) python manage.py         — open the web UI")
-    return 0
-
-
-def _ensure_dirs():
     config.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     (config.DB_PATH.parent / ".gitkeep").touch()
     ui.ok("data/ ready")
+    _check_deps()
+    _check_sources()
+    ui.step("Next steps")
+    ui.info("1) python manage.py index   : build the search index")
+    ui.info("2) python manage.py         : open the web UI")
+    return 0
 
 
 def _check_deps():
     missing = [m for m in _CORE_DEPS if not _importable(m)]
     if missing:
-        ui.warn(f"missing packages: {', '.join(missing)} — run: pip install -r requirements.txt")
+        ui.warn(f"missing packages: {', '.join(missing)}, run: pip install -r requirements.txt")
     else:
         ui.ok("core dependencies present")
 
     missing_optional = [m for m in _OPTIONAL_DEPS if not _importable(m)]
     if missing_optional:
-        ui.info(f"optional: {', '.join(missing_optional)} not installed — "
+        ui.info(f"optional: {', '.join(missing_optional)} not installed, "
                  "/view/<id> will fall back to plain text")
     else:
         ui.ok("optional dependencies present")

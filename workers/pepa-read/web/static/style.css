@@ -248,6 +248,21 @@ button:disabled {
   gap: 0.5rem;
 }
 
+.open-actions .download-btn {
+  display: inline-block;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--fg);
+}
+
+.open-actions .download-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  text-decoration: none;
+}
+
 .viewer .content {
   margin-top: 1.5rem;
   line-height: 1.55;

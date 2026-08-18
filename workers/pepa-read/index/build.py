@@ -1,7 +1,6 @@
-"""Scan pepa-prep/pepa-sum output and upsert into the SQLite search index.
-
-Incremental by default: a (stem, chapter) row is skipped once its stored
-text_mtime/sum_mtime match the files on disk, unless force=True.
+"""Scan pepa-prep/pepa-sum output and upsert into the SQLite search
+index. Incremental by default: a (stem, chapter) row is skipped once its
+stored text_mtime/sum_mtime match the files on disk.
 """
 import sqlite3
 import time
@@ -33,7 +32,7 @@ def _connect() -> sqlite3.Connection:
     conn = sqlite3.connect(config.DB_PATH)
     conn.execute("PRAGMA journal_mode=WAL")
     if ensure_schema(conn):
-        ui.warn("index schema upgraded — existing rows were cleared, doing a full reindex")
+        ui.warn("index schema upgraded, existing rows were cleared, doing a full reindex")
     return conn
 
 
@@ -44,32 +43,48 @@ def _existing_row(conn, stem, chapter):
     ).fetchone()
 
 
-def _upsert(conn, stem, chapter, title, authors, sections, text_path, sum_path,
-            text_mtime, sum_mtime):
+def _upsert(conn, doc):
+    """Write one document row and its search-index entry, returning the row id.
+
+    Args:
+        doc: one document's fields, keyed as the `documents` columns are named
+            (`stem`, `chapter`, `title`, `authors`, `sections`, `text_path`,
+            `sum_path`, `text_mtime`, `sum_mtime`).
+
+    Returns:
+        The `documents.id` of the row written.
+    """
+    stem = doc["stem"]
+    chapter = doc["chapter"]
+    title = doc["title"]
+    authors = doc["authors"]
+    text_path = doc["text_path"]
+    sum_path = doc["sum_path"]
+    text_mtime = doc["text_mtime"]
+    sum_mtime = doc["sum_mtime"]
     now = time.time()
-    section_values = [sections.get(f, "") for f in SECTION_FIELDS]
+    section_values = [doc["sections"].get(f, "") for f in SECTION_FIELDS]
     row = _existing_row(conn, stem, chapter)
     if row:
         doc_id = row[0]
-        # Delete the FTS entry before overwriting `documents` — external-content
+        # Delete the FTS entry before overwriting `documents`: external-content
         # FTS5 re-tokenizes the CURRENT content-table row to know what to
         # remove, so this must run against the old values, not the new ones.
         conn.execute("DELETE FROM documents_fts WHERE rowid = ?", (doc_id,))
         set_clause = ", ".join(f"{f}=?" for f in SECTION_FIELDS)
+        update_values = (title, authors, *section_values, text_path, sum_path, text_mtime, sum_mtime, now, doc_id)
         conn.execute(
             f"UPDATE documents SET title=?, authors_raw=?, {set_clause}, text_path=?, "
             "sum_path=?, text_mtime=?, sum_mtime=?, indexed_at=? WHERE id=?",
-            (title, authors, *section_values, text_path, sum_path, text_mtime, sum_mtime,
-             now, doc_id),
+            update_values,
         )
     else:
-        col_names = ["stem", "chapter", "title", "authors_raw", *SECTION_FIELDS,
-                     "text_path", "sum_path", "text_mtime", "sum_mtime", "indexed_at"]
+        col_names = ["stem", "chapter", "title", "authors_raw", *SECTION_FIELDS, "text_path", "sum_path", "text_mtime", "sum_mtime", "indexed_at"]
         placeholders = ", ".join("?" * len(col_names))
+        insert_values = (stem, chapter, title, authors, *section_values, text_path, sum_path, text_mtime, sum_mtime, now)
         cur = conn.execute(
             f"INSERT INTO documents ({', '.join(col_names)}) VALUES ({placeholders})",
-            (stem, chapter, title, authors, *section_values, text_path, sum_path,
-             text_mtime, sum_mtime, now),
+            insert_values,
         )
         doc_id = cur.lastrowid
     fts_col_names = ["rowid", "title", "authors_raw", *SECTION_FIELDS]
@@ -91,8 +106,8 @@ def _scan_text_dir(text_dir):
     for i, path in enumerate(files, 1):
         if i % _BATCH == 0 or i == total:
             ui.info(f"[{i}/{total}] {path.name}")
-        book_stem, chapter = scan.text_stem_and_chapter(path.name)
-        entry = docs.setdefault((book_stem, chapter), {})
+        found = scan.text_stem_and_chapter(path.name)
+        entry = docs.setdefault((found["stem"], found["chapter"]), {})
         entry["text_path"] = path
         entry["text_mtime"] = path.stat().st_mtime
     ui.ok(f"{total} text file(s) found")
@@ -108,8 +123,8 @@ def _scan_sum_dir(sum_dir, docs):
     for i, path in enumerate(files, 1):
         if i % _BATCH == 0 or i == total:
             ui.info(f"[{i}/{total}] {path.name}")
-        book_stem, chapter = scan.sum_stem_and_chapter(path.name)
-        entry = docs.setdefault((book_stem, chapter), {})
+        found = scan.sum_stem_and_chapter(path.name)
+        entry = docs.setdefault((found["stem"], found["chapter"]), {})
         entry["sum_path"] = path
         entry["sum_mtime"] = path.stat().st_mtime
     ui.ok(f"{total} sum file(s) found")
@@ -154,12 +169,17 @@ def run(force: bool = False):
         sections = scan.parse_sum_sections(sum_path) if sum_path else {}
         authors = scan.authors_raw(book_stem)
 
-        _upsert(
-            conn, book_stem, chapter, title, authors, sections,
-            str(text_path) if text_path else None,
-            str(sum_path) if sum_path else None,
-            text_mtime, sum_mtime,
-        )
+        _upsert(conn, {
+            "stem": book_stem,
+            "chapter": chapter,
+            "title": title,
+            "authors": authors,
+            "sections": sections,
+            "text_path": str(text_path) if text_path else None,
+            "sum_path": str(sum_path) if sum_path else None,
+            "text_mtime": text_mtime,
+            "sum_mtime": sum_mtime,
+        })
         indexed += 1
 
         if i % _BATCH == 0:

@@ -1,6 +1,6 @@
-# pepa-reader
+# pepa-read
 
-pepa-reader exists because Explorer search cannot keep up once the pepa-prep extracted text and pepa-sum summaries run into thousands of markdown files: hunting for a paper by author, argument, or method becomes a matter of luck. pepa-reader answers with a small SQLite full-text index, ranked by BM25, built once and queried instantly, then exposes it through a local web UI with one-click open in the file's default Windows app, plus a one-shot search command for scripting. It is read-only with respect to the source corpus, never writing to pepa-prep or pepa-sum output, and it makes no LLM or network calls: everything runs on `127.0.0.1`, so nothing leaves the machine except its own SQLite index. That index also holds user-curated literature lists, so results can be organised while reading and exported as input to pepa-review.
+The task that pepa-read fulfiles is reltated to how Windows File Explorer search cannot keep up once the pepa-prep extracted text and pepa-sum summaries run into thousands of markdown files. Hunting for a paper by author, argument, or method becomes a matter of luck. pepa-read answers with a small SQLite full-text index, ranked by BM25, built once and queried instantly, then exposes it through a local web UI with one-click open in the file's default Windows app, plus a one-shot search command for scripting. It is read-only with respect to the source corpus, never writing to pepa-prep or pepa-sum output, and it makes no LLM or network calls. Everything runs on `127.0.0.1`, so nothing leaves the machine except its own SQLite index. That index also holds user-curated literature lists, so results can be organised while reading and exported as input to pepa-review.
 
 ## Data flow
 
@@ -49,7 +49,7 @@ python manage.py install
 
 `install` checks dependencies and confirms the pepa-prep/pepa-sum source directories are reachable. Add `pip install markdown` for nicer rendering of the `/view/<id>` page; it falls back to plain text if not installed.
 
-By default pepa-reader looks for source files at `../pepa-prep/output/text` and `../pepa-sum/output`, relative to its own folder, as a sibling of those repos. Override with environment variables if the corpus lives elsewhere:
+By default pepa-read looks for source files at `../pepa-prep/output/text` and `../pepa-sum/output`, relative to its own folder, as a sibling of those repos. Override with environment variables if the corpus lives elsewhere:
 
 ```
 PEPA_READER_TEXT_DIR=D:\corpus\text
@@ -95,6 +95,6 @@ Each search result row has a Lists cell where a document can be assigned to one 
 
 ## Caveats
 
-> Upgrading pepa-reader to a newer index schema clears the existing index automatically, since it is fully rebuildable from the source files, and reindexes from scratch on the next `index` run; that takes as long as the original build.
+> Upgrading pepa-read to a newer index schema clears the existing index automatically, since it is fully rebuildable from the source files, and reindexes from scratch on the next `index` run; that takes as long as the original build.
 
 Indexing is incremental: a file is only re-parsed when its modified time changes, or `--force` is passed.

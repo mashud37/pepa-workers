@@ -3,7 +3,7 @@ import os
 import sqlite3
 from pathlib import Path
 
-from flask import Blueprint, Response, jsonify, render_template, request
+from flask import Blueprint, Response, jsonify, render_template, request, send_file
 from markupsafe import escape
 
 import config
@@ -12,15 +12,6 @@ from index.schema import ensure_schema
 from search.query import count, search
 
 bp = Blueprint("reader", __name__)
-
-
-def _connect():
-    conn = sqlite3.connect(config.DB_PATH)
-    conn.row_factory = sqlite3.Row
-    # Cheap and idempotent (CREATE TABLE IF NOT EXISTS) — covers reader.db files
-    # built before the lists/list_items tables existed, without a full reindex.
-    ensure_schema(conn)
-    return conn
 
 _VIEW_PAGE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>{title}</title>
@@ -60,12 +51,42 @@ document.querySelectorAll(".open-btn").forEach((btn) => {{
 </body></html>"""
 
 
+def _connect():
+    conn = sqlite3.connect(config.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    # Cheap and idempotent (CREATE TABLE IF NOT EXISTS), covers reader.db files
+    # built before the lists/list_items tables existed, without a full reindex.
+    ensure_schema(conn)
+    return conn
+
+
 def _doc_row(doc_id: int):
     conn = _connect()
     try:
         return conn.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
     finally:
         conn.close()
+
+
+def _resolve_path(row, which: str | None) -> dict:
+    """Pick the text or summary file path from a document row.
+
+    Args:
+        row: A `documents` table row.
+        which: "text" or "sum" to pick a specific file when both exist;
+            None falls back to the summary if present, else the raw text.
+
+    Returns:
+        The `path` chosen and the `label` for it; path is None if that file
+        isn't on record.
+    """
+    if which == "text":
+        return {"path": row["text_path"], "label": "text"}
+    if which == "sum":
+        return {"path": row["sum_path"], "label": "summary"}
+    if row["sum_path"]:
+        return {"path": row["sum_path"], "label": "summary"}
+    return {"path": row["text_path"], "label": "text"}
 
 
 def open_document(doc_id: int, which: str | None = None) -> str:
@@ -80,19 +101,14 @@ def open_document(doc_id: int, which: str | None = None) -> str:
     row = _doc_row(doc_id)
     if row is None:
         raise SystemExit(f"no document with id {doc_id}")
-    if which == "text":
-        path = row["text_path"]
-    elif which == "sum":
-        path = row["sum_path"]
-    else:
-        path = row["sum_path"] or row["text_path"]
+    chosen = _resolve_path(row, which)
+    path, label = chosen["path"], chosen["label"]
     if not path:
-        label = {"text": "text", "sum": "summary"}.get(which, "text/summary")
         raise SystemExit(f"document {doc_id} has no {label} file on disk")
     try:
         os.startfile(path)
     except OSError:
-        raise SystemExit(f"{path} is indexed but missing on disk — the file may have moved; "
+        raise SystemExit(f"{path} is indexed but missing on disk, the file may have moved; "
                           "try reindexing") from None
     return path
 
@@ -130,10 +146,18 @@ def _open_buttons_html(doc_id: int, has_text: bool, has_sum: bool) -> str:
             f'<button class="open-btn" data-id="{doc_id}" data-which="text" '
             'title="Launch the pepa-prep text file in its default Windows app">Open text</button>'
         )
+        buttons.append(
+            f'<a class="download-btn" href="/download/{doc_id}?which=text" download '
+            'title="Download the pepa-prep text file">Download text</a>'
+        )
     if has_sum:
         buttons.append(
             f'<button class="open-btn" data-id="{doc_id}" data-which="sum" '
             'title="Launch the pepa-sum summary file in its default Windows app">Open summary</button>'
+        )
+        buttons.append(
+            f'<a class="download-btn" href="/download/{doc_id}?which=sum" download '
+            'title="Download the pepa-sum summary file">Download summary</a>'
         )
     return "\n    ".join(buttons)
 
@@ -144,18 +168,14 @@ def view(doc_id):
     if row is None:
         return f"no document with id {doc_id}", 404
     which = request.args.get("which")
-    if which == "text":
-        path, label = row["text_path"], "text"
-    elif which == "sum":
-        path, label = row["sum_path"], "summary"
-    else:
-        path, label = (row["sum_path"], "summary") if row["sum_path"] else (row["text_path"], "text")
+    chosen = _resolve_path(row, which)
+    path, label = chosen["path"], chosen["label"]
     if not path:
-        return f"document {doc_id} has no {'text' if which == 'text' else 'summary'} file on disk", 404
+        return f"document {doc_id} has no {label} file on disk", 404
     try:
         text = Path(path).read_text(encoding="utf-8", errors="ignore")
     except OSError:
-        return f"{path} is indexed but missing on disk — the file may have moved; try reindexing", 404
+        return f"{path} is indexed but missing on disk, the file may have moved; try reindexing", 404
     try:
         import markdown
         content = markdown.markdown(text)
@@ -180,7 +200,23 @@ def open_route(doc_id):
     return jsonify({"ok": True, "path": str(path)})
 
 
-# ── literature lists ───────────────────────────────────────────────────────
+@bp.route("/download/<int:doc_id>")
+def download(doc_id):
+    row = _doc_row(doc_id)
+    if row is None:
+        return f"no document with id {doc_id}", 404
+    which = request.args.get("which")
+    chosen = _resolve_path(row, which)
+    path, label = chosen["path"], chosen["label"]
+    if not path:
+        return f"document {doc_id} has no {label} file on disk", 404
+    if not Path(path).exists():
+        return (f"{path} is indexed but missing on disk, the file may have moved; "
+                 "try reindexing"), 404
+    return send_file(path, as_attachment=True, download_name=Path(path).name)
+
+
+# ---- Literature lists ----
 
 @bp.route("/api/lists", methods=["GET"])
 def api_lists():

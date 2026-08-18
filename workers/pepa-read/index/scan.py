@@ -1,14 +1,6 @@
-"""Resolve pepa-prep/pepa-sum filenames to a shared (stem, chapter) document identity.
-
-Mirrors pepa-sum's paper_stem() (render/markdown.py) so both file families agree
-on identity, then further splits a pepa-prep chapter suffix (chapter.py's
-write_chapters: `text_{stem}_{i:0{width}d}.md`, width >= 2) so a chapter file
-and its own summary land on the same row instead of the whole book's.
-
-The suffix is restricted to 2-3 digits: real chapter counts in this corpus are
-1-2 digits wide (write_chapters pads to width 2 minimum), while a bare title
-ending in a 4-digit year (e.g. "text_Schubert_2010.md") must NOT be mistaken
-for a chapter — confirmed against the real corpus before picking this width.
+"""Resolve pepa-prep/pepa-sum filenames to a shared (stem, chapter)
+document identity, mirroring pepa-sum's paper_stem() and splitting off a
+pepa-prep chapter suffix so a chapter and its summary share one row.
 """
 import re
 from pathlib import Path
@@ -44,11 +36,12 @@ def paper_stem(source_name: str) -> str:
     return stem
 
 
-def split_chapter(stem: str) -> tuple[str, str | None]:
+def split_chapter(stem: str) -> dict:
+    """The book `stem` on its own, and the `chapter` number it carried, or None."""
     m = _CHAPTER_RE.match(stem)
     if m:
-        return m.group(1), m.group(2)
-    return stem, None
+        return {"stem": m.group(1), "chapter": m.group(2)}
+    return {"stem": stem, "chapter": None}
 
 
 def authors_raw(book_stem: str) -> str:
@@ -119,11 +112,11 @@ def parse_sum_sections(path: Path) -> dict[str, str]:
     return {k: re.sub(r"\s+", " ", " ".join(v)).strip() for k, v in sections.items()}
 
 
-def text_stem_and_chapter(text_filename: str) -> tuple[str, str | None]:
+def text_stem_and_chapter(text_filename: str) -> dict:
     return split_chapter(paper_stem(text_filename))
 
 
-def sum_stem_and_chapter(sum_filename: str) -> tuple[str, str | None]:
+def sum_stem_and_chapter(sum_filename: str) -> dict:
     stem = Path(sum_filename).stem
     if stem.startswith(_SUM_PREFIX):
         stem = stem[len(_SUM_PREFIX):]

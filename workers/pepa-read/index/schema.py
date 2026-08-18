@@ -1,13 +1,6 @@
-"""SQLite schema: one row per (stem, chapter) document, FTS5 for BM25 search.
-
-Each pepa-sum section (see index/scan.py SECTION_FIELDS) is its own column,
-not one concatenated blob, so a query can target a specific field (e.g.
-`lit:foucault`) via FTS5's native `column:term` filter syntax. Those columns
-are carried on `documents` too (not just `documents_fts`) because FTS5's
-external-content mode (content='documents') re-derives old column text from
-the content table by name on every DELETE/snippet() call — it does not keep
-its own copy. Without same-named columns there, those calls fail with
-"no such column: ...".
+"""Define the SQLite schema: one row per (stem, chapter) document, FTS5
+for BM25 search, each pepa-sum section its own column so queries can
+target one field.
 """
 from index.scan import SECTION_FIELDS
 
@@ -37,7 +30,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
 )
 """
 
-# User-curated literature lists — kept out of the SCHEMA_VERSION migration
+# User-curated literature lists, kept out of the SCHEMA_VERSION migration
 # below (which drops/rebuilds `documents`/`documents_fts`, both fully
 # rebuildable from source files) because list membership is user state that
 # a reindex or schema bump must never wipe.
@@ -63,7 +56,7 @@ def ensure_schema(conn) -> bool:
     """Create the schema, wiping stale tables from an older SCHEMA_VERSION first.
 
     Returns True if a migration (table drop) happened, so the caller can warn
-    that a full reindex is needed — the data is fully rebuildable from the
+    that a full reindex is needed: the data is fully rebuildable from the
     pepa-prep/pepa-sum source files, so dropping it is safe, just not free.
     """
     version = conn.execute("PRAGMA user_version").fetchone()[0]

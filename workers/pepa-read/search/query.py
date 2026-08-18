@@ -4,7 +4,7 @@ import sqlite3
 
 # User-facing query prefixes -> real FTS5 column names. FTS5 natively supports
 # `column:term` filters (applying to the single term that follows), so this is
-# just an alias rewrite — the rest of the query's implicit-AND grammar handles
+# just an alias rewrite: the rest of the query's implicit-AND grammar handles
 # combining a field filter with ordinary free-text terms, e.g.
 # "lit:foucault author:aaker brand" -> "literature:foucault authors_raw:aaker AND brand".
 _FIELD_ALIASES = {
@@ -23,16 +23,19 @@ _FIELD_TOKEN_RE = re.compile(r"\b(" + "|".join(_FIELD_ALIASES) + r"):(\S+)")
 # Column order/count must match documents_fts (index/schema.py) for bm25()
 # weights and snippet()'s column index to line up.
 _BM25_WEIGHTS = "5.0, 2.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0"
+DEFAULT_LIMIT = 20
 
 
-def _rewrite_field_tokens(text: str) -> str:
-    return _FIELD_TOKEN_RE.sub(lambda m: f"{_FIELD_ALIASES[m.group(1)]}:{m.group(2)}", text)
+def _real_column(match) -> str:  # lint-style: ignore FN004
+    """Rewrite one `alias:term` token into the FTS column name the index uses."""
+    return f"{_FIELD_ALIASES[match.group(1)]}:{match.group(2)}"
 
 
 def _match_expr(text: str, author: str | None) -> str:
     parts = []
     if text:
-        parts.append(_rewrite_field_tokens(text.strip()))
+        stripped = text.strip()
+        parts.append(_FIELD_TOKEN_RE.sub(_real_column, stripped))
     if author:
         parts.append(f'authors_raw:"{author}"')
     return " AND ".join(p for p in parts if p)
@@ -54,7 +57,7 @@ def _result(row, score=None, snippet=""):
 
 
 def count(db_path, query: str = "", author: str | None = None) -> int:
-    """Total rows matching `query`/`author`, ignoring `limit`/`offset` — for pagination."""
+    """Total rows matching `query`/`author`, ignoring `limit`/`offset`, for pagination."""
     conn = sqlite3.connect(db_path)
     try:
         match_expr = _match_expr(query or "", author)
@@ -71,15 +74,15 @@ def count(db_path, query: str = "", author: str | None = None) -> int:
 
 
 def search(db_path, query: str = "", author: str | None = None,
-           limit: int = 20, offset: int = 0) -> list[dict]:
+           limit: int = DEFAULT_LIMIT, offset: int = 0) -> list[dict]:
     """Rank documents by BM25 relevance to `query`, optionally filtered by author.
 
     Args:
         db_path: Path to the reader.db SQLite file.
         query: Free-text query. Supports field-scoped tokens (FTS5 column
-            filters under the hood) — `author:`, `title:`, `context:`,
+            filters under the hood): `author:`, `title:`, `context:`,
             `empirical:`, `lit:`, `methods:`, `arguments:`, `conclusions:`,
-            `discussion:` — combinable with free text and each other, e.g.
+            `discussion:`, combinable with free text and each other, e.g.
             `lit:foucault author:aaker brand`.
         author: Explicit author filter, ANDed with any inline `author:` token.
         limit: Maximum number of rows to return.
@@ -87,7 +90,7 @@ def search(db_path, query: str = "", author: str | None = None,
 
     Returns:
         Result dicts ordered most-relevant first. `score` is the raw FTS5
-        bm25() value (lower = more relevant), not a 0-1 similarity — it is
+        bm25() value (lower = more relevant), not a 0-1 similarity: it is
         None for the no-query browse path, which instead sorts by title.
 
     Raises:

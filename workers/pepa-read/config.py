@@ -1,7 +1,6 @@
-"""Effective configuration: source directories, database path, server port.
-
-Everything below is env-var overridable with a sensible default; v1 makes no
-external calls, so there are no secrets to manage here.
+"""Resolve effective configuration: source directories, database path,
+server port, each overridable by an environment variable with a sensible
+default.
 """
 import os
 from pathlib import Path

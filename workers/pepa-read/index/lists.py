@@ -1,8 +1,6 @@
-"""Named literature lists — user curation on top of the read-only search index.
-
-A document can belong to any number of named lists. Membership is stored in
-`list_items` (see index/schema.py); nothing here touches `documents` or
-`documents_fts`, so it is independent of reindexing.
+"""Manage named literature lists, user curation on top of the read-only
+search index. Membership lives in `list_items`, independent of `documents`
+and reindexing.
 """
 import time
 
@@ -84,9 +82,16 @@ def list_items(conn, list_id):
     ).fetchall()
     return [
         {
-            "id": r[0], "stem": r[1], "title": r[2], "authors_raw": r[3],
-            "has_text": bool(r[4]), "has_sum": bool(r[5]),
-            "text_path": r[4], "sum_path": r[5], "snippet": "", "score": None,
+            "id": r[0],
+            "stem": r[1],
+            "title": r[2],
+            "authors_raw": r[3],
+            "has_text": bool(r[4]),
+            "has_sum": bool(r[5]),
+            "text_path": r[4],
+            "sum_path": r[5],
+            "snippet": "",
+            "score": None,
         }
         for r in rows
     ]
