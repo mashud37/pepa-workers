@@ -15,8 +15,8 @@ def run():
     _check_deps()
     _check_corpus()
     ui.step("Next steps")
-    ui.info("1) python manage.py abstract   — build the skeleton library")
-    ui.info("2) python manage.py            — open the menu")
+    ui.info("1) python manage.py abstract: build the skeleton library")
+    ui.info("2) python manage.py: open the menu")
     return 0
 
 
@@ -33,16 +33,17 @@ def _ensure_secrets():
         ui.ok("created secrets.yaml from template")
     else:
         ui.info("secrets.yaml already exists")
-    _prompt_key("anthropic_api_key", config.anthropic_api_key,
+    api_key = config.load()["anthropic_api_key"]
+    _prompt_key("anthropic_api_key", api_key,
                 "ANTHROPIC_API_KEY", "  Anthropic API key (blank to skip): ")
 
 
-def _prompt_key(name, getter, env_hint, prompt_text):
-    if getter():
+def _prompt_key(name, current_value, env_hint, prompt_text):
+    if current_value:
         ui.ok(f"{name} present")
         return
     if not sys.stdin.isatty():
-        ui.warn(f"{name} not set — add it to secrets.yaml or set {env_hint}")
+        ui.warn(f"{name} not set, add it to secrets.yaml or set {env_hint}")
         return
     key = getpass.getpass(prompt_text).strip()
     if key:
@@ -59,13 +60,13 @@ def _check_deps():
         except ImportError:
             missing.append(mod)
     if missing:
-        ui.warn(f"missing packages: {', '.join(missing)} — run: pip install -r requirements.txt")
+        ui.warn(f"missing packages: {', '.join(missing)}, run: pip install -r requirements.txt")
     else:
         ui.ok("core dependencies present")
 
 
 def _check_corpus():
-    d = config.corpus_dir()
+    d = config.load()["corpus_dir"]
     if not d.exists():
         ui.warn(f"CORPUS_DIR not found: {d}")
         ui.info("Set corpus_dir in secrets.yaml or PEPAPLAN_CORPUS_DIR env var")

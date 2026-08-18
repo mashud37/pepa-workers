@@ -31,17 +31,17 @@ This avoids the embedding infrastructure cost and keeps the tool useful before p
 has been run.
 
 **Two structural levels: skeleton and blueprint.** The skeleton is section-to-section flow
-(a stage like `ANALYSIS_FINDING`). The blueprint is the level below — how a multi-paragraph
+(a stage like `ANALYSIS_FINDING`). The blueprint is the level below: how a multi-paragraph
 run of one move unfolds internally. Blueprints reuse the labelling already done: the `para_`
 text is re-joined to the stored move labels (`corpus/join.py`), so only synthesis is new, not
 re-labelling. They live in a separate `data/blueprints.json` add-on so the skeleton library
 stays stable. The within-move sub-structure is produced by LLM synthesis (the readable
 artifact); a standalone, gitignored embedding track (`benchmark/submoves.py`) clusters the
 move's paragraphs and writes an `agreement` note back, as a deterministic sanity check on the
-granularity — not rhetorical ground truth, since text embeddings group by topic.
+granularity, not rhetorical ground truth, since text embeddings group by topic.
 
 **Examples are deterministic.** A skeleton's example papers are the 20 corpus papers nearest
-its move distribution under the Hellinger metric (`skeleton/examples.py`), not model-named —
+its move distribution under the Hellinger metric (`skeleton/examples.py`), not model-named:
 the synthesis model only ever sees a sample and would otherwise invent base names.
 
 ## Roadmap
@@ -51,7 +51,7 @@ the synthesis model only ever sees a sample and would otherwise invent base name
 pepa-review builds a `map_*.md` cluster report that characterises each thematic thread's
 key arguments and concepts. A future `pepa-plan route` command could read those cluster
 reports and suggest which literature threads the paper should engage with at each stage
-of the outline — grounding the plan in the actual field structure.
+of the outline, grounding the plan in the actual field structure.
 
 Implementation sketch:
 - Parse `map_*.md` files from pepa-review's output.

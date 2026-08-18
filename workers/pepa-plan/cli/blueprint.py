@@ -9,7 +9,7 @@ def run():
     ui.header("Build within-section blueprints")
     if not config.SKELETONS_FILE.exists() or not config.SEQUENCES_FILE.exists():
         raise SystemExit(
-            "Blueprints need a built library — run 'Build skeletons' first "
+            "Blueprints need a built library: run 'Build skeletons' first "
             "(it produces skeletons.json and sequences.json)."
         )
 
@@ -49,6 +49,6 @@ def _write_report(library, path):
                 pos = step.get("typical_position", "")
                 lines.append(
                     f"- **{step.get('sub_move', '')}** "
-                    f"({pos}) — {step.get('intent', '')}"
+                    f"({pos}): {step.get('intent', '')}"
                 )
     path.write_text("\n".join(lines), encoding="utf-8")

@@ -1,11 +1,6 @@
-"""Pick each skeleton's representative example papers deterministically.
-
-Asking the synthesis model to name papers is unreliable — it sees only a compacted,
-sampled prompt and invents plausible-looking base names, worse the more we request.
-Instead we rank the whole labelled corpus by how closely each paper's move
-distribution matches the skeleton's, under the Hellinger geometry the clustering
-already uses, and take the nearest N. Every returned base is then a real corpus
-paper. Pure stdlib so the shipped tool stays free of the benchmark's numpy.
+"""Pick each skeleton's representative example papers deterministically
+by nearest move distribution under the Hellinger geometry, avoiding an
+LLM that would invent paper names.
 """
 import math
 
@@ -34,13 +29,14 @@ def _skeleton_distribution(skeleton):
     return [x / total for x in v] if total else v
 
 
-def _hellinger(p, q):
-    return math.sqrt(sum((math.sqrt(a) - math.sqrt(b)) ** 2 for a, b in zip(p, q)))
-
-
 def for_skeleton(skeleton, dists, sequences, n=N_EXAMPLES):
     target = _skeleton_distribution(skeleton)
-    ranked = sorted(range(len(sequences)), key=lambda i: _hellinger(dists[i], target))
+    ranked = sorted(
+        range(len(sequences)),
+        key=lambda i: math.sqrt(
+            sum((math.sqrt(a) - math.sqrt(b)) ** 2 for a, b in zip(dists[i], target))
+        ),
+    )
     return [sequences[i]["base"] for i in ranked[:n]]
 
 

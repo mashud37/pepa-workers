@@ -2,7 +2,7 @@ import config
 
 
 def para_files():
-    d = config.corpus_dir()
+    d = config.load()["corpus_dir"]
     if not d.exists():
         raise SystemExit(
             f"CORPUS_DIR not found: {d}\n"
@@ -13,7 +13,7 @@ def para_files():
 
 
 def paper_count():
-    d = config.corpus_dir()
+    d = config.load()["corpus_dir"]
     if not d.exists():
         return 0
     return sum(1 for _ in d.glob("para_*.md"))

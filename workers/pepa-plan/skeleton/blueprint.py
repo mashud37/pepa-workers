@@ -1,13 +1,6 @@
-"""Synthesise a within-section progression blueprint for each skeleton's major moves.
-
-A skeleton stage like ANALYSIS_FINDING is really a run of several paragraphs; this
-adds the level below it — how that run typically unfolds, paragraph by paragraph.
-For each skeleton and each major move we gather real sections (runs of that move)
-from the skeleton's example papers, then ask Sonnet for the recurring internal
-progression. Section lengths set typical_paragraphs deterministically; only the
-sub-move prose comes from the model. Output is a standalone add-on,
-data/blueprints.json, keyed by skeleton id -> move, so the skeleton library is
-untouched.
+"""Synthesise a within-section paragraph blueprint for each skeleton's
+major moves, gathering real sections from example papers and asking
+Sonnet for the recurring progression.
 """
 import json
 import random
@@ -21,7 +14,7 @@ from corpus import join
 from skeleton import build
 
 MAJOR_SHARE = 0.10          # a move worth blueprinting (rarer ones don't generalise)
-MIN_SECTIONS = 4            # below this there isn't enough evidence — skip the move
+MIN_SECTIONS = 4            # below this there isn't enough evidence, skip the move
 MAX_SECTIONS = 40           # sections shown to the model per move
 SECTION_CHAR_BUDGET = 24_000
 SEED = 0
@@ -45,7 +38,7 @@ def build_blueprints(skeletons=None, sequences=None):
             ui.info(f"[{done}/{total}] {sk['id']} · {move}")
             secs = _gather(sk, move, moves_by_base)
             if len(secs) < MIN_SECTIONS:
-                ui.warn(f"    only {len(secs)} section(s) — skipped")
+                ui.warn(f"    only {len(secs)} section(s), skipped")
                 continue
             blueprints[sk["id"]][move] = _synthesise_move(sk, move, intent, secs)
     build._report_cost()
@@ -56,10 +49,10 @@ def build_blueprints(skeletons=None, sequences=None):
     }
 
 
-# ---------------------------------------------------------------------------
+# ---- Blueprint synthesis ----
 
 def _major_moves(skeleton):
-    """The skeleton's stages worth blueprinting — share over the floor, deduped by
+    """The skeleton's stages worth blueprinting: share over the floor, deduped by
     move (a move can recur across stages) keeping its first/highest-share intent."""
     seen, out = set(), []
     stages = sorted(skeleton.get("stages", []),
@@ -133,7 +126,7 @@ def _length_band(lengths):
 
 
 def _parse_json(raw):
-    """Tolerant parse — one move failing to return clean JSON shouldn't abort the
+    """Tolerant parse: one move failing to return clean JSON shouldn't abort the
     whole run, so a bad reply yields an empty progression with a warning."""
     cleaned = raw.strip()
     if cleaned.startswith("```"):
@@ -143,11 +136,11 @@ def _parse_json(raw):
     try:
         return json.loads(cleaned.strip())
     except json.JSONDecodeError:
-        ui.warn("    could not parse blueprint JSON — left empty")
+        ui.warn("    could not parse blueprint JSON, left empty")
         return {}
 
 
-# ---------------------------------------------------------------------------
+# ---- Reporting and persistence ----
 
 def _show_plan(plan, total):
     ui.step("Plan")
@@ -159,13 +152,13 @@ def _show_plan(plan, total):
 
 def _load_skeletons():
     if not config.SKELETONS_FILE.exists():
-        raise SystemExit("No skeleton library — run 'Build skeletons' first.")
+        raise SystemExit("No skeleton library, run 'Build skeletons' first.")
     return json.loads(config.SKELETONS_FILE.read_text(encoding="utf-8")).get("skeletons", [])
 
 
 def _load_sequences():
     if not config.SEQUENCES_FILE.exists():
-        raise SystemExit("No labelled sequences — run 'Build skeletons' first.")
+        raise SystemExit("No labelled sequences, run 'Build skeletons' first.")
     data = json.loads(config.SEQUENCES_FILE.read_text(encoding="utf-8"))
     return [s for s in data if s.get("moves")]
 

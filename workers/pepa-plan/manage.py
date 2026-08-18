@@ -5,7 +5,7 @@ import sys
 from cli import install, menu, ui
 
 
-def main():
+def _build_parser():
     parser = argparse.ArgumentParser(prog="manage.py", description="pepa-plan")
     sub = parser.add_subparsers(dest="command")
 
@@ -44,7 +44,11 @@ def main():
 
     sub.add_parser("config", help="Show effective configuration")
     sub.add_parser("install", help="Set up files and check dependencies")
+    return parser
 
+
+def main():
+    parser = _build_parser()
     args = parser.parse_args()
 
     if args.command is None:
@@ -57,14 +61,14 @@ def main():
         blueprint.run()
     elif args.command == "outline":
         from cli import outline
-        outline.run(
-            input_file=args.input,
-            literature_file=args.literature,
-            skeleton_id=args.skeleton_id,
-            feedback=args.feedback,
-            no_input=args.no_input,
-            template_file=args.template,
-        )
+        outline.run({
+            "input_file": args.input,
+            "literature_file": args.literature,
+            "skeleton_id": args.skeleton_id,
+            "feedback": args.feedback,
+            "no_input": args.no_input,
+            "template_file": args.template,
+        })
     elif args.command == "template":
         from cli import templates
         templates.run(new=args.new, show=args.list)

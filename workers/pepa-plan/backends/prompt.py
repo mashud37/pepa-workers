@@ -1,4 +1,5 @@
-"""Per-task prompt builders — no IO, no ANSI."""
+"""Build the per-task prompts, with no IO and no ANSI.
+"""
 import json
 
 
@@ -29,7 +30,7 @@ def skeleton_system():
     return (
         "You are a research methodology analyst. You will receive move-sequence data from "
         "a corpus of academic papers. Identify a small set (3–6) of canonical structural "
-        "templates that recur across papers. Output strict JSON only — no commentary, no "
+        "templates that recur across papers. Output strict JSON only: no commentary, no "
         "code fences, no extra text."
     )
 
@@ -54,7 +55,7 @@ def skeleton_prompt(sequences, n_total=None):
         '  "paper_type": string (e.g. empirical, conceptual, review, methods),\n'
         '  "description": string (one sentence),\n'
         '  "stages": array of {"move": string, "intent": string, "typical_share": number}\n'
-        "Output the JSON array and nothing else. Do not include example papers — those are "
+        "Output the JSON array and nothing else. Do not include example papers. Those are "
         "attached deterministically from the corpus afterwards."
     )
 
@@ -62,10 +63,10 @@ def skeleton_prompt(sequences, n_total=None):
 def blueprint_system():
     return (
         "You are a research methodology analyst. You will receive real example sections "
-        "from academic papers of one structural type — each section is a run of consecutive "
+        "from academic papers of one structural type: each section is a run of consecutive "
         "paragraph summaries that all perform the same rhetorical move. Identify the typical "
         "internal progression: the ordered sub-moves a writer steps through within such a "
-        "section. Output strict JSON only — no commentary, no code fences."
+        "section. Output strict JSON only: no commentary, no code fences."
     )
 
 
@@ -77,7 +78,7 @@ def blueprint_prompt(skeleton, move, intent, sections):
     body = "\n\n".join(blocks)
     return (
         f"STRUCTURAL TEMPLATE: {skeleton.get('name', '')} ({skeleton.get('paper_type', '')})\n"
-        f"MOVE: {move} — {intent}\n\n"
+        f"MOVE: {move}, {intent}\n\n"
         f"Real example sections performing this move:\n\n{body}\n\n"
         "Identify how such a section typically unfolds across its paragraphs. Return a JSON "
         "object with exactly these keys:\n"
@@ -92,7 +93,7 @@ def blueprint_prompt(skeleton, move, intent, sections):
 def outline_system():
     return (
         "You are a scholarly writing coach helping a researcher plan an academic paper. "
-        "You produce detailed, forward-looking paragraph plans — each paragraph entry "
+        "You produce detailed, forward-looking paragraph plans: each paragraph entry "
         "specifies the rhetorical move it performs and the specific intellectual point it "
         "will make. Be concrete, substantive, and faithful to the chosen structural template."
     )
@@ -103,7 +104,7 @@ def _blueprint_block(blueprint):
     ordered sub-move progression a multi-paragraph section of it should step through."""
     if not blueprint:
         return ""
-    lines = ["\nWITHIN-SECTION GUIDES — when a stage below spans several paragraphs, "
+    lines = ["\nWITHIN-SECTION GUIDES: when a stage below spans several paragraphs, "
              "progress through these sub-moves in order:"]
     for move, bp in blueprint.items():
         sub = " → ".join(s.get("sub_move", "") for s in bp.get("progression", []))
@@ -133,14 +134,14 @@ def outline_prompt(idea, literature, skeleton, structure=None, blueprint=None):
         return (
             f"PAPER IDEA:\n{idea}\n"
             f"{lit_block}\n"
-            "REQUIRED STRUCTURE — follow this exactly: reproduce every section below in "
+            "REQUIRED STRUCTURE, follow this exactly: reproduce every section below in "
             "order, with the number of paragraphs it specifies, and make each paragraph "
             "fulfil the intent given for it. Do not add, drop, merge, or reorder sections "
             "or paragraphs.\n"
             f"\n{structure}\n\n"
             "Write the plan grouped under the same section headings. Under each heading, "
             "number the paragraphs and for each write:\n"
-            "  <N>. [MOVE] — <the specific point this paragraph makes>\n"
+            "  <N>. [MOVE]: <the specific point this paragraph makes>\n"
             + lit_note
             + "Be specific about arguments, not just topics. Output the structured plan only."
         )
@@ -149,7 +150,7 @@ def outline_prompt(idea, literature, skeleton, structure=None, blueprint=None):
         f"{lit_block}"
         f"{skel_block}\n\n"
         "Write a numbered paragraph-by-paragraph plan. For each paragraph:\n"
-        "  <N>. [MOVE] — <the specific point this paragraph makes>\n"
+        "  <N>. [MOVE]: <the specific point this paragraph makes>\n"
         "Follow the template's stage sequence. "
         + lit_note
         + "Be specific about arguments, not just topics. Output the numbered list only."
@@ -170,7 +171,7 @@ def refine_prompt(outline, feedback):
         f"FEEDBACK:\n{feedback}\n\n"
         "Apply the feedback and return the full revised outline. "
         "Keep every paragraph on its own numbered line in the format: "
-        "'<N>. [MOVE] — <point>'. Output the revised outline only."
+        "'<N>. [MOVE]: <point>'. Output the revised outline only."
     )
 
 

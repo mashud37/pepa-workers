@@ -1,15 +1,6 @@
-"""Label every corpus paper's paragraph moves, then synthesise the skeleton library.
-
-Labelling is one fast LLM call per paper and scales to thousands of papers, so it
-runs in one of three modes (config.mode(), default `auto`, picked by estimated
-wall-clock):
-  - serial   — one paper at a time (single paper, or a tiny corpus).
-  - parallel — a thread pool bounded by the client's concurrency governor.
-  - batch    — the same prompts go to the Anthropic Message Batches API: ~50%
-               cheaper and far higher throughput, at the cost of asynchronous
-               (typically up to ~1h) turnaround. Best for large volumes.
-All three produce identical move sequences; only the transport differs. The final
-clustering into 3–6 templates is a single quality call, always live.
+"""Label every paper's paragraph moves via one LLM call each, in serial,
+parallel, or batch mode by estimated wall-clock, then synthesise the
+skeleton library with one final clustering call.
 """
 import json
 import random
@@ -23,6 +14,9 @@ from cli.progress import StepSpinner
 from corpus.load import para_files
 from corpus.parse_para import parse as parse_para
 from skeleton import examples, moves
+
+COST_WARNING_THRESHOLD = 10.0
+SYNTH_CHAR_BUDGET = 600_000
 
 
 def build(limit=None, sample=None, mode=None):
@@ -69,12 +63,11 @@ def build(limit=None, sample=None, mode=None):
     }
 
 
-# ---------------------------------------------------------------------------
-# Mode selection (by estimated wall-clock time)
-# ---------------------------------------------------------------------------
+# ---- Mode selection ----
+# By estimated wall-clock time.
 
 def _select_mode(n, override=None):
-    wanted = (override or config.mode() or "auto").lower()
+    wanted = (override or config.load()["mode"] or "auto").lower()
     if wanted in ("serial", "parallel", "batch"):
         return wanted
     if wanted != "auto":
@@ -90,7 +83,8 @@ def _estimate(n):
     latency floor but very high throughput once running, so it overtakes parallel
     on large volumes (and is also billed at ~50%)."""
     serial = n * config.EST_LABEL_SECONDS
-    parallel = max(serial / config.concurrency(), n / config.EST_PARALLEL_PPH * 3600)
+    concurrency = config.load()["concurrency"]
+    parallel = max(serial / concurrency, n / config.EST_PARALLEL_PPH * 3600)
     batch = max(config.EST_BATCH_FLOOR_MINUTES * 60, n / config.EST_BATCH_PPH * 3600)
     return {"serial": serial, "parallel": parallel, "batch": batch}
 
@@ -101,7 +95,7 @@ def _show_plan(n, chosen, override):
     for m in ("serial", "parallel", "batch"):
         mark = "  <- chosen" if m == chosen else ""
         ui.info(f"{m:<9} ~{_fmt(est[m])}{mark}")
-    forced = (override or config.mode() or "auto").lower() != "auto"
+    forced = (override or config.load()["mode"] or "auto").lower() != "auto"
     if forced:
         ui.info("(mode forced by setting/flag)")
     elif chosen == "batch":
@@ -110,10 +104,10 @@ def _show_plan(n, chosen, override):
         ui.info("(fastest estimate)")
 
 
-def _preflight_cost_check(parsed, chosen, threshold=10.0):
+def _preflight_cost_check(parsed, chosen, threshold=COST_WARNING_THRESHOLD):
     if not parsed:
         return
-    model = config.anthropic_model()
+    model = config.load()["anthropic_model"]
     price = config.price_per_mtok(model)
     if price is None:
         return
@@ -131,15 +125,13 @@ def _preflight_cost_check(parsed, chosen, threshold=10.0):
             f"Estimated cost: ~${cost:.2f}  "
             f"({total_in / 1e6:.2f}M in + {total_out / 1e6:.2f}M out · {model})"
         )
-        if not ui.confirm("Cost exceeds threshold — proceed?"):
+        if not ui.confirm("Cost exceeds threshold, proceed?"):
             raise SystemExit("Aborted.")
     else:
         ui.info(f"Est. cost ~${cost:.2f}")
 
 
-# ---------------------------------------------------------------------------
-# Labelling paths
-# ---------------------------------------------------------------------------
+# ---- Labelling paths ----
 
 def _label_serial(parsed):
     sequences = []
@@ -155,7 +147,7 @@ def _label_serial(parsed):
 
 def _label_parallel(parsed):
     n = len(parsed)
-    workers = min(config.concurrency(), n)
+    workers = min(config.load()["concurrency"], n)
     ui.info(f"parallel: up to {workers} labelling calls in flight  ·  "
             "Ctrl-C to stop")
     sequences = []
@@ -174,19 +166,25 @@ def _label_parallel(parsed):
 
 
 def _label_batch(parsed):
-    model = config.anthropic_model()
+    model = config.load()["anthropic_model"]
     requests, meta = [], {}
     for idx, (base, sentences) in enumerate(parsed):
-        system, user, max_tokens = moves.request(sentences)
+        built = moves.request(sentences)
+        system, user, max_tokens = built["system"], built["prompt"], built["max_tokens"]
         cid = f"p{idx}"
-        requests.append({"custom_id": cid, "system": system, "prompt": user,
-                         "max_tokens": max_tokens, "model": model})
+        requests.append({
+            "custom_id": cid,
+            "system": system,
+            "prompt": user,
+            "max_tokens": max_tokens,
+            "model": model,
+        })
         meta[cid] = (base, len(sentences))
 
     ui.step(f"Submitting {len(requests)} request(s) to the Message Batches API")
     ui.info("most batches finish within ~1h (max 24h)  ·  Ctrl-C cancels the batch")
     results = anthropic_client.run_batch(
-        requests, on_progress=_batch_progress(), on_created=_batch_created())
+        requests, on_progress=_batch_progress, on_created=_batch_created)
 
     sequences, missing = [], 0
     for cid, (base, n_sent) in meta.items():
@@ -196,36 +194,28 @@ def _label_batch(parsed):
             continue
         sequences.append({"base": base, "moves": moves.parse(raw, n_sent)})
     if missing:
-        ui.warn(f"{missing} paper(s) had no batch result — re-run to retry them")
+        ui.warn(f"{missing} paper(s) had no batch result, re-run to retry them")
     return sequences
 
 
-def _batch_created():
-    def cb(batch_id):
-        ui.info(f"batch id: {batch_id}  ·  results retrievable from the API for 29 "
-                "days — keep this id to recover after any crash")
-    return cb
+def _batch_created(batch_id):
+    ui.info(f"batch id: {batch_id}  ·  results retrievable from the API for 29 "
+            "days, keep this id to recover after any crash")
 
 
-def _batch_progress():
-    def cb(status):
-        c = status.request_counts
-        ui.info(f"batch {status.processing_status}: {c.succeeded} ok · "
-                f"{c.errored} err · {c.processing} processing")
-    return cb
+def _batch_progress(status):
+    c = status.request_counts
+    ui.info(f"batch {status.processing_status}: {c.succeeded} ok · "
+            f"{c.errored} err · {c.processing} processing")
 
 
-# ---------------------------------------------------------------------------
-# Synthesis (the fan-in: one quality call over the whole corpus)
-# ---------------------------------------------------------------------------
-
-# Move sequences are long and near-unique per paper, so the full corpus does not
-# fit one context window (4307 papers ~= 1.09M tokens). Templates are a property of
-# the corpus's recurring *shapes*, not of every individual string, so synthesis
-# runs on a representative sample compacted by run-length-collapsing repeats. The
-# budget is in characters (~3.3 chars/token) and stays well under the model limit.
-SYNTH_CHAR_BUDGET = 600_000
-
+# ---- Synthesis ----
+# The fan-in: one quality call over the whole corpus. Move sequences are long and
+# near-unique per paper, so the full corpus does not fit one context window (4307
+# papers ~= 1.09M tokens). Templates are a property of the corpus's recurring
+# *shapes*, not of every individual string, so synthesis runs on a representative
+# sample compacted by run-length-collapsing repeats. The budget is in characters
+# (~3.3 chars/token) and stays well under the model limit.
 
 def _collapse(move_list):
     """Run-length-collapse a move sequence to a compact string that keeps order
@@ -241,25 +231,30 @@ def _collapse(move_list):
 
 def prepare_synthesis(sequences, char_budget=SYNTH_CHAR_BUDGET, seed=0):
     """Compact sequences for the synthesis call and, if still over budget, draw a
-    reproducible representative sample that fits. Returns (compact, n_total).
+    reproducible representative sample that fits.
 
     Sorted by base first so the seeded sample is identical run-to-run: parallel
-    labelling appends in completion order, which the seed alone wouldn't pin down."""
+    labelling appends in completion order, which the seed alone wouldn't pin down.
+
+    Returns:
+        dict with `compact` (the sequences to synthesise from) and `n_total`
+        (the full corpus size before any sampling).
+    """
     ordered = sorted(sequences, key=lambda s: s["base"])
     compact = [{"base": s["base"], "moves": _collapse(s["moves"])} for s in ordered]
     n_total = len(compact)
     if sum(len(c["moves"]) + len(c["base"]) + 16 for c in compact) <= char_budget:
-        return compact, n_total
+        return {"compact": compact, "n_total": n_total}
     avg = max(1, sum(len(c["moves"]) + len(c["base"]) + 16 for c in compact) // n_total)
     keep = max(1, char_budget // avg)
     sample = random.Random(seed).sample(compact, min(keep, n_total))
-    return sample, n_total
+    return {"compact": sample, "n_total": n_total}
 
 
 def _checkpoint_sequences(sequences):
     """Persist the labelled sequences before synthesis. Labelling is the paid,
     slow step; synthesis is fast but can fail, so banking the sequences here means
-    a synthesis crash never discards the spend — re-run reads from this file."""
+    a synthesis crash never discards the spend, re-run reads from this file."""
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
     config.SEQUENCES_FILE.write_text(
         json.dumps(sequences, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -270,7 +265,9 @@ def _checkpoint_sequences(sequences):
 def synthesise(sequences):
     """The fan-in step: cluster the corpus's move sequences into 3-6 templates with
     one quality call. Shared by build() and the batch-recovery path."""
-    compact, n_total = prepare_synthesis(sequences)
+    prepared = prepare_synthesis(sequences)
+    compact = prepared["compact"]
+    n_total = prepared["n_total"]
     ui.step("Synthesising skeleton library")
     if len(compact) != n_total:
         ui.info(f"synthesising over a representative sample of {len(compact)} "
@@ -285,9 +282,7 @@ def synthesise(sequences):
     return examples.attach(skeletons, sequences)
 
 
-# ---------------------------------------------------------------------------
-# Synthesis parsing, cost, persistence
-# ---------------------------------------------------------------------------
+# ---- Synthesis parsing, cost, persistence ----
 
 def _parse_skeletons(raw):
     cleaned = raw.strip()

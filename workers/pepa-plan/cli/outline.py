@@ -9,8 +9,20 @@ from plan.refine import refine
 from skeleton.build import load as load_library
 
 
-def run(input_file=None, literature_file=None, skeleton_id=None,
-        feedback=None, no_input=False, template_file=None):
+def run(options):
+    """Generate a paper outline from an idea, then refine it against feedback.
+
+    Args:
+        options: dict with `input_file`, `literature_file`, `skeleton_id`,
+            `feedback`, `no_input`, and `template_file`, matching the
+            outline subcommand's flags in manage.py.
+    """
+    input_file = options.get("input_file")
+    literature_file = options.get("literature_file")
+    skeleton_id = options.get("skeleton_id")
+    feedback = options.get("feedback")
+    no_input = options.get("no_input", False)
+    template_file = options.get("template_file")
     ui.header("Outline a paper")
 
     idea = _resolve_idea(input_file, no_input)
@@ -93,12 +105,9 @@ def _resolve_idea(input_file, no_input):
             return _read_file(files[choice])
         # User chose "Enter a file path"
         if not no_input and sys.stdin.isatty():
-            raw = ui.ask("File path")
-            if raw:
-                p = Path(raw.strip())
-                if not p.exists():
-                    raise SystemExit(f"File not found: {p}")
-                return _read_file(p)
+            typed = _read_typed_path()
+            if typed is not None:
+                return typed
 
     if no_input or not sys.stdin.isatty():
         raise SystemExit("No input file provided and not running interactively.")
@@ -106,6 +115,17 @@ def _resolve_idea(input_file, no_input):
     if not text:
         raise SystemExit("No idea provided.")
     return text
+
+
+def _read_typed_path():
+    """Prompt for a file path and read it, or None if the user left it blank."""
+    raw = ui.ask("File path")
+    if not raw:
+        return None
+    p = Path(raw.strip())
+    if not p.exists():
+        raise SystemExit(f"File not found: {p}")
+    return _read_file(p)
 
 
 def _resolve_literature(literature_file):
@@ -130,7 +150,7 @@ def _resolve_structure(template_file, no_input):
     if not existing or no_input or not sys.stdin.isatty():
         return None
 
-    options = [(p.name, "") for p in existing] + [("No template — use a learned skeleton", "")]
+    options = [(p.name, "") for p in existing] + [("No template, use a learned skeleton", "")]
     choice = ui.menu("Plan structure", options)
     if choice is None or choice == len(existing):
         return None

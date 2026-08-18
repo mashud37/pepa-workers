@@ -1,14 +1,6 @@
-"""Rebuild the skeleton library from an already-completed Message Batch.
-
-When a batch finishes but the run crashes before the library is saved (e.g. the
-synthesis step fails), the paid-for labelling results are not lost: they live in
-the batch's results JSONL, retrievable from the API for 29 days. This rebuilds the
-move sequences from that file and runs synthesis again — no re-billing.
-
-The batch's custom_ids are `p{idx}` over para_files() in sorted order, so the same
-corpus reproduces the idx -> paper mapping exactly. Reconstructed sequences are
-checkpointed to data/sequences.json before synthesis, so the recovered work is
-banked even if synthesis needs another attempt.
+"""Rebuild the skeleton library from an already-completed Message Batch
+when a crash loses the in-memory results, without re-billing the
+labelling calls.
 """
 import json
 import sys
@@ -48,7 +40,7 @@ def recover(jsonl_path):
     ui.info(f"loaded {len(raws)} succeeded result(s) from batch file")
     missing = [f"p{i}" for i in range(n) if f"p{i}" not in raws]
     if len(raws) != n:
-        ui.warn(f"corpus has {n} papers but batch file has {len(raws)} results — "
+        ui.warn(f"corpus has {n} papers but batch file has {len(raws)} results, "
                 f"{len(missing)} unmatched; mapping requires an unchanged corpus")
 
     ui.step(f"Rebuilding move sequences for {n} paper(s)")

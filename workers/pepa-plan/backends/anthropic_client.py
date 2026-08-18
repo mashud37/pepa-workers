@@ -1,11 +1,6 @@
-"""Claude (Anthropic) client — default generation backend.
-
-Adapted from pepa-sum/backends/anthropic_client.py. A global semaphore caps how
-many requests are ever in flight at once (so the move-labelling pool can't outrun
-the account's rate limit), transient overload/rate-limit is ridden out with
-backoff that honors Retry-After, and token usage is tallied per model for the
-post-run cost estimate. The Message Batches API (run_batch) is the same model and
-request shape as complete(), only asynchronous and ~50% cheaper.
+"""Call Claude as the default generation backend, capping in-flight
+requests with a global semaphore, retrying transient errors with backoff,
+and tallying token usage per model for cost estimates.
 """
 import random
 import threading
@@ -15,6 +10,7 @@ import config
 
 _RETRYABLE = (429, 500, 502, 503, 529)
 _MAX_ATTEMPTS = 5
+_DEFAULT_MAX_TOKENS = 4000
 
 _lock = threading.Lock()
 _cached = {"key": None, "client": None}
@@ -28,10 +24,17 @@ _gate = {"limit": None, "sem": None}
 _usage_lock = threading.Lock()
 _usage = {}
 
+# Message Batches API: same model, max_tokens, temperature, system, and single
+# user message as complete() below, so a paper labelled via a batch is drawn from
+# the identical model and configuration as the live path, only the transport
+# differs. 50% cheaper, asynchronous.
+_BATCH_MAX_REQUESTS = 90000
+_BATCH_MAX_BYTES = 180_000_000
+
 
 def usage_snapshot():
     """Per-model cumulative token usage tallied from API responses since the last
-    reset — the basis for the run's cost estimate. Safe to read from any thread."""
+    reset: the basis for the run's cost estimate. Safe to read from any thread."""
     with _usage_lock:
         return {m: dict(u) for m, u in _usage.items()}
 
@@ -61,9 +64,9 @@ def _tally(model, msg, batch=False):
 
 
 def _governor():
-    """One BoundedSemaphore sized to config.concurrency(), shared by every thread,
-    so total simultaneous API calls stay within the configured cap."""
-    limit = config.concurrency()
+    """One BoundedSemaphore sized to config.load()['concurrency'], shared by every
+    thread, so total simultaneous API calls stay within the configured cap."""
+    limit = config.load()["concurrency"]
     with _gate_lock:
         if _gate["sem"] is None or _gate["limit"] != limit:
             _gate["limit"] = limit
@@ -79,7 +82,7 @@ def _client():
     except ImportError:
         raise SystemExit("anthropic package missing. Run: pip install -r requirements.txt")
 
-    key = config.anthropic_api_key()
+    key = config.load()["anthropic_api_key"]
     if not key:
         raise SystemExit(
             "No ANTHROPIC_API_KEY. Set it in secrets.yaml or the ANTHROPIC_API_KEY env "
@@ -111,11 +114,11 @@ def _retry_after(error):
         return None
 
 
-def complete(system, prompt, max_tokens=4000, model=None):
+def complete(system, prompt, max_tokens=_DEFAULT_MAX_TOKENS, model=None):
     client = _client()
     import anthropic
 
-    model = model or config.anthropic_model()
+    model = model or config.load()["anthropic_model"]
     last = None
     for attempt in range(_MAX_ATTEMPTS):
         try:
@@ -144,16 +147,8 @@ def complete(system, prompt, max_tokens=4000, model=None):
                 time.sleep(_backoff(attempt))
 
     # Transient errors exhausted retries: recoverable per paper, not fatal to the
-    # whole run — the caller logs it and moves on (a re-run picks the paper up).
+    # whole run, the caller logs it and moves on (a re-run picks the paper up).
     raise RuntimeError(f"Anthropic API unavailable after {_MAX_ATTEMPTS} attempts: {last}")
-
-
-# Message Batches API: same model, max_tokens, temperature, system, and single
-# user message as complete() above, so a paper labelled via a batch is drawn from
-# the identical model and configuration as the live path — only the transport
-# differs. 50% cheaper, asynchronous.
-_BATCH_MAX_REQUESTS = 90000       # API ceiling is 100k; stay under it
-_BATCH_MAX_BYTES = 180_000_000    # API caps total request size at 256 MB; keep margin
 
 
 def run_batch(requests, on_progress=None, on_created=None):
@@ -166,18 +161,19 @@ def run_batch(requests, on_progress=None, on_created=None):
     batch is cancelled to stop spend, then the interrupt propagates.
 
     `on_created(batch_id)` fires as soon as each sub-batch is submitted, so the
-    caller can record the id — a completed batch's results stay retrievable from the
+    caller can record the id: a completed batch's results stay retrievable from the
     API for 29 days, so the id is the key to recovering paid work after any crash."""
     client = _client()
-    default_model = config.anthropic_model()
-    poll = config.batch_poll_seconds()
+    settings = config.load()
+    default_model = settings["anthropic_model"]
+    poll = settings["batch_poll_seconds"]
     results = {}
     for sub in _sub_batches(requests, _BATCH_MAX_REQUESTS, _BATCH_MAX_BYTES):
         batch = _submit_sub_batch(client, sub, default_model)
         if on_created:
             on_created(batch.id)
         _poll_until_ended(client, batch.id, poll, on_progress)
-        _collect_results(client, batch.id, sub, default_model, results)
+        results.update(_collect_results(client, batch.id, sub, default_model))
     return results
 
 
@@ -216,30 +212,38 @@ def _poll_until_ended(client, batch_id, poll, on_progress):
         raise
 
 
-def _collect_results(client, batch_id, sub, default_model, results):
-    """Merge this sub-batch's succeeded results into `results` and tally usage."""
+def _collect_results(client, batch_id, sub, default_model):
+    """Fetch this sub-batch's succeeded results and tally usage.
+
+    Returns:
+        dict mapping custom_id to result text, for succeeded requests only.
+    """
     models = {r["custom_id"]: r.get("model", default_model) for r in sub}
+    collected = {}
     for res in client.messages.batches.results(batch_id):
         if res.result.type != "succeeded":
             continue
         msg = res.result.message
-        results[res.custom_id] = "".join(
+        collected[res.custom_id] = "".join(
             b.text for b in msg.content if getattr(b, "type", None) == "text"
         ).strip()
         _tally(models.get(res.custom_id, default_model), msg, batch=True)
+    return collected
 
 
 def _sub_batches(seq, max_count, max_bytes):
     """Split requests into batches under BOTH the count and total-size ceiling. A
     single request larger than max_bytes still goes out on its own; the size guard
     only prevents many requests from summing past it."""
+    batches = []
     batch, size = [], 0
     for r in seq:
         r_bytes = len(r["system"]) + len(r["prompt"]) + 256
         if batch and (len(batch) >= max_count or size + r_bytes > max_bytes):
-            yield batch
+            batches.append(batch)
             batch, size = [], 0
         batch.append(r)
         size += r_bytes
     if batch:
-        yield batch
+        batches.append(batch)
+    return batches

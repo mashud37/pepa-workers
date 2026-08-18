@@ -8,11 +8,11 @@ Copy this file (Plan templates → Create new in the menu, or `python manage.py
 template --new <name>`), edit the sections below to your own structure, then pick
 it when you outline a paper.
 
-Lines starting with `#` and this paragraph are guidance only — delete or keep
+Lines starting with `#` and this paragraph are guidance only, delete or keep
 them, they are ignored. Keep the `##` section headings and the numbered lists.
 
 ## Introduction (4 paragraphs)
-1. Real-world context — why this topic matters right now
+1. Real-world context: why this topic matters right now
 2. Problems and gaps in current understanding
 3. This paper's approach and headline findings
 4. Core argument and what the paper concludes

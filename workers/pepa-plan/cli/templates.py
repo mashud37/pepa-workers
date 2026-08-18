@@ -1,9 +1,6 @@
-"""Plan templates — user-authored section/paragraph progressions for outlines.
-
-A template is a markdown file in templates/ describing the sections and the
-paragraphs each should contain. The shipped example.plan.md is the starting point:
-the user copies it to a named template, edits the structure, then selects it when
-outlining so the generated plan follows that exact progression.
+"""Manage plan templates: markdown files in templates/ describing the
+sections and paragraphs an outline should follow, copied from
+example.plan.md and edited by the user.
 """
 import re
 import shutil
@@ -25,18 +22,14 @@ def read(path):
     return path.read_text(encoding="utf-8").strip()
 
 
-def _slug(name):
-    s = re.sub(r"[^a-z0-9]+", "-", name.strip().lower()).strip("-")
-    return s or "plan"
-
-
 def create(name):
     """Copy the example template to templates/<slug>.plan.md and return the path.
     Refuses to overwrite an existing template."""
     config.TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
     if not config.EXAMPLE_TEMPLATE.exists():
         raise SystemExit(f"Example template missing: {config.EXAMPLE_TEMPLATE}")
-    dest = config.TEMPLATES_DIR / f"{_slug(name)}{_SUFFIX}"
+    slug = re.sub(r"[^a-z0-9]+", "-", name.strip().lower()).strip("-") or "plan"
+    dest = config.TEMPLATES_DIR / f"{slug}{_SUFFIX}"
     if dest.exists():
         raise SystemExit(f"Template already exists: {dest.name}")
     shutil.copyfile(config.EXAMPLE_TEMPLATE, dest)
@@ -81,7 +74,7 @@ def run(new=None, show=False):
 
 def _show_list(existing):
     if not existing:
-        ui.warn("no templates yet — create one with: python manage.py template --new <name>")
+        ui.warn("no templates yet, create one with: python manage.py template --new <name>")
         return
     ui.step("Templates")
     for p in existing:

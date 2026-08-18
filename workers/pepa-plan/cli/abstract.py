@@ -27,7 +27,7 @@ def run(limit=None, sample=None, mode=None):
             "No para_*.md files found in corpus.\n"
             "Check corpus_dir in secrets.yaml or run python manage.py config."
         )
-    ui.info(f"corpus: {count} para files in {config.corpus_dir().name}/")
+    ui.info(f"corpus: {count} para files in {config.load()['corpus_dir'].name}/")
     if limit:
         ui.info(f"limit: {limit} papers")
     if sample:
@@ -59,7 +59,7 @@ def _write_report(library, path):
         for stage in sk.get("stages", []):
             share = stage.get("typical_share", "")
             share_str = f" ({share:.0%})" if isinstance(share, float) else ""
-            lines.append(f"- **{stage.get('move', '')}**{share_str} — {stage.get('intent', '')}")
+            lines.append(f"- **{stage.get('move', '')}**{share_str}: {stage.get('intent', '')}")
         examples = sk.get("example_bases", [])
         if examples:
             lines.append(f"\n**Example papers:** {', '.join(examples[:20])}")

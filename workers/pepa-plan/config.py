@@ -27,7 +27,7 @@ MODES = ("auto", "serial", "parallel", "batch")
 # Coarse planning constants that only steer the auto mode choice, never the work.
 # Labelling is one fast LLM call per paper; the local read+parse is negligible.
 EST_LABEL_SECONDS = 3.0        # one paper's labelling call, run serially
-EST_PARALLEL_PPH = 2500        # realistic sustained papers/hour in parallel — the
+EST_PARALLEL_PPH = 2500        # realistic sustained papers/hour in parallel: the
                                # account rate limit, not the worker count, bounds
                                # this, so raising concurrency won't beat it
 EST_BATCH_PPH = 6000           # papers/hour once a batch is running
@@ -78,41 +78,27 @@ def get(key, default=None):
     return val if val not in (None, *_PLACEHOLDERS) else default
 
 
-def corpus_dir():
-    return Path(get("corpus_dir", CORPUS_DIR_DEFAULT))
+def load():
+    """The current settings, re-read every call so an edited secrets.yaml or a
+    changed env var takes effect on the next call without a restart.
 
-
-def anthropic_api_key():
-    return get("anthropic_api_key")
-
-
-def anthropic_model():
-    return get("anthropic_model", GENERATION_MODEL_DEFAULT)
-
-
-def review_model():
-    return get("review_model", GENERATION_MODEL_QUALITY)
-
-
-def concurrency():
-    """Concurrent labelling requests in parallel mode, and the hard cap the client
-    governor enforces across every in-flight call."""
-    return _clamped_int("concurrency", CONCURRENCY_DEFAULT, 1, 32)
-
-
-def mode():
-    """Execution mode for move-labelling: auto | serial | parallel | batch."""
-    return get("mode", "auto")
-
-
-def batch_poll_seconds():
-    """How often to poll a running Message Batch for completion."""
-    return _clamped_int("batch_poll", 30, 5, 300)
+    Returns a dict with keys: corpus_dir, anthropic_api_key, anthropic_model,
+    review_model, concurrency, mode, batch_poll_seconds.
+    """
+    return {
+        "corpus_dir": Path(get("corpus_dir", CORPUS_DIR_DEFAULT)),
+        "anthropic_api_key": get("anthropic_api_key"),
+        "anthropic_model": get("anthropic_model", GENERATION_MODEL_DEFAULT),
+        "review_model": get("review_model", GENERATION_MODEL_QUALITY),
+        "concurrency": _clamped_int("concurrency", CONCURRENCY_DEFAULT, 1, 32),
+        "mode": get("mode", "auto"),
+        "batch_poll_seconds": _clamped_int("batch_poll", 30, 5, 300),
+    }
 
 
 def price_per_mtok(model):
     """(input, output) USD per million tokens for the model, or None if its price
-    isn't known — the caller then reports tokens without a dollar figure."""
+    isn't known: the caller then reports tokens without a dollar figure."""
     for key, price in _PRICES_PER_MTOK.items():
         if model.startswith(key):
             return price
