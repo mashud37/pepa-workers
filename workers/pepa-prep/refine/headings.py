@@ -3,7 +3,7 @@ import re
 import statistics
 from collections import defaultdict
 
-from extract.anchor import _key
+from extract.anchor import text_key
 from extract.shape import _ORD_RE
 
 from . import signals
@@ -21,7 +21,11 @@ def _strong(text: str) -> int:
     score = 0
     if text.endswith("-") or text.endswith(","):
         score += 1
-    first = next((c for c in text if c.isalpha()), "")
+    first = ""
+    for c in text:
+        if c.isalpha():
+            first = c
+            break
     if first.islower() and not _ORD_RE.match(text):
         score += 1
     if _SENTENCE_RE.search(text):
@@ -37,14 +41,14 @@ def _weak(text: str, next_line: str, fw: set) -> int:
     if toks and sum(t in fw for t in toks) / len(toks) >= _PROSE_FW_RATIO:
         score += 1
     dangling = text and text[-1] not in _TERMINAL
-    first = next((c for c in next_line if c.isalpha()), "")
+    first = ""
+    for c in next_line:
+        if c.isalpha():
+            first = c
+            break
     if dangling and first.islower():
         score += 1
     return score
-
-
-def _next_text(lines: list, idx: int) -> str:
-    return next((ln.strip() for ln in lines[idx + 1:idx + 4] if ln.strip()), "")
 
 
 def false_headings(lines: list, heads: list, fw: set) -> list:
@@ -54,8 +58,13 @@ def false_headings(lines: list, heads: list, fw: set) -> list:
         t = h["text"].strip()
         if _ORD_RE.match(t) and len(t.split()) <= 8:
             continue
+        next_text = ""
+        for ln in lines[h["line"] + 1:h["line"] + 4]:
+            if ln.strip():
+                next_text = ln.strip()
+                break
         strong = _strong(t)
-        if strong and strong + _weak(t, _next_text(lines, h["line"]), fw) >= 2:
+        if strong and strong + _weak(t, next_text, fw) >= 2:
             out.append(h["line"])
     return out
 
@@ -64,11 +73,11 @@ def recurring(heads: list, offs: list) -> dict:
     """Split repeated heading keys into page-frequency running heads and
     chapter-frequency template markers by the char gap between occurrences.
     A repeated key that carries the same ordinal every time (\"CHAPTER 2\" three
-    times) is a running head regardless of gap — chapters do not repeat numbers."""
+    times) is a running head regardless of gap: chapters do not repeat numbers."""
     groups: dict = defaultdict(list)
     texts: dict = {}
     for h in heads:
-        k = _key(h["text"])
+        k = text_key(h["text"])
         if k:
             groups[k].append(h["line"])
             texts.setdefault(k, h["text"])

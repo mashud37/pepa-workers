@@ -21,9 +21,15 @@ _MIN_SIGNALS = 2
 
 def _features(lines: list, fw: set) -> dict:
     body = [ln.strip() for ln in lines if ln.strip()]
-    toks = [t for ln in body for t in signals.tokens(ln)]
-    alnum = sum(c.isalnum() for ln in body for c in ln)
-    digits = sum(c.isdigit() for ln in body for c in ln)
+    toks = []
+    for ln in body:
+        toks.extend(signals.tokens(ln))
+    alnum = 0
+    digits = 0
+    for ln in body:
+        for c in ln:
+            alnum += c.isalnum()
+            digits += c.isdigit()
     caps = sum(1 for ln in body
                if sum(c.isupper() for c in ln) >= 0.7 * max(1, sum(c.isalpha() for c in ln)))
     return {
@@ -37,15 +43,18 @@ def _features(lines: list, fw: set) -> dict:
     }
 
 
-def is_apparatus(lines: list, fw: set) -> tuple[bool, list]:
+def is_apparatus(lines: list, fw: set) -> dict:
     """Judge a unit as apparatus (index, bibliography, title/copyright pages).
 
     Requires almost no prose paragraphs plus at least two density signals, so a
     preface or introduction never qualifies.
+
+    Returns:
+        {"apparatus": bool verdict, "reasons": the density signals that fired}.
     """
     f = _features(lines, fw)
     if f["lines"] < _MIN_LINES or f["prose_lines"] >= _PROSE_MAX:
-        return False, []
+        return {"apparatus": False, "reasons": []}
     reasons = []
     if f["stop_ratio"] < _STOP_FLOOR:
         reasons.append("low function-word share")
@@ -57,4 +66,4 @@ def is_apparatus(lines: list, fw: set) -> tuple[bool, list]:
         reasons.append("caps-heavy")
     if f["marker"]:
         reasons.append("ISBN/copyright markers")
-    return len(reasons) >= _MIN_SIGNALS, reasons
+    return {"apparatus": len(reasons) >= _MIN_SIGNALS, "reasons": reasons}

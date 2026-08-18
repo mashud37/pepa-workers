@@ -1,1 +1,2 @@
-"""Bibliography enrichment — Zotero matching, Crossref fetch, citation networks."""
+"""Bibliography enrichment: Zotero matching, OpenAlex fetch, citation networks.
+"""

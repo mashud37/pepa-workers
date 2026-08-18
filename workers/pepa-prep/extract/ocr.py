@@ -3,7 +3,9 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 
 
-def _clean(raw: str) -> str:
+def _ocr_image(img):  # lint-style: ignore FN004
+    import pytesseract
+    raw = pytesseract.image_to_string(img)
     return raw.strip().encode("utf-8", "surrogatepass").decode("utf-8", "ignore")
 
 
@@ -29,9 +31,6 @@ def ocr_pages(path, fitz, cfg: dict, progress=None) -> list:
     mat = fitz.Matrix(dpi / 72, dpi / 72)
     n_workers = max(1, cfg.get("workers", 4))
 
-    def ocr_image(img):
-        return _clean(pytesseract.image_to_string(img))
-
     texts: list = []
     with fitz.open(str(path)) as doc, ThreadPoolExecutor(max_workers=n_workers) as pool:
         total = doc.page_count
@@ -42,7 +41,7 @@ def ocr_pages(path, fitz, cfg: dict, progress=None) -> list:
             for n in range(start, min(start + n_workers, total)):
                 pix = doc[n].get_pixmap(matrix=mat, colorspace=fitz.csGRAY)
                 batch.append(Image.frombytes("L", [pix.width, pix.height], pix.samples))
-            texts.extend(pool.map(ocr_image, batch))
+            texts.extend(pool.map(_ocr_image, batch))
             if progress:
                 progress(len(texts), total)
     return texts

@@ -1,4 +1,6 @@
-"""Chapter splitting — verified outline, printed-ToC anchoring, or heading pattern."""
+"""Split a book into chapters from a verified outline, a printed table of contents,
+or a heading pattern.
+"""
 import re
 import statistics
 from pathlib import Path
@@ -38,9 +40,9 @@ def _outline_results(doc, index: list, page_count: int, cfg: dict) -> list:
     for level, cands in sorted(outline_candidates(doc).items()):
         if not 2 <= len(cands) <= 2 * cfg.get("max_chapters", 80):
             continue
-        bounds, frac = anchor.verify(cands, index)
-        ok, _ = shape.plausible(bounds, page_count, cfg)
-        if ok:
+        verified = anchor.verify(cands, index)
+        bounds, frac = verified["bounds"], verified["verified_fraction"]
+        if shape.plausible(bounds, page_count, cfg)["ok"]:
             results.append((frac, "outline", bounds, None, level))
     return results
 
@@ -59,32 +61,37 @@ def _toc_results(doc, pages: list, entries: list, index: list, cfg: dict) -> lis
         cands = [{"title": e["title"],
                   "page": e["no"] + off if off is not None and not e["roman"] else None}
                  for e in chap]
-        bounds, frac = anchor.verify(cands, index)
-        ok, _ = shape.plausible(bounds, len(pages), cfg)
-        if ok:
+        verified = anchor.verify(cands, index)
+        bounds, frac = verified["bounds"], verified["verified_fraction"]
+        if shape.plausible(bounds, len(pages), cfg)["ok"]:
             results.append((frac, "toc", bounds, off, 1))
     return results
 
 
-def _rank(result: tuple, page_count: int) -> tuple:
+def _rank(result: tuple, page_count: int) -> dict:  # lint-style: ignore FN004
     frac, _, bounds, _, level = result
     median_span = statistics.median(shape.spans(bounds, page_count))
-    return frac >= _FULL_ACCEPT, 6 <= median_span <= 70, -level, frac
+    return {
+        "full_accept": frac >= _FULL_ACCEPT,
+        "good_span": 6 <= median_span <= 70,
+        "neg_level": -level,
+        "frac": frac,
+    }
 
 
-def detect_chapters(doc, pages: list, dims: list, stats: tuple,
-                    cfg: dict) -> tuple[list, dict]:
+def detect_chapters(doc, pages: list, dims: list, stats: dict,
+                    cfg: dict) -> dict:
     """Locate chapter boundaries as page indices; the strategy drives the output path.
 
     Args:
         doc: Open PyMuPDF document.
         pages: Per-page line blocks from doc_lines().
         dims: Per-page (width, height) from doc_dims().
-        stats: (body, heads, lh) from doc_stats().
+        stats: {"body", "heads", "lh"} from doc_stats().
         cfg: Loaded config dict.
 
     Returns:
-        (boundaries, meta): boundaries as [{"title", "page"}] with 0-based start
+        {"bounds", "meta"}: bounds as [{"title", "page"}] with 0-based start
         pages, meta = {"strategy", "verified", "offset", "notes"} where strategy
         is "outline" | "toc" | "regex" | "none".
     """
@@ -98,33 +105,52 @@ def detect_chapters(doc, pages: list, dims: list, stats: tuple,
 
     results = _outline_results(doc, index, page_count, cfg)
     results += _toc_results(doc, pages, entries, index, cfg)
-    results.sort(key=lambda r: _rank(r, page_count), reverse=True)
+    results.sort(key=lambda r: tuple(_rank(r, page_count).values()), reverse=True)
     if results and results[0][0] >= _MIN_ACCEPT:
         frac, strategy, bounds, off, _ = results[0]
         drop_pages = set(toc_rng or ()) | toc.find_lists(pages, widths)
-        bounds, notes = shape.repair(bounds, pages, drop_pages)
+        repaired = shape.repair(bounds, pages, drop_pages)
+        bounds, notes = repaired["bounds"], repaired["notes"]
         if len(bounds) >= 2:
             notes += shape.diagnose(bounds, page_count)
-            return bounds, {"strategy": strategy, "verified": frac,
-                            "offset": off, "notes": notes}
+            return {
+                "bounds": bounds,
+                "meta": {
+                    "strategy": strategy,
+                    "verified": frac,
+                    "offset": off,
+                    "notes": notes,
+                },
+            }
 
     bounds = _regex_boundaries(pages, stats)
     if bounds:
-        return bounds, {"strategy": "regex", "verified": None, "offset": None,
-                        "notes": shape.diagnose(bounds, page_count)}
-    return [], {"strategy": "none", "verified": None, "offset": None, "notes": []}
+        return {
+            "bounds": bounds,
+            "meta": {
+                "strategy": "regex",
+                "verified": None,
+                "offset": None,
+                "notes": shape.diagnose(bounds, page_count),
+            },
+        }
+    return {"bounds": [], "meta": {"strategy": "none", "verified": None, "offset": None, "notes": []}}
 
 
-def _is_regex_boundary(ln: dict, stats: tuple) -> bool:
+def _is_regex_boundary(ln: dict, stats: dict) -> bool:
     t = norm(ln["text"])
-    return (_is_heading(ln, stats[0], stats[1]) and len(t.split()) <= 8
+    return (_is_heading(ln, stats["body"], stats["heads"]) and len(t.split()) <= 8
             and bool(_CHAPTER_HEADING_RE.match(t)))
 
 
-def _regex_boundaries(pages: list, stats: tuple) -> list:
+def _regex_boundaries(pages: list, stats: dict) -> list:
     bounds: list = []
     chars = 0
-    lines = ((pno, ln) for pno, page in enumerate(pages) for block in page for ln in block)
+    lines = []
+    for pno, page in enumerate(pages):
+        for block in page:
+            for ln in block:
+                lines.append((pno, ln))
     for pno, ln in lines:
         if _is_regex_boundary(ln, stats):
             if not bounds or chars >= _MIN_CHAPTER_CHARS:
@@ -142,17 +168,16 @@ def _is_chapter_heading(el: tuple) -> bool:
     return len(t.split()) <= 8 and bool(_CHAPTER_HEADING_RE.match(t))
 
 
-def _chapter_text_len(group: list) -> int:
-    return sum(len(t) for k, _, t in group if k == "para")
-
-
 def split_into_chapters(elements: list) -> list:
     if sum(1 for el in elements if _is_chapter_heading(el)) < 2:
         return [elements]
     chapters, current = [], []
     for el in elements:
-        if (_is_chapter_heading(el) and current
-                and _chapter_text_len(current) >= _MIN_CHAPTER_CHARS):
+        should_split = False
+        if _is_chapter_heading(el) and current:
+            chars = sum(len(t) for k, _, t in current if k == "para")
+            should_split = chars >= _MIN_CHAPTER_CHARS
+        if should_split:
             chapters.append(current)
             current = [el]
         else:

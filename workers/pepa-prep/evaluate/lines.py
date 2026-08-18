@@ -1,9 +1,6 @@
-"""Extract a stable per-line stream from a PDF, the shared unit for evaluation.
-
-A stream is a deterministic, JSON-serialisable record of the document's content
-lines (running headers, footers, and page numbers already removed, mirroring the
-extractor) plus the geometry each predictor needs. Gold corrections and predictor
-output are both aligned to this exact line order, so scoring needs no fuzzy matching.
+"""Extract a stable per-line stream from a PDF: content lines plus geometry,
+headers, footers, and page numbers removed. Gold corrections and predictor
+output align to this exact line order.
 """
 import json
 from pathlib import Path
@@ -23,10 +20,6 @@ from extract.text import (
 _GEOM_KEYS = ("x0", "y0", "x1", "y1", "size", "bold")
 
 
-def _text_flags(fitz) -> int:
-    return fitz.TEXTFLAGS_DICT & ~fitz.TEXT_PRESERVE_IMAGES
-
-
 def _keep(ln: dict, drop: set) -> bool:
     t = ln["text"].strip()
     key = hdr_key(t)
@@ -36,14 +29,25 @@ def _keep(ln: dict, drop: set) -> bool:
 def _block_records(block: list, pi: int, bid: int, lh: float, drop: set) -> list:
     geom = list(_block_geom(block, lh))
     return [{
-        "text": ln["text"], "page": pi, "bid": bid, "blank_before": False,
-        "geom": [ln[k] for k in _GEOM_KEYS], "block_geom": geom,
+        "text": ln["text"],
+        "page": pi,
+        "bid": bid,
+        "blank_before": False,
+        "geom": [ln[k] for k in _GEOM_KEYS],
+        "block_geom": geom,
     } for ln in block if _keep(ln, drop)]
 
 
-def _born_digital(doc, fitz, keep: set | None) -> tuple[dict, list]:
-    pages = doc_lines(doc, range(doc.page_count), _text_flags(fitz))
-    body, heads, lh = doc_stats(pages)
+def _born_digital(doc, fitz, keep: set | None) -> dict:
+    """Extract lines from a born-digital PDF using the production geometry pipeline.
+
+    Returns:
+        {"meta": {"route", "body", "heads", "lh"}, "lines": extracted line records}.
+    """
+    text_flags = fitz.TEXTFLAGS_DICT & ~fitz.TEXT_PRESERVE_IMAGES
+    pages = doc_lines(doc, range(doc.page_count), text_flags)
+    stats = doc_stats(pages)
+    body, heads, lh = stats["body"], stats["heads"], stats["lh"]
     drop = drop_keys(pages)
     out: list = []
     bid = 0
@@ -55,10 +59,15 @@ def _born_digital(doc, fitz, keep: set | None) -> tuple[dict, list]:
             if recs:
                 out.extend(recs)
                 bid += 1
-    return {"route": "geometry", "body": body, "heads": heads, "lh": lh}, out
+    return {"meta": {"route": "geometry", "body": body, "heads": heads, "lh": lh}, "lines": out}
 
 
-def _ocr(path: Path, fitz, cfg: dict, keep: set | None) -> tuple[dict, list]:
+def _ocr(path: Path, fitz, cfg: dict, keep: set | None) -> dict:
+    """Extract lines from a scanned PDF's OCR text.
+
+    Returns:
+        {"meta": {"route": "ocr"}, "lines": extracted line records}.
+    """
     pages = ocr_pages(path, fitz, cfg)
     drop = text_drop(pages)
     out: list = []
@@ -74,11 +83,15 @@ def _ocr(path: Path, fitz, cfg: dict, keep: set | None) -> tuple[dict, list]:
             if _PAGE_NUM_RE.match(t) or hdr_key(t) in drop:
                 continue
             out.append({
-                "text": t, "page": pi, "bid": pi, "blank_before": blank_before,
-                "geom": None, "block_geom": None,
+                "text": t,
+                "page": pi,
+                "bid": pi,
+                "blank_before": blank_before,
+                "geom": None,
+                "block_geom": None,
             })
             blank_before = False
-    return {"route": "ocr"}, out
+    return {"meta": {"route": "ocr"}, "lines": out}
 
 
 def build(path: Path, cfg: dict, keep: set | None = None) -> dict:
@@ -91,12 +104,13 @@ def build(path: Path, cfg: dict, keep: set | None = None) -> dict:
     scan = categorise.scan_one(path, fitz)
     if scan is None:
         raise ValueError(f"unreadable PDF: {path.name}")
-    pages, fraction = scan
+    pages, fraction = scan["pages"], scan["fraction"]
     if categorise.route(pages, fraction, cfg) == "ocr":
-        meta, body = _ocr(path, fitz, cfg, keep)
+        extracted = _ocr(path, fitz, cfg, keep)
     else:
         with fitz.open(str(path)) as doc:
-            meta, body = _born_digital(doc, fitz, keep)
+            extracted = _born_digital(doc, fitz, keep)
+    meta, body = extracted["meta"], extracted["lines"]
     return {"name": path.stem, "route": meta["route"], "meta": meta, "lines": body}
 
 

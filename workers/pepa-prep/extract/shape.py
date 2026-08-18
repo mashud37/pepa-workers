@@ -15,12 +15,6 @@ _ORD_RE = re.compile(
 )
 
 
-def _roman(token: str) -> int:
-    values = [_ROMAN_VALUES.get(c, 0) for c in token.lower()]
-    return sum(-v if i + 1 < len(values) and v < values[i + 1] else v
-               for i, v in enumerate(values))
-
-
 def ordinals(titles: list) -> list:
     out = []
     for t in titles:
@@ -29,7 +23,12 @@ def ordinals(titles: list) -> list:
             out.append(None)
             continue
         tok = m.group(1)
-        out.append(int(tok) if tok.isdigit() else _roman(tok))
+        if tok.isdigit():
+            out.append(int(tok))
+        else:
+            values = [_ROMAN_VALUES.get(c, 0) for c in tok.lower()]
+            out.append(sum(-v if i + 1 < len(values) and v < values[i + 1] else v
+                           for i, v in enumerate(values)))
     return out
 
 
@@ -50,17 +49,23 @@ def spans(bounds: list, page_count: int) -> list:
     return [z - a for a, z in zip(starts, starts[1:] + [page_count])]
 
 
-def plausible(bounds: list, page_count: int, cfg: dict) -> tuple[bool, list]:
-    """Gate a candidate split against count/size priors; True means acceptable."""
+def plausible(bounds: list, page_count: int, cfg: dict) -> dict:
+    """Gate a candidate split against count/size priors.
+
+    Returns:
+        {"ok", "notes"}: ok is True when the split is acceptable.
+    """
     n = len(bounds)
     if n < 2:
-        return False, ["fewer than 2 units"]
+        return {"ok": False, "notes": ["fewer than 2 units"]}
     if n > cfg.get("max_chapters", 80):
-        return False, [f"{n} units exceed max_chapters {cfg.get('max_chapters', 80)}"]
+        return {"ok": False,
+                "notes": [f"{n} units exceed max_chapters {cfg.get('max_chapters', 80)}"]}
     median_span = statistics.median(spans(bounds, page_count))
     if n >= _OVERSPLIT_UNITS and median_span < _OVERSPLIT_MEDIAN_PAGES:
-        return False, [f"{n} units at median {median_span:.0f} page(s) — over-split"]
-    return True, []
+        return {"ok": False,
+                "notes": [f"{n} units at median {median_span:.0f} page(s): over-split"]}
+    return {"ok": True, "notes": []}
 
 
 def diagnose(bounds: list, page_count: int) -> list:
@@ -78,19 +83,19 @@ def diagnose(bounds: list, page_count: int) -> list:
             notes.append("ordinal gap: missing "
                          + ", ".join(str(m) for m in missing[:6]))
     if len(runs) > 1:
-        notes.append(f"{len(runs)} ordinal runs — numbering restarts (parts?)")
+        notes.append(f"{len(runs)} ordinal runs: numbering restarts (parts?)")
     if n >= _OVERSPLIT_UNITS and median_span < 6:
-        notes.append(f"{n} units at median {median_span:.0f} page(s) — check for over-split")
+        notes.append(f"{n} units at median {median_span:.0f} page(s): check for over-split")
     return notes
 
 
 def _unit_chars(pages: list, start: int, stop: int) -> int:
-    return sum(len(ln["text"].strip())
-               for page in pages[start:stop] for block in page for ln in block)
-
-
-def _page_chars(pages: list, pno: int) -> int:
-    return _unit_chars(pages, pno, pno + 1)
+    total = 0
+    for page in pages[start:stop]:
+        for block in page:
+            for ln in block:
+                total += len(ln["text"].strip())
+    return total
 
 
 def _backfill(bounds: list, pages: list) -> int:
@@ -103,7 +108,7 @@ def _backfill(bounds: list, pages: list) -> int:
         for _ in range(2):
             if page - 1 < floor:
                 break
-            chars = _page_chars(pages, page - 1)
+            chars = _unit_chars(pages, page - 1, page)
             if chars >= _BLANK_PAGE_CHARS:
                 break
             page -= 1
@@ -152,17 +157,17 @@ def _merge_small(bounds: list, pages: list) -> int:
     return merged
 
 
-def repair(bounds: list, pages: list, drop_pages: set) -> tuple[list, list]:
+def repair(bounds: list, pages: list, drop_pages: set) -> dict:
     """Post-process boundaries: drop contents/figure-list units, drop unverified
     leading fragments, merge sub-minimum units forward, backfill over dividers.
 
     Interior sub-minimum units merge forward (a divider opens the next chapter);
-    a trailing one merges backward — both keep the content. The leading drop
+    a trailing one merges backward, both keep the content. The leading drop
     loses content, so it spares title-verified units. Never repairs below 2
     boundaries.
 
     Returns:
-        (bounds, notes) with notes describing every adjustment made.
+        {"bounds", "notes"}: notes describes every adjustment made.
     """
     bounds = [dict(b) for b in bounds]
     notes = []
@@ -177,4 +182,4 @@ def repair(bounds: list, pages: list, drop_pages: set) -> tuple[list, list]:
         notes.append(f"merged {merged} sub-minimum unit(s)")
     if _backfill(bounds, pages):
         notes.append("backfilled boundaries over blank/divider pages")
-    return bounds, notes
+    return {"bounds": bounds, "notes": notes}

@@ -56,12 +56,18 @@ def tokens(text: str) -> list:
     return _WORD_RE.findall(text.casefold())
 
 
-def lexicon(lines: list) -> tuple[set, set]:
-    """One tokenizing pass returning (function words, full vocabulary)."""
+def lexicon(lines: list) -> dict:
+    """One tokenizing pass over the book's lines.
+
+    Returns:
+        {"function_words": the most common tokens, "vocab": every distinct
+        token seen}.
+    """
     counts: Counter = Counter()
     for ln in lines:
         counts.update(tokens(ln))
-    return {w for w, _ in counts.most_common(_FUNCTION_WORDS)}, set(counts)
+    function_words = {w for w, _ in counts.most_common(_FUNCTION_WORDS)}
+    return {"function_words": function_words, "vocab": set(counts)}
 
 
 def unit_spans(bounds: list, offs: list) -> list:
@@ -69,13 +75,27 @@ def unit_spans(bounds: list, offs: list) -> list:
     return [offs[z] - offs[a] for a, z in zip(bounds, stops)]
 
 
+def _first_heading_text(heads: list, a: int, z: int) -> str | None:
+    for h in heads:
+        if a <= h["line"] < z:
+            return h["text"]
+    return None
+
+
+def _first_nonblank_line(lines: list, a: int, z: int) -> str:
+    for ln in lines[a:z]:
+        if ln.strip():
+            return ln.strip()
+    return ""
+
+
 def unit_titles(bounds: list, lines: list, heads: list) -> list:
     stops = list(bounds[1:]) + [len(lines)]
     titles = []
     for a, z in zip(bounds, stops):
-        head = next((h["text"] for h in heads if a <= h["line"] < z), None)
+        head = _first_heading_text(heads, a, z)
         if head is None:
-            head = next((ln.strip() for ln in lines[a:z] if ln.strip()), "")
+            head = _first_nonblank_line(lines, a, z)
         titles.append(head)
     return titles
 
@@ -85,18 +105,23 @@ def ordinal_opener(title: str) -> bool:
     return bool(shape._ORD_RE.match(t)) and len(t.split()) <= _MAX_TITLE_WORDS
 
 
-def plausible(spans: list, cfg: dict) -> tuple[bool, list]:
-    """Gate a candidate partition against count/size priors; True means acceptable."""
+def plausible(spans: list, cfg: dict) -> dict:
+    """Gate a candidate partition against count/size priors.
+
+    Returns:
+        {"ok": True when the partition is acceptable, "reasons": why not}.
+    """
     n = len(spans)
     if n < 1:
-        return False, ["no units"]
+        return {"ok": False, "reasons": ["no units"]}
     cap = cfg.get("max_chapters", 80)
     if n > cap:
-        return False, [f"{n} units exceed max_chapters {cap}"]
+        return {"ok": False, "reasons": [f"{n} units exceed max_chapters {cap}"]}
     median = statistics.median(spans)
     if n >= _OVERSPLIT_UNITS and median < _OVERSPLIT_MEDIAN:
-        return False, [f"{n} units at median {median / 1000:.1f}k chars — over-split"]
-    return True, []
+        reason = f"{n} units at median {median / 1000:.1f}k chars: over-split"
+        return {"ok": False, "reasons": [reason]}
+    return {"ok": True, "reasons": []}
 
 
 def missing_ordinals(titles: list) -> set:
@@ -115,15 +140,15 @@ def diagnose(spans: list, titles: list) -> list:
         return notes
     median = statistics.median(spans)
     if n >= _OVERSPLIT_UNITS and median < _OVERSPLIT_MEDIAN:
-        notes.append(f"{n} units at median {median / 1000:.1f}k chars — over-split")
+        notes.append(f"{n} units at median {median / 1000:.1f}k chars: over-split")
     over = [i + 1 for i, s in enumerate(spans) if s >= OVERSIZED_CHARS]
     if over:
         notes.append("oversized unit(s) " + ", ".join(str(i) for i in over[:4])
-                      + " — under-split suspect")
+                      + ": under-split suspect")
     missing = sorted(missing_ordinals(titles))
     if missing:
         notes.append("ordinal gap: missing " + ", ".join(str(m) for m in missing[:6]))
     runs = [r for r in shape._runs(shape.ordinals(titles)) if len(r) >= 3]
     if len(runs) > 1:
-        notes.append(f"{len(runs)} ordinal runs — numbering restarts (parts?)")
+        notes.append(f"{len(runs)} ordinal runs: numbering restarts (parts?)")
     return notes

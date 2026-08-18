@@ -30,41 +30,42 @@ def main(cfg: dict) -> None:
         if choice == 0:
             v = ui.ask("Input folder", cfg["input_folder"])
             if v:
-                cfg["input_folder"] = v
+                cfg = {**cfg, "input_folder": v}
                 cfg_mod.save(cfg)
                 ui.ok("Saved")
 
         elif choice == 1:
             v = ui.ask("Output folder", cfg["output_folder"])
             if v:
-                cfg["output_folder"] = v
+                cfg = {**cfg, "output_folder": v}
                 cfg_mod.save(cfg)
                 ui.ok("Saved")
 
         elif choice == 2:
             v = ui.ask("Workers (parallel threads)", str(cfg["workers"]))
             if v and v.isdigit() and int(v) >= 1:
-                cfg["workers"] = int(v)
+                cfg = {**cfg, "workers": int(v)}
                 cfg_mod.save(cfg)
                 ui.ok("Saved")
             elif v:
                 ui.warn("Must be a positive integer")
 
         elif choice == 3:
-            _advanced(cfg)
+            cfg = _advanced(cfg)
 
 
-def _ask_int(cfg: dict, key: str, prompt: str, minimum: int, err: str) -> None:
+def _ask_int(cfg: dict, key: str, prompt: str, minimum: int, err: str) -> dict:
     v = ui.ask(prompt, str(cfg[key]))
     if v and v.isdigit() and int(v) >= minimum:
-        cfg[key] = int(v)
+        cfg = {**cfg, key: int(v)}
         cfg_mod.save(cfg)
         ui.ok("Saved")
     elif v:
         ui.warn(err)
+    return cfg
 
 
-def _advanced(cfg: dict) -> None:
+def _advanced(cfg: dict) -> dict:
     while True:
         ui.header("Advanced")
         choice = ui.menu("Advanced options", [
@@ -74,16 +75,16 @@ def _advanced(cfg: dict) -> None:
             ("Tesseract path", f"current: {cfg.get('tesseract_cmd') or '(from PATH)'}"),
         ])
         if choice is None:
-            return
+            return cfg
         if choice == 0:
-            _ask_int(cfg, "book_page_threshold", "Book page threshold", 1, "Must be a positive integer")
+            cfg = _ask_int(cfg, "book_page_threshold", "Book page threshold", 1, "Must be a positive integer")
         elif choice == 1:
-            _ask_int(cfg, "max_chapters", "Max chapters before a book becomes one file", 2,
+            cfg = _ask_int(cfg, "max_chapters", "Max chapters before a book becomes one file", 2,
                      "Must be an integer ≥ 2")
         elif choice == 2:
-            _ask_int(cfg, "ocr_dpi", "OCR DPI", 72, "Must be ≥ 72")
+            cfg = _ask_int(cfg, "ocr_dpi", "OCR DPI", 72, "Must be ≥ 72")
         elif choice == 3:
             v = ui.ask("Tesseract executable path (blank = use PATH)", cfg.get("tesseract_cmd", ""))
-            cfg["tesseract_cmd"] = v or ""
+            cfg = {**cfg, "tesseract_cmd": v or ""}
             cfg_mod.save(cfg)
             ui.ok("Saved")

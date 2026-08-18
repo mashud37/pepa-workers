@@ -15,8 +15,12 @@ def _trunc(name: str) -> str:
     return name if len(name) <= _MAX_NAME else name[: _MAX_NAME - 3] + "..."
 
 
-def _gather(cfg: dict, input_dir: str | None) -> tuple[list, str]:
-    """Return [(path, keep)] to label and a one-line source description."""
+def _gather(cfg: dict, input_dir: str | None) -> dict:
+    """Return docs to label and a one-line source description.
+
+    Returns:
+        {"items": [(path, keep)], "source": one-line source description}.
+    """
     if input_dir:
         src = Path(input_dir)
         if not src.is_dir():
@@ -24,20 +28,21 @@ def _gather(cfg: dict, input_dir: str | None) -> tuple[list, str]:
         pdfs = sorted(src.glob("*.pdf"))
         if not pdfs:
             raise SystemExit(f"No PDFs found in {src}")
-        return [(p, None) for p in pdfs], f"{src.resolve()} (all pages)"
+        return {"items": [(p, None) for p in pdfs], "source": f"{src.resolve()} (all pages)"}
     if harness.SELECTION.exists():
         items = harness.selection(Path(cfg["input_folder"]))
         missing = [p.name for p, _ in items if not p.exists()]
         if missing:
             raise SystemExit(f"selection.tsv lists {len(missing)} missing PDF(s): "
                              f"{', '.join(missing[:3])}{' ...' if len(missing) > 3 else ''}")
-        return items, f"{harness.SELECTION} ({len(items)} sliced doc(s))"
+        return {"items": items, "source": f"{harness.SELECTION} ({len(items)} sliced doc(s))"}
     raise SystemExit("No selection.tsv and no --input given. Create "
                      f"{harness.SELECTION} (filename<TAB>page-spec) or pass --input FOLDER.")
 
 
 def label(cfg: dict, input_dir: str | None = None) -> None:
-    items, src_desc = _gather(cfg, input_dir)
+    gathered = _gather(cfg, input_dir)
+    items, src_desc = gathered["items"], gathered["source"]
     harness.ensure_dirs()
 
     ui.step("Plan")
@@ -58,19 +63,24 @@ def label(cfg: dict, input_dir: str | None = None) -> None:
 
     ui.step(f"Step 2/2: Write tag files  [{len(streams)} stream(s)]")
     for i, stream in enumerate(streams, 1):
-        path, skipped = harness.write_review(stream)
+        written = harness.write_review(stream)
+        path, skipped = written["path"], written["kept"]
         name = _trunc(stream["name"])
         if skipped:
-            ui.warn(f"[{i}/{len(streams)}] {name} — kept existing correction ({path.name})")
+            ui.warn(f"[{i}/{len(streams)}] {name}: kept existing correction ({path.name})")
         else:
-            ui.ok(f"[{i}/{len(streams)}] {name} — {path.name} ({len(stream['lines'])} lines)")
+            ui.ok(f"[{i}/{len(streams)}] {name}: {path.name} ({len(stream['lines'])} lines)")
 
     ui.step("Done")
     ui.ok(f"Correct the tag files in {harness.REVIEW_DIR}, then run: python manage.py score")
 
 
-def _gather_books(cfg: dict, input_dir: str | None) -> tuple[list, str]:
-    """Return book PDFs to label and a one-line source description."""
+def _gather_books(cfg: dict, input_dir: str | None) -> dict:
+    """Return book PDFs to label and a one-line source description.
+
+    Returns:
+        {"items": PDF paths, "source": one-line source description}.
+    """
     if input_dir:
         src = Path(input_dir)
         if not src.is_dir():
@@ -78,20 +88,21 @@ def _gather_books(cfg: dict, input_dir: str | None) -> tuple[list, str]:
         pdfs = sorted(src.glob("*.pdf"))
         if not pdfs:
             raise SystemExit(f"No PDFs found in {src}")
-        return pdfs, str(src.resolve())
+        return {"items": pdfs, "source": str(src.resolve())}
     if chapters.SELECTION.exists():
         items = chapters.selection(Path(cfg["input_folder"]))
         missing = [p.name for p in items if not p.exists()]
         if missing:
             raise SystemExit(f"selection.tsv lists {len(missing)} missing PDF(s): "
                              f"{', '.join(missing[:3])}{' ...' if len(missing) > 3 else ''}")
-        return items, f"{chapters.SELECTION} ({len(items)} book(s))"
+        return {"items": items, "source": f"{chapters.SELECTION} ({len(items)} book(s))"}
     raise SystemExit("No selection.tsv and no --input given. Create "
                      f"{chapters.SELECTION} (one PDF filename per line) or pass --input FOLDER.")
 
 
 def label_chapters(cfg: dict, input_dir: str | None = None) -> None:
-    items, src_desc = _gather_books(cfg, input_dir)
+    gathered = _gather_books(cfg, input_dir)
+    items, src_desc = gathered["items"], gathered["source"]
     chapters.ensure_dirs()
 
     ui.step("Plan")
@@ -108,10 +119,11 @@ def label_chapters(cfg: dict, input_dir: str | None = None) -> None:
             ui.error(f"    {e}")
             continue
         if pred["route"] != "book":
-            ui.warn(f"    route {pred['route']} — skipped (chapter detection runs "
+            ui.warn(f"    route {pred['route']}, skipped (chapter detection runs "
                     "on the book route)")
             continue
-        path, kept = chapters.write_gold(pred)
+        written = chapters.write_gold(pred)
+        path, kept = written["path"], written["kept"]
         if kept:
             ui.warn(f"    kept existing gold ({path.name})")
         else:
@@ -140,12 +152,13 @@ def score_chapters(cfg: dict) -> None:
     for i, (name, pdf_path, gold_path) in enumerate(items, 1):
         ui.info(f"[{i}/{len(items)}] {_trunc(name)}")
         try:
-            res, note = chapters.grade_one(pdf_path, gold_path, cfg)
+            graded = chapters.grade_one(pdf_path, gold_path, cfg)
         except Exception as e:
             ui.error(f"    {e}")
             continue
+        res, note = graded["result"], graded["note"]
         if res is None:
-            ui.warn(f"    skipped — {note}")
+            ui.warn(f"    skipped: {note}")
             continue
         rows.append((name, res))
         ui.ok(f"    {res['strategy']}: match score {res['f1'] * 100:.1f}%  "
@@ -155,14 +168,14 @@ def score_chapters(cfg: dict) -> None:
 
     ui.step("Done")
     if not rows:
-        ui.warn("Nothing scored — correct some reference files first "
+        ui.warn("Nothing scored, correct some reference files first "
                  "(run label-chapters, then edit the files it writes).")
         return
     chapters.write_report(rows)
     agg = chapters.aggregate([r for _, r in rows])
     ui.ok(f"Overall match score: {agg['f1'] * 100:.1f}%  ·  exact page {agg['exact'] * 100:.1f}%  ·  "
           f"{agg['over']} spurious  {agg['under']} missed")
-    ui.ok(f"Report → {chapters.REPORT}")
+    ui.ok(f"Report: {chapters.REPORT}")
 
 
 def label_refine(cfg: dict) -> None:
@@ -186,9 +199,10 @@ def label_refine(cfg: dict) -> None:
     for i, stem in enumerate(stems, 1):
         ui.info(f"[{i}/{len(stems)}] {_trunc(stem)}")
         book = engine.load_book(stem, groups[stem])
-        path, kept = refine_eval.write_gold(stem, refine_eval.prefill(book))
+        written = refine_eval.write_gold(stem, refine_eval.prefill(book))
+        path, kept = written["path"], written["kept"]
         if kept:
-            ui.warn(f"    kept existing file ({path.name}) — not overwritten")
+            ui.warn(f"    kept existing file ({path.name}), not overwritten")
         else:
             ui.ok(f"    {path.name} ({len(book['starts'])} chapter starts listed)")
 
@@ -217,15 +231,16 @@ def score_refine(cfg: dict) -> None:
     for i, (stem, gold_path) in enumerate(items, 1):
         ui.info(f"[{i}/{len(items)}] {_trunc(stem)}")
         if stem not in groups:
-            ui.warn("    skipped — no chapter files in the output folder")
+            ui.warn("    skipped: no chapter files in the output folder")
             continue
         try:
-            res, note = refine_eval.grade_one(stem, groups[stem], gold_path, cfg)
+            graded = refine_eval.grade_one(stem, groups[stem], gold_path, cfg)
         except Exception as e:
             ui.error(f"    {e}")
             continue
+        res, note = graded["result"], graded["note"]
         if res is None:
-            ui.warn(f"    skipped — {note}")
+            ui.warn(f"    skipped: {note}")
             continue
         if note:
             ui.warn(f"    {note}")
@@ -237,14 +252,14 @@ def score_refine(cfg: dict) -> None:
 
     ui.step("Done")
     if not rows:
-        ui.warn("Nothing scored — correct some reference files first "
+        ui.warn("Nothing scored, correct some reference files first "
                  "(run label-refine, then edit the files it writes).")
         return
     refine_eval.write_report(rows)
     agg = refine_eval.aggregate([r for _, r in rows])
     ui.ok(f"Overall match score: {agg['base_f1'] * 100:.1f}% → {agg['f1'] * 100:.1f}% "
           f"({(agg['f1'] - agg['base_f1']) * 100:+.1f} points)")
-    ui.ok(f"Report → {refine_eval.REPORT}")
+    ui.ok(f"Report: {refine_eval.REPORT}")
 
 
 def score(cfg: dict) -> None:
@@ -262,9 +277,10 @@ def score(cfg: dict) -> None:
     rows = []
     for i, (name, stream_path, review_path) in enumerate(items, 1):
         ui.info(f"[{i}/{len(items)}] {_trunc(name)}")
-        base, merged, note = harness.grade_one(stream_path, review_path)
+        graded = harness.grade_one(stream_path, review_path)
+        base, merged, note = graded["base"], graded["merged"], graded["note"]
         if base is None:
-            ui.warn(f"    skipped — {note}")
+            ui.warn(f"    skipped: {note}")
             continue
         if note:
             ui.warn(f"    {note}")
@@ -276,7 +292,7 @@ def score(cfg: dict) -> None:
 
     ui.step("Done")
     if not rows:
-        ui.warn("Nothing scored — correct some tag files first.")
+        ui.warn("Nothing scored, correct some tag files first.")
         return
     harness.write_report(rows)
     base_agg = harness.aggregate([b for _, b, _ in rows])
@@ -286,4 +302,4 @@ def score(cfg: dict) -> None:
           f"{(mrg_agg['f1'] - base_agg['f1']) * 100:+.1f} points)  ·  "
           f"over-splits {base_agg['over_seg']}→{mrg_agg['over_seg']}  ·  "
           f"median WindowDiff {mrg_agg['windowdiff']:.3f} (lower is better)")
-    ui.ok(f"Report → {harness.REPORT}")
+    ui.ok(f"Report: {harness.REPORT}")

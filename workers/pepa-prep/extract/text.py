@@ -28,7 +28,7 @@ def hdr_key(line: str) -> str | None:
     return key if len(key) >= 5 else None
 
 
-def _line_style(spans: list) -> tuple:
+def _line_style(spans: list) -> dict:
     sizes: dict = {}
     bold = tot = 0
     for sp in spans:
@@ -41,7 +41,7 @@ def _line_style(spans: list) -> tuple:
         if sp.get("flags", 0) & 16 or "bold" in sp.get("font", "").lower():
             bold += n
     size = max(sizes, key=sizes.get) if sizes else 0.0
-    return size, tot > 0 and bold / tot > 0.6
+    return {"size": size, "bold": tot > 0 and bold / tot > 0.6}
 
 
 def page_lines(page, flags=None) -> list:
@@ -57,9 +57,16 @@ def page_lines(page, flags=None) -> list:
             if not text.strip():
                 continue
             x0, y0, x1, y1 = ln["bbox"]
-            size, bold = _line_style(spans)
-            lines.append({"text": text, "x0": x0, "y0": y0, "x1": x1, "y1": y1,
-                          "size": size, "bold": bold})
+            style = _line_style(spans)
+            lines.append({
+                "text": text,
+                "x0": x0,
+                "y0": y0,
+                "x1": x1,
+                "y1": y1,
+                "size": style["size"],
+                "bold": style["bold"],
+            })
         if lines:
             blocks.append(lines)
     return blocks
@@ -73,21 +80,38 @@ def doc_dims(doc, page_range) -> list:
     return [(doc[pno].rect.width, doc[pno].rect.height) for pno in page_range]
 
 
-def doc_stats(pages: list) -> tuple:
-    """One pass over every line: body size, heading sizes, and median line height."""
+def _line_sizes_and_heights(page: list) -> dict:
     sizes: dict = {}
     heights: list = []
-    for ln in (ln for page in pages for block in page for ln in block):
-        n = len(ln["text"].strip())
-        if n:
-            sizes[ln["size"]] = sizes.get(ln["size"], 0) + n
-            heights.append(ln["y1"] - ln["y0"])
+    for block in page:
+        for ln in block:
+            n = len(ln["text"].strip())
+            if n:
+                sizes[ln["size"]] = sizes.get(ln["size"], 0) + n
+                heights.append(ln["y1"] - ln["y0"])
+    return {"sizes": sizes, "heights": heights}
+
+
+def doc_stats(pages: list) -> dict:
+    """One pass over every line: body size, heading sizes, and median line height.
+
+    Returns:
+        {"body": most common font size, "heads": larger sizes descending,
+        "lh": median line height}.
+    """
+    sizes: dict = {}
+    heights: list = []
+    for page in pages:
+        counts = _line_sizes_and_heights(page)
+        for size, n in counts["sizes"].items():
+            sizes[size] = sizes.get(size, 0) + n
+        heights.extend(counts["heights"])
     if not sizes:
-        return 0.0, [], 12.0
+        return {"body": 0.0, "heads": [], "lh": 12.0}
     body = max(sizes, key=sizes.get)
     heads = sorted((s for s in sizes if s > body + 0.5), reverse=True)
     lh = statistics.median(heights) if heights else 12.0
-    return body, heads, lh
+    return {"body": body, "heads": heads, "lh": lh}
 
 
 def drop_keys(pages: list) -> set:
@@ -95,7 +119,10 @@ def drop_keys(pages: list) -> set:
         return set()
     counts: Counter = Counter()
     for page in pages:
-        flat = [ln for block in page for ln in block]
+        flat = []
+        for block in page:
+            for ln in block:
+                flat.append(ln)
         for ln in flat[:2] + flat[-2:]:
             k = hdr_key(ln["text"])
             if k:
@@ -139,7 +166,7 @@ def _flush(lines: list) -> tuple:
         s = ln["text"].strip()
         if s:
             text = _concat(text, s)
-    return ("para", 0, norm(text))
+    return ("para", 0, norm(text))  # lint-style: ignore DT001
 
 
 def _block_geom(block: list, page_lh: float) -> tuple:
@@ -148,7 +175,7 @@ def _block_geom(block: list, page_lh: float) -> tuple:
     heights = [ln["y1"] - ln["y0"] for ln in block]
     lh = statistics.median(heights) if heights else page_lh
     left, right = min(xs0), max(xs1)
-    return left, right, max(right - left, 1.0), (lh or page_lh)
+    return left, right, max(right - left, 1.0), (lh or page_lh)  # lint-style: ignore DT001
 
 
 def _breaks(prev: dict, cur: dict, geom: tuple) -> bool:
@@ -183,31 +210,37 @@ def _merge_continuations(elements: list) -> list:
     return out
 
 
+def _segment_block(block: list, body: float, heading_sizes: list, drop: set, geom: tuple) -> list:
+    elements: list = []
+    para, prev = [], None
+    for ln in block:
+        t = ln["text"].strip()
+        key = hdr_key(t)
+        if (key and key in drop) or _PAGE_NUM_RE.match(t):
+            continue
+        if _is_heading(ln, body, heading_sizes):
+            if para:
+                elements.append(_flush(para))
+                para = []
+            elements.append(("heading", _level(ln, heading_sizes), norm(t)))
+            prev = None
+            continue
+        if para and prev and _breaks(prev, ln, geom):
+            elements.append(_flush(para))
+            para = []
+        para.append(ln)
+        prev = ln
+    if para:
+        elements.append(_flush(para))
+    return elements
+
+
 def segment(pages: list, body: float, heading_sizes: list, drop: set, page_lh: float) -> list:
     elements: list = []
     for page in pages:
         for block in page:
             geom = _block_geom(block, page_lh)
-            para, prev = [], None
-            for ln in block:
-                t = ln["text"].strip()
-                key = hdr_key(t)
-                if (key and key in drop) or _PAGE_NUM_RE.match(t):
-                    continue
-                if _is_heading(ln, body, heading_sizes):
-                    if para:
-                        elements.append(_flush(para))
-                        para = []
-                    elements.append(("heading", _level(ln, heading_sizes), norm(t)))
-                    prev = None
-                    continue
-                if para and prev and _breaks(prev, ln, geom):
-                    elements.append(_flush(para))
-                    para = []
-                para.append(ln)
-                prev = ln
-            if para:
-                elements.append(_flush(para))
+            elements.extend(_segment_block(block, body, heading_sizes, drop, geom))
     return _merge_continuations(elements)
 
 
@@ -226,7 +259,7 @@ def strip_references(md: str) -> str:
     return md[:cut].rstrip() + "\n" if cut else md
 
 
-# OCR text (no geometry) -------------------------------------------------------
+# ---- OCR text (no geometry) ----
 
 def _is_text_heading(line: str) -> bool:
     t = line.strip()
@@ -252,28 +285,28 @@ def text_drop(pages: list) -> set:
     return {k for k, c in counts.items() if c >= threshold}
 
 
+def _flush_buf(elements: list, buf: list) -> None:
+    if buf:
+        elements.append(("para", 0, norm(" ".join(buf))))
+        buf.clear()
+
+
 def text_to_elements(pages: list) -> list:
     drop = text_drop(pages)
     elements: list = []
     buf: list = []
-
-    def flush():
-        if buf:
-            elements.append(("para", 0, norm(" ".join(buf))))
-            buf.clear()
-
     for p in pages:
         for raw in p.split("\n"):
             line = raw.strip()
             if not line:
-                flush()
+                _flush_buf(elements, buf)
                 continue
             if _PAGE_NUM_RE.match(line) or hdr_key(line) in drop:
                 continue
             if _is_text_heading(line):
-                flush()
+                _flush_buf(elements, buf)
                 elements.append(("heading", 2, line))
             else:
                 buf.append(line)
-        flush()
+        _flush_buf(elements, buf)
     return _merge_continuations(elements)

@@ -1,29 +1,27 @@
-"""CLI layer for the bibliography enrichment workflow.
-
-Matches pepa-sum sum_*.md files to a Zotero CSL-JSON library, fetches full
-metadata from Crossref (by DOI for matched papers, title search for unmatched),
-and optionally enriches each record with citation networks from OpenCitations.
-
-Output: one biblio_{stem}.json per paper in the configured output folder.
-Existing files are skipped unless --force is set.
-
-Pipeline:
-    [1] Match sum_*.md stems to Zotero records
-    [2] Fetch metadata from Crossref (DOI or title search)
-    [3] Write biblio JSON files           <- interleaved with step 2
-   ([4] Fetch citation networks)          <- only with --cite
+"""Run the bibliography enrichment pipeline: match pepa-sum files to Zotero records,
+fetch OpenAlex metadata, and write one biblio JSON file per paper.
 """
 from pathlib import Path
 
-from biblio import crossref, match, opencitations, write
+from biblio import match, openalex, opencitations, write
+from extract import config as cfg_mod
 
 from . import ui
+
+
+def _access_note(api_key: str, email: str) -> str:
+    if api_key:
+        return "premium key set"
+    if email:
+        return f"polite pool: {email}"
+    return "free route (set openalex_email in config.yaml for the polite pool)"
 
 
 def run(cfg: dict, zotero=None, cite=False, force=False, quiet=False) -> None:
     corpus_dir = Path(cfg.get("biblio_corpus", "../pepa-sum/output"))
     out_dir = Path(cfg.get("biblio_output", cfg.get("output_folder", "./output"))) / "biblio"
-    email = cfg.get("crossref_email", "")
+    email = cfg.get("openalex_email", "")
+    api_key = cfg_mod.openalex_api_key()
 
     if not corpus_dir.exists():
         raise SystemExit(
@@ -40,42 +38,62 @@ def run(cfg: dict, zotero=None, cite=False, force=False, quiet=False) -> None:
 
     n = len(stems)
     total_steps = 4 if cite else 3
-    email_note = f"polite pool: {email}" if email else "set crossref_email in config.yaml for polite pool"
 
     # Announce the full pipeline before any blocking call (liveness rule)
-    ui.header("pepa-prep  —  bibliography enrichment")
+    ui.header("pepa-prep: bibliography enrichment")
     ui.info(f"{n} paper(s) found in corpus")
     ui.info(f"Output folder: {out_dir.resolve()}")
-    ui.info(f"Crossref: {email_note}")
+    ui.info(f"OpenAlex: {_access_note(api_key, email)}")
     _show_plan(cite, total_steps)
 
-    # Step 1: match Zotero
     ui.step(f"Step 1/{total_steps}: Match Zotero library")
     records = match.load_zotero(zotero_path)
     ui.info(f"loaded {len(records)} records from {Path(zotero_path).name}")
     matches = match.match_all(stems, records)
     n_matched = sum(1 for v in matches.values() if v)
-    ui.ok(f"{n_matched}/{n} matched  ·  {n - n_matched} will use Crossref title search")
+    ui.ok(f"{n_matched}/{n} matched  ·  {n - n_matched} will use OpenAlex title search")
 
-    # Step 2+3: Crossref fetch + write (interleaved so progress shows per paper)
+    ui.step(f"Step 2/{total_steps}: Fetch OpenAlex + write output")
+    opts = {"email": email, "api_key": api_key, "force": force, "quiet": quiet}
+    result = _fetch_and_write(stems, matches, out_dir, opts)
+    ui.ok(f"{result['done']} written  ·  {result['skipped']} skipped  ·  "
+          f"{result['errors']} failed")
+
+    if not cite:
+        _done_summary(out_dir, result["done"])
+        return
+
+    ui.step(f"Step 4/{total_steps}: Fetch citation networks (OpenCitations)")
+    cited = _fetch_citations(stems, out_dir, quiet)
+    ui.ok(f"{cited['done']} enriched  ·  {cited['skipped']} skipped (no DOI)")
+    _done_summary(out_dir, result["done"])
+
+
+def _fetch_and_write(stems: list, matches: dict, out_dir: Path, opts: dict) -> dict:
+    """Fetch bibliographic data for each stem and write it to disk.
+
+    Returns:
+        {"done": files written, "skipped": files left as-is, "errors": failed lookups}.
+    """
+    n = len(stems)
     done = skipped = errors = 0
-    ui.step(f"Step 2/{total_steps}: Fetch Crossref + write output")
     for i, stem in enumerate(stems, 1):
         ui.info(f"[{i}/{n}] {stem}")  # always before the blocking API call
 
-        if not force and write.exists(out_dir, stem):
+        if not opts["force"] and write.exists(out_dir, stem):
             skipped += 1
-            if not quiet:
+            if not opts["quiet"]:
                 ui.info("  · skip (exists)")
             continue
 
         try:
             zrec = matches.get(stem)
-            biblio_data, source = _fetch_one(stem, zrec, email, quiet)
+            fetched = _fetch_one(stem, zrec, opts["email"], opts["api_key"], opts["quiet"])
+            biblio_data = fetched["data"]
             biblio_data.update({
                 "source_file": f"sum_{stem}.md",
                 "stem": stem,
-                "match_source": source,
+                "match_source": fetched["source"],
             })
             if biblio_data.get("title"):
                 biblio_data["apa"] = write.apa_string(
@@ -89,41 +107,40 @@ def run(cfg: dict, zotero=None, cite=False, force=False, quiet=False) -> None:
         except Exception as e:
             errors += 1
             ui.error(f"  · failed: {e}")
+    return {"done": done, "skipped": skipped, "errors": errors}
 
-    ui.ok(f"{done} written  ·  {skipped} skipped  ·  {errors} failed")
 
-    if not cite:
-        _done_summary(out_dir, done)
-        return
+def _fetch_citations(stems: list, out_dir: Path, quiet: bool) -> dict:
+    """Fetch citation networks for every stem that already has a DOI on file.
 
-    # Step 4: OpenCitations citation networks
-    cite_done = cite_skip = 0
-    ui.step(f"Step 4/{total_steps}: Fetch citation networks (OpenCitations)")
+    Returns:
+        {"done": files enriched, "skipped": files with no biblio record or no DOI}.
+    """
+    n = len(stems)
+    done = skipped = 0
     for i, stem in enumerate(stems, 1):
         ui.info(f"[{i}/{n}] {stem}")  # always before the blocking API call
         existing = write.load(out_dir, stem)
         if not existing:
-            cite_skip += 1
+            skipped += 1
             continue
         doi = existing.get("doi", "")
         if not doi:
-            cite_skip += 1
+            skipped += 1
             if not quiet:
-                ui.info("  · no DOI — skipping")
+                ui.info("  · no DOI, skipping")
             continue
         existing["references"] = opencitations.references(doi)
         existing["cited_by"] = opencitations.citations(doi)
         write.save(out_dir, stem, existing)
-        cite_done += 1
-
-    ui.ok(f"{cite_done} enriched  ·  {cite_skip} skipped (no DOI)")
-    _done_summary(out_dir, done)
+        done += 1
+    return {"done": done, "skipped": skipped}
 
 
 def _show_plan(cite: bool, total_steps: int) -> None:
     steps = [
         f"[1/{total_steps}] match Zotero",
-        f"[2/{total_steps}] fetch Crossref",
+        f"[2/{total_steps}] fetch OpenAlex",
         f"[3/{total_steps}] write output",
     ]
     if cite:
@@ -166,41 +183,45 @@ def _resolve_zotero(zotero, cfg: dict) -> str:
             "Drop it in input/ or pass --zotero <file>."
         )
     raise SystemExit(
-        "Multiple JSON files found in input/ — specify one with --zotero <file>.\n"
+        "Multiple JSON files found in input/, specify one with --zotero <file>.\n"
         + "\n".join(f"  {p}" for p in unique)
     )
 
 
-def _fetch_one(stem: str, zrec: dict | None, email: str, quiet: bool) -> tuple[dict, str]:
-    """Fetch from Crossref; fall back to Zotero fields or a stem-derived title search."""
+def _fetch_one(stem: str, zrec: dict | None, email: str, api_key: str, quiet: bool) -> dict:
+    """Fetch from OpenAlex; fall back to Zotero fields or a stem-derived title search.
+
+    Returns:
+        {"data": biblio fields, "source": "openalex_doi" | "openalex_title" | "zotero" | "none"}.
+    """
     doi = (zrec.get("DOI", "") or "").strip() if zrec else ""
 
     if doi:
-        msg = crossref.by_doi(doi, email)
+        msg = openalex.by_doi(doi, email, api_key)
         if msg:
             if not quiet:
-                ui.info("  · Crossref DOI hit")
-            return crossref.extract(msg), "crossref_doi"
+                ui.info("  · OpenAlex DOI hit")
+            return {"data": openalex.extract(msg), "source": "openalex_doi"}
 
     title_hint = (zrec.get("title", "") or "").strip() if zrec else ""
     if not title_hint:
         title_hint = stem.replace("_", " ")
 
     if title_hint:
-        msg = crossref.by_title(title_hint, email)
+        msg = openalex.by_title(title_hint, email, api_key)
         if msg:
             if not quiet:
-                ui.info("  · Crossref title match")
-            return crossref.extract(msg), "crossref_title"
+                ui.info("  · OpenAlex title match")
+            return {"data": openalex.extract(msg), "source": "openalex_title"}
 
     if zrec:
         if not quiet:
-            ui.info("  · Zotero fields only (Crossref returned nothing)")
-        return _from_zotero(zrec), "zotero"
+            ui.info("  · Zotero fields only (OpenAlex returned nothing)")
+        return {"data": _from_zotero(zrec), "source": "zotero"}
 
     if not quiet:
         ui.warn("  · no match found")
-    return {}, "none"
+    return {"data": {}, "source": "none"}
 
 
 def _from_zotero(rec: dict) -> dict:
@@ -217,7 +238,12 @@ def _from_zotero(rec: dict) -> dict:
         except (IndexError, TypeError, ValueError):
             pass
     container = rec.get("container-title", "")
-    journal = container if isinstance(container, str) else (container[0] if container else "")
+    if isinstance(container, str):
+        journal = container
+    elif container:
+        journal = container[0]
+    else:
+        journal = ""
     doi = rec.get("DOI", "") or ""
     return {
         "title": rec.get("title", ""),

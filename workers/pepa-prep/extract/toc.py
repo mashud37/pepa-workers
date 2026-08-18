@@ -42,8 +42,16 @@ _VETO_RE = re.compile(
     r"|(?:abbildungs|tabellen)verzeichnis)\b",
     re.IGNORECASE,
 )
-_OCR_DIGITS = str.maketrans({"I": "1", "l": "1", "|": "1", "O": "0", "o": "0",
-                             "S": "5", "s": "5", "B": "8"})
+_OCR_DIGITS = str.maketrans({
+    "I": "1",
+    "l": "1",
+    "|": "1",
+    "O": "0",
+    "o": "0",
+    "S": "5",
+    "s": "5",
+    "B": "8",
+})
 _ROMAN_VALUES = {"i": 1, "v": 5, "x": 10, "l": 50, "c": 100, "d": 500, "m": 1000}
 
 
@@ -55,23 +63,27 @@ def _roman(token: str) -> int:
     return total
 
 
-def _page_no(token: str) -> tuple | None:
+def _page_no(token: str) -> dict | None:
     t = _LEADER_RE.sub("", token).strip().strip("()[]")
     if not t:
         return None
     if _ARABIC_RE.match(t):
-        return int(t), False
+        return {"no": int(t), "roman": False}
     if _ROMAN_RE.match(t):
-        return _roman(t), True
+        return {"no": _roman(t), "roman": True}
     repaired = t.translate(_OCR_DIGITS).replace(" ", "")
     if _ARABIC_RE.match(repaired) and any(c.isdigit() for c in t):
-        return int(repaired), False
+        return {"no": int(repaired), "roman": False}
     return None
 
 
 def _rows(page: list) -> list:
-    lines = sorted((ln for block in page for ln in block if ln["text"].strip()),
-                   key=lambda ln: (ln["y0"], ln["x0"]))
+    flat_lines = []
+    for block in page:
+        for ln in block:
+            if ln["text"].strip():
+                flat_lines.append(ln)
+    lines = sorted(flat_lines, key=lambda ln: (ln["y0"], ln["x0"]))
     rows: list = []
     for ln in lines:
         if rows and _same_row(rows[-1], ln):
@@ -105,14 +117,24 @@ def _row_entry(row: dict, width: float, col_right: float) -> dict | None:
         if no is not None and (right_edge or _LEADER_RE.search(lines[-2]["text"])):
             title = _LEADER_RE.sub("", norm(" ".join(ln["text"] for ln in lines[:-1]))).strip()
             if title:
-                return {"title": title, "no": no[0], "roman": no[1],
-                        "x0": row["x0"], "bold": row["bold"]}
+                return {
+                    "title": title,
+                    "no": no["no"],
+                    "roman": no["roman"],
+                    "x0": row["x0"],
+                    "bold": row["bold"],
+                }
     m = _INLINE_RE.match(row["text"])
     if m and right_edge:
         no = _page_no(m.group("no"))
         if no is not None:
-            return {"title": m.group("title").strip(), "no": no[0], "roman": no[1],
-                    "x0": row["x0"], "bold": row["bold"]}
+            return {
+                "title": m.group("title").strip(),
+                "no": no["no"],
+                "roman": no["roman"],
+                "x0": row["x0"],
+                "bold": row["bold"],
+            }
     return None
 
 
@@ -121,20 +143,33 @@ def _loose_entry(row: dict, page_count: int) -> dict | None:
     if not m:
         return None
     no = _page_no(m.group("no"))
-    if no is None or (not no[1] and no[0] > max(2 * page_count, 400)):
+    if no is None or (not no["roman"] and no["no"] > max(2 * page_count, 400)):
         return None
-    return {"title": m.group("title").strip(), "no": no[0], "roman": no[1],
-            "x0": row["x0"], "bold": row["bold"]}
+    return {
+        "title": m.group("title").strip(),
+        "no": no["no"],
+        "roman": no["roman"],
+        "x0": row["x0"],
+        "bold": row["bold"],
+    }
 
 
 def _page_entries(rows: list, width: float, page_count: int) -> dict:
     """Map row index → parsed entry, falling back to single-space rows when the
     page has no aligned number column and the loose values read like page numbers."""
     col_right = max((r["x1"] for r in rows), default=0.0)
-    strict = {i: e for i, r in enumerate(rows) if (e := _row_entry(r, width, col_right))}
+    strict = {}
+    for i, r in enumerate(rows):
+        entry = _row_entry(r, width, col_right)
+        if entry:
+            strict[i] = entry
     if len(strict) >= _MIN_ROWS_TITLED:
         return strict
-    loose = {i: e for i, r in enumerate(rows) if (e := _loose_entry(r, page_count))}
+    loose = {}
+    for i, r in enumerate(rows):
+        entry = _loose_entry(r, page_count)
+        if entry:
+            loose[i] = entry
     arabic = [e["no"] for e in loose.values() if not e["roman"]]
     if len(loose) >= _MIN_ROWS and _inversions(arabic) <= _MAX_INVERSIONS:
         return loose
@@ -190,7 +225,7 @@ def find_toc(pages: list, widths: list, toc_words: set) -> range | None:
 
 def find_lists(pages: list, widths: list) -> set:
     """Pages in the front window that are figure/table/plate lists (ToC-shaped
-    pages under a veto heading) — navigation furniture to exclude from units."""
+    pages under a veto heading): navigation furniture to exclude from units."""
     n = len(pages)
     limit = min(n, _SEARCH_CAP, max(6, round(n * _SEARCH_FRACTION)))
     hits: set = set()
@@ -305,16 +340,32 @@ def label_offset(doc, entries: list) -> int | None:
 _FOLIO_EDGE_RE = re.compile(r"^(\d{1,4})\b(?:\s|$)|\s(\d{1,4})$")
 
 
+def _flat_lines(page: list) -> list:
+    flat = []
+    for block in page:
+        for ln in block:
+            if ln["text"].strip():
+                flat.append(ln)
+    return flat
+
+
+def _folio_digits(m, t: str) -> str:
+    for g in m.groups():
+        if g:
+            return g
+    return t
+
+
 def folio_offset(pages: list) -> int | None:
     """Offset from printed folio lines in page headers/footers (modal, gated)."""
     diffs: Counter = Counter()
     for pno, page in enumerate(pages):
-        flat = [ln for block in page for ln in block if ln["text"].strip()]
+        flat = _flat_lines(page)
         for ln in flat[:2] + flat[-2:]:
             t = ln["text"].strip()
             m = _FOLIO_RE.match(t) or _FOLIO_EDGE_RE.search(t)
             if m:
-                folio = next(g for g in m.groups() if g) if m.groups() else t
+                folio = _folio_digits(m, t)
                 diffs[pno - int(folio)] += 1
     if not diffs:
         return None

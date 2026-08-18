@@ -30,12 +30,11 @@ def apa_string(title: str, authors: list[dict], year: int | None, journal: str) 
     if not authors:
         author_str = "Unknown"
     else:
-        def _fmt(a: dict) -> str:
+        parts = []
+        for a in authors[:6]:
             given = a.get("given", "")
             initials = "".join(f"{p[0]}." for p in given.split() if p) if given else ""
-            return f"{a.get('family', '')}, {initials}".rstrip(", ")
-
-        parts = [_fmt(a) for a in authors[:6]]
+            parts.append(f"{a.get('family', '')}, {initials}".rstrip(", "))
         if len(authors) > 6:
             parts.append("et al.")
         author_str = ", ".join(parts[:-1]) + f", & {parts[-1]}" if len(parts) > 1 else parts[0]

@@ -1,9 +1,11 @@
+import os
 from pathlib import Path
 
 import yaml
 
 _ROOT = Path(__file__).parent.parent
 _CONFIG_PATH = _ROOT / "config.yaml"
+_SECRETS_PATH = _ROOT / "secrets.yaml"
 
 _DEFAULT: dict = {
     "input_folder": "./input",
@@ -18,7 +20,7 @@ _DEFAULT: dict = {
     "biblio_corpus": "../pepa-sum/output",
     "biblio_output": "./output",
     "biblio_zotero": "",
-    "crossref_email": "",
+    "openalex_email": "",
 }
 
 
@@ -33,3 +35,14 @@ def load() -> dict:
 def save(cfg: dict) -> None:
     with _CONFIG_PATH.open("w", encoding="utf-8") as f:
         yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True)
+
+
+def openalex_api_key() -> str:
+    """Optional OpenAlex premium key: OPENALEX_API_KEY env var wins over secrets.yaml."""
+    if os.environ.get("OPENALEX_API_KEY"):
+        return os.environ["OPENALEX_API_KEY"]
+    if not _SECRETS_PATH.exists():
+        return ""
+    secrets = yaml.safe_load(_SECRETS_PATH.read_text(encoding="utf-8")) or {}
+    key = secrets.get("openalex_api_key", "")
+    return key if key and not key.startswith("<") else ""

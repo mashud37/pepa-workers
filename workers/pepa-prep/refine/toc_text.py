@@ -2,7 +2,7 @@
 import re
 
 from extract import anchor
-from extract.anchor import _key
+from extract.anchor import text_key
 from extract.shape import _ORD_RE
 
 from . import signals
@@ -23,31 +23,36 @@ _HIER_RE = re.compile(r"^\d{1,2}\.\d")
 
 
 def _is_toc_word(text: str, keys: set) -> bool:
-    hk = _key(text)
+    hk = text_key(text)
     return any(hk == k or hk.startswith(k + " ") or hk.startswith("inhalt") for k in keys)
 
 
 def _toc_head(lines: list, heads: list, toc_words: set) -> int | None:
     front = min(len(lines), max(200, len(lines) // 10))
-    keys = {_key(w) for w in toc_words}
+    keys = {text_key(w) for w in toc_words}
     for h in heads:
         if h["line"] < front and _is_toc_word(h["text"], keys):
             return h["line"]
     for i, ln in enumerate(lines[:front]):
         t = ln.strip()
-        if t and len(t) <= 40 and _key(t) in keys:
+        if t and len(t) <= 40 and text_key(t) in keys:
             return i
     return None
 
 
-def _collect(lines: list, start: int) -> tuple[list, int]:
+def _collect(lines: list, start: int) -> dict:
+    """Scan lines after the ToC heading for entry-shaped rows.
+
+    Returns:
+        {"rows": [(line, text)], "end": last line index still inside the ToC}.
+    """
     rows, seen, prose_run, end = [], set(), 0, start
     for i in range(start + 1, min(start + 1 + _SCAN_CAP, len(lines))):
         t = lines[i].strip()
         if not t:
             continue
         clean = t.lstrip("#").strip()
-        if signals._HEAD_RE.match(lines[i]) and _key(clean) in seen:
+        if signals._HEAD_RE.match(lines[i]) and text_key(clean) in seen:
             break
         if len(clean) >= _PROSE_CHARS:
             prose_run += 1
@@ -57,9 +62,9 @@ def _collect(lines: list, start: int) -> tuple[list, int]:
         prose_run = 0
         if len(clean) <= _ENTRY_MAX:
             rows.append((i, clean))
-            seen.add(_key(clean))
+            seen.add(text_key(clean))
             end = i
-    return rows, end
+    return {"rows": rows, "end": end}
 
 
 def _entries(rows: list) -> list:
@@ -68,9 +73,12 @@ def _entries(rows: list) -> list:
         t = _TRAIL_RE.sub("", text).strip()
         if _DOTS_RE.match(t) or sum(c.isalpha() for c in t) < _MIN_ALPHA:
             continue
-        out.append({"line": line, "text": t,
-                    "marker": bool(_MARKER_RE.match(t)),
-                    "hier": bool(_HIER_RE.match(t))})
+        out.append({
+            "line": line,
+            "text": t,
+            "marker": bool(_MARKER_RE.match(t)),
+            "hier": bool(_HIER_RE.match(t)),
+        })
     return out
 
 
@@ -97,7 +105,11 @@ def _top_level(entries: list) -> list:
 
 
 def _in_list_context(lines: list, idx: int) -> bool:
-    nxt = next((ln.strip() for ln in lines[idx + 1:idx + 4] if ln.strip()), "")
+    nxt = ""
+    for ln in lines[idx + 1:idx + 4]:
+        if ln.strip():
+            nxt = ln.strip()
+            break
     return bool(_MARKER_RE.match(nxt.lstrip("#").strip())) or bool(
         signals._HEAD_RE.match(nxt) and _MARKER_RE.match(nxt.lstrip("#").strip()))
 
@@ -152,8 +164,8 @@ def recover(lines: list, heads: list, toc_words: set, cands: list | None = None)
     start = _toc_head(lines, heads, toc_words)
     if start is None:
         return None
-    rows, end = _collect(lines, start)
-    top = _top_level(_entries(rows))
-    rng = range(start, end + 1)
+    collected = _collect(lines, start)
+    top = _top_level(_entries(collected["rows"]))
+    rng = range(start, collected["end"] + 1)
     return {"rng": rng, "expected": len(top),
             "anchors": _anchor_titles(top, cands or heads, rng, lines)}

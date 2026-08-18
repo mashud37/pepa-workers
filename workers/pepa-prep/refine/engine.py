@@ -16,6 +16,13 @@ _QUAR_MAX_SHARE = 0.30
 _TOC_OVERLAP = 0.5
 _DEFAULT_TOC_WORDS = ("contents", "table of contents", "inhalt", "inhaltsverzeichnis")
 _HEAD_MARK_RE = re.compile(r"^#+\s*")
+_ACTION_LABELS = (
+    ("demoted", "demote"),
+    ("merged", "merges"),
+    ("split", "splits"),
+    ("joined", "joins"),
+    ("quarantined", "quarantine"),
+)
 
 
 def load_book(stem: str, group: list) -> dict:
@@ -33,7 +40,8 @@ def _context(book: dict, cfg: dict) -> dict:
     lines = book["lines"]
     heads = signals.headings(lines)
     offs = signals.char_offsets(lines)
-    fw, vocab = signals.lexicon(lines)
+    lex = signals.lexicon(lines)
+    fw, vocab = lex["function_words"], lex["vocab"]
     demoted = set(headings.false_headings(lines, heads, fw))
     sound = [h for h in heads if h["line"] not in demoted]
     recur = headings.recurring(sound, offs)
@@ -43,10 +51,19 @@ def _context(book: dict, cfg: dict) -> dict:
     words = {w.casefold() for w in cfg.get("toc_headings", _DEFAULT_TOC_WORDS)}
     toc = toc_text.recover(lines, sound, words, cands)
     anchors = toc["anchors"] if toc else []
-    return {"heads": heads, "offs": offs, "fw": fw, "vocab": vocab,
-            "demoted": demoted, "live": {h["line"] for h in live},
-            "live_heads": live, "cands": cands, "recur": recur, "toc": toc,
-            "anchor_lines": {ln for ln, _ in anchors}}
+    return {
+        "heads": heads,
+        "offs": offs,
+        "fw": fw,
+        "vocab": vocab,
+        "demoted": demoted,
+        "live": {h["line"] for h in live},
+        "live_heads": live,
+        "cands": cands,
+        "recur": recur,
+        "toc": toc,
+        "anchor_lines": {ln for ln, _ in anchors},
+    }
 
 
 def _opener_lines(lines: list, start: int) -> list:
@@ -90,7 +107,11 @@ _TERMINAL_PUNCT = tuple(".!?:;,\"'”’)]…")
 
 
 def _title_like(text: str) -> bool:
-    first = next((c for c in text if c.isalpha()), "")
+    first = ""
+    for c in text:
+        if c.isalpha():
+            first = c
+            break
     return (len(text) <= 60 and not text.endswith(_TERMINAL_PUNCT)
             and not first.islower())
 
@@ -128,12 +149,6 @@ def _nearest_snap(lines: list, bounds: list, targets: set, window: int) -> list:
     return sorted(set(out))
 
 
-def _snap_bounds(book: dict, ctx: dict, bounds: list) -> list:
-    """Move existing boundaries onto a nearby anchored title (the printed ToC
-    knows where units start; old boundaries are often a page or two off)."""
-    return _nearest_snap(book["lines"], bounds, ctx["anchor_lines"], _SNAP_LINES)
-
-
 def _chain(ctx: dict) -> list:
     """Longest 1..N same-level run of short ordinal headings (N >= 5)."""
     hits = []
@@ -154,16 +169,21 @@ def _chain(ctx: dict) -> list:
     return [ln for ln, _, _ in best] if len(best) >= _MIN_CHAIN else []
 
 
-def _adopt_chain(book: dict, ctx: dict, bounds: list) -> tuple[list, int]:
+def _adopt_chain(book: dict, ctx: dict, bounds: list) -> dict:
     """When a clean Chapter-1..N heading chain exists, it defines the units
-    between its first and last member; stray boundaries inside merge away."""
+    between its first and last member; stray boundaries inside merge away.
+
+    Returns:
+        {"bounds": list of boundary line numbers, "chained": count of
+        boundaries the chain moved or added}.
+    """
     chain = _chain(ctx)
     if not chain:
-        return bounds, 0
+        return {"bounds": bounds, "chained": 0}
     offs = ctx["offs"]
     spans = [offs[z] - offs[a] for a, z in zip(chain, chain[1:])]
     if statistics.median(spans) < 4 * signals.PAGE_CHARS:
-        return bounds, 0
+        return {"bounds": bounds, "chained": 0}
     lines = book["lines"]
     keep = {0} | {_walk_up(lines, ln, 0) for ln in chain} | set(chain)
     keep |= ctx["anchor_lines"]
@@ -173,7 +193,7 @@ def _adopt_chain(book: dict, ctx: dict, bounds: list) -> tuple[list, int]:
     added = [ln for ln in chain
              if all(abs(ln - b) > _NEAR_SPLIT for b in out)]
     dropped = len(bounds) - len([b for b in bounds if b in out])
-    return sorted(set(out) | set(added)), dropped + len(added)
+    return {"bounds": sorted(set(out) | set(added)), "chained": dropped + len(added)}
 
 
 def _template_hits(ctx: dict, a: int, z: int) -> list:
@@ -239,7 +259,7 @@ def _splits(book: dict, ctx: dict, bounds: list, cfg: dict) -> list:
     for dropped in ((), ("template",), ("template", "ordinal")):
         chosen = [s for kind, s in gated if kind not in dropped]
         test = sorted(set(bounds) | set(chosen))
-        if not chosen or signals.plausible(signals.unit_spans(test, ctx["offs"]), cfg)[0]:
+        if not chosen or signals.plausible(signals.unit_spans(test, ctx["offs"]), cfg)["ok"]:
             return chosen
     return []
 
@@ -269,9 +289,9 @@ def _quar_reason(ctx: dict, lines: list, rng: tuple, first: bool) -> str | None:
     a, z = rng
     if any(a <= ln < z for ln in ctx["anchor_lines"]):
         return None
-    appar, reasons = zones.is_apparatus(lines[a:z], ctx["fw"])
-    if appar:
-        return "; ".join(reasons)
+    verdict = zones.is_apparatus(lines[a:z], ctx["fw"])
+    if verdict["apparatus"]:
+        return "; ".join(verdict["reasons"])
     if _toc_share(ctx, a, z) >= _TOC_OVERLAP:
         return "contents pages"
     if first and ctx["offs"][z] - ctx["offs"][a] < _MIN_UNIT:
@@ -306,10 +326,11 @@ def analyse(book: dict, cfg: dict) -> dict:
     ctx = _context(book, cfg)
     removed = _merge_bounds(book, ctx)
     bounds = sorted((set(book["starts"]) - removed) | {0})
-    bounds = _snap_bounds(book, ctx, bounds)
+    bounds = _nearest_snap(book["lines"], bounds, ctx["anchor_lines"], _SNAP_LINES)
     splits = _splits(book, ctx, bounds, cfg)
     bounds = sorted(set(bounds) | set(splits))
-    bounds, chained = _adopt_chain(book, ctx, bounds)
+    chain_result = _adopt_chain(book, ctx, bounds)
+    bounds, chained = chain_result["bounds"], chain_result["chained"]
     bounds = _merge_small(bounds, ctx)
     quarantine = _quarantines(book, ctx, bounds)
     joins = seams.dehyphen_points(book["lines"], ctx["vocab"])
@@ -320,10 +341,17 @@ def analyse(book: dict, cfg: dict) -> dict:
     if ctx["toc"]:
         notes.insert(0, f"toc: {len(ctx['anchor_lines'])}/{ctx['toc']['expected']} "
                         "titles anchored")
-    return {"bounds": bounds, "demote": sorted(ctx["demoted"]), "merges": sorted(removed),
-            "splits": sorted(splits), "quarantine": quarantine, "joins": joins,
-            "n_before": len(book["starts"]), "n_after": len(bounds) - len(quarantine),
-            "notes": notes}
+    return {
+        "bounds": bounds,
+        "demote": sorted(ctx["demoted"]),
+        "merges": sorted(removed),
+        "splits": sorted(splits),
+        "quarantine": quarantine,
+        "joins": joins,
+        "n_before": len(book["starts"]),
+        "n_after": len(bounds) - len(quarantine),
+        "notes": notes,
+    }
 
 
 def has_actions(plan: dict) -> bool:
@@ -332,9 +360,7 @@ def has_actions(plan: dict) -> bool:
 
 
 def actions_summary(plan: dict) -> str:
-    parts = [f"{label} {len(plan[key])}" for label, key in
-             (("demoted", "demote"), ("merged", "merges"), ("split", "splits"),
-              ("joined", "joins"), ("quarantined", "quarantine")) if plan[key]]
+    parts = [f"{label} {len(plan[key])}" for label, key in _ACTION_LABELS if plan[key]]
     return " · ".join(parts)
 
 
@@ -387,7 +413,7 @@ def apply_plan(book: dict, plan: dict, out_dir: Path) -> int:
     stops = bounds[1:] + [len(book["lines"])]
     units = [_edit_unit(book["lines"], a, z, plan) for a, z in zip(bounds, stops)]
     if _alnum("".join(units)) != _alnum("\n".join(book["lines"])):
-        raise ValueError("content invariance check failed — nothing written")
+        raise ValueError("content invariance check failed: nothing written")
     quarantined = {i for i, _ in plan["quarantine"]}
     review = out_dir / "_review"
     for i in quarantined:

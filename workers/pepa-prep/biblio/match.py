@@ -1,10 +1,5 @@
-"""Match pepa-sum file stems to Zotero CSL-JSON records.
-
-Each stem is derived from the sum_*.md filename (strip the leading "sum_").
-Matching is a token-overlap heuristic: words from the stem that appear in the
-Zotero record's title or author fields score one point each. Tokens shorter
-than 3 characters are ignored to avoid noise from stop words and initials.
-A match is accepted when at least two tokens match.
+"""Match pepa-sum file stems to Zotero CSL-JSON records by token overlap
+between the stem and each record's title or author fields.
 """
 import json
 from pathlib import Path

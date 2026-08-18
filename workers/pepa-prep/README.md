@@ -1,6 +1,6 @@
 # pepa-prep
 
-pepa-prep exists because everything downstream in the pepa suite depends on clean, uniform text, and PDFs almost never come that way. It takes a folder of PDFs, whether born-digital papers, multi-chapter books, or scanned volumes, and turns each one into clean markdown, so the later stages can work on the content instead of fighting the layout. Everything runs locally and deterministically, with no API calls, so the source material never leaves the machine.
+The job of pepa-prep is to produce clean, uniform text, and PDFs almost never come that way. It takes a folder of PDFs, whether born-digital papers, multi-chapter books, or scanned volumes, and turns each one into clean markdown, so the later stages can work on the content instead of fighting the layout. Everything runs locally and deterministically, with no API calls, so the source material never leaves the machine.
 
 ## Data flow
 
@@ -29,7 +29,7 @@ flowchart TD
     PRIOR --> MD
 
     MD --> VAL["validate<br/>grade chapters, quarantine junk,<br/>renumber &rarr; report.md"]
-    MD --> SPLIT["split<br/>manual chapter markers<br/>for single-block books"]
+    MD --> SPLIT["split<br/>manual chapter markers<br/>for any book"]
     MD --> REF["refine<br/>repair boundaries from text<br/>ToC anchor, seam repair, zoning"]
 
     VAL --> FINAL[("Clean chaptered<br/>markdown corpus")]
@@ -74,7 +74,7 @@ Run `python manage.py` with no arguments for the interactive menu, or call any a
 |---|---|
 | Convert PDFs to clean markdown | `manage.py extract` |
 | Grade, quarantine, and renumber a book's chapters | `manage.py validate` (`-n` to preview) |
-| Mark chapter boundaries by hand | `manage.py split` |
+| Correct chapter boundaries by hand | `manage.py split` (`--file` for one book) |
 | Repair chapter boundaries from the text | `manage.py refine` (`--apply` to write) |
 | Fetch bibliography metadata for pepa-sum papers | `manage.py biblio` (`--cite` for citation networks) |
 | Check dependencies | `manage.py install` |
@@ -104,7 +104,7 @@ Splitting a book cleanly is the hard part, and it does not always come out right
 
 `refine` is the repair pass, and it works from the markdown alone, no source PDF needed, which matters because re-extracting a large OCR corpus is slow. It re-finds the printed contents page in the text and re-anchors the split to it, demotes a "heading" that turns out to be a running head repeated on every page, rejoins boundaries that fall mid-sentence, and quarantines front and back matter (indexes, bibliographies, copyright pages) by their textual density rather than by any keyword list. Every repair is gated by the same shape priors, so nothing is allowed to make a book's shape less plausible. On its own it only diagnoses and writes a report; add `--apply` to commit the repairs, and `--book STEM` to limit it to one book.
 
-`split` is the manual escape hatch for when a book has no outline and no recognisable headings, so it comes out as a single block. The command opens the file in your editor; you scroll through and drop a `<!-- chapter -->` line wherever a chapter should begin, save, and it writes the numbered files.
+`split` is the manual escape hatch for when the automatic passes get a book wrong. It searches every extracted book, whichever route it took: type part of an author or title, pick from the matches, and the book opens in your editor. A book that came out as a single block opens as one file for you to drop `<!-- chapter -->` lines into; a book already split into chapters opens as one file with a marker at each current boundary, so you move, add, or remove markers to correct an over- or under-split. On save it rewrites that book's numbered chapter files. Pass `--file PATH_OR_STEM` to jump straight to one book.
 
 ## Evaluation
 
@@ -143,4 +143,4 @@ OCR is optional, and only kicks in for scanned PDFs with no text layer. To enabl
 pip install pytesseract Pillow
 ```
 
-Install the Tesseract binary separately (see <https://tesseract-ocr.github.io/>), and set `tesseract_cmd` in the config if it is not on your PATH.
+Install the Tesseract binary separately (see <https://github.com/tesseract-ocr/tesseract>), and set `tesseract_cmd` in the config if it is not on your PATH.

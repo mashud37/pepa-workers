@@ -14,20 +14,25 @@ _HYPHEN_RE = re.compile(r"([^\W\d_]{2,})-$")
 _LEAD_WORD_RE = re.compile(r"^([^\W\d_]{2,})")
 
 
-def _prev_text(lines: list, bound: int) -> str:
-    return next((ln.strip() for ln in reversed(lines[:bound]) if ln.strip()), "")
-
-
-def _next_text(lines: list, bound: int) -> str:
-    return next((ln.strip() for ln in lines[bound:] if ln.strip()), "")
-
-
 def broken_seam(lines: list, bound: int) -> bool:
     """True when the text runs mid-sentence across a unit boundary."""
-    prev, nxt = _prev_text(lines, bound), _next_text(lines, bound)
+    prev = ""
+    for ln in reversed(lines[:bound]):
+        if ln.strip():
+            prev = ln.strip()
+            break
+    nxt = ""
+    for ln in lines[bound:]:
+        if ln.strip():
+            nxt = ln.strip()
+            break
     if not prev or not nxt or prev.startswith("#") or nxt.startswith("#"):
         return False
-    first = next((c for c in nxt if c.isalpha()), "")
+    first = ""
+    for c in nxt:
+        if c.isalpha():
+            first = c
+            break
     return not prev.endswith(_TERMINAL) and not prev[-1].isdigit() and first.islower()
 
 

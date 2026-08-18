@@ -11,14 +11,15 @@ _ROOT = Path(__file__).parent.parent
 REPORT = _ROOT / "data" / "refine_report.md"
 
 
-def _trunc(name: str) -> str:
-    return name if len(name) <= _MAX_NAME else name[: _MAX_NAME - 3] + "..."
+def _gather(cfg: dict, book: str | None) -> dict:
+    """Return the extracted-text folder and the chapter-file groups to refine.
 
-
-def _gather(cfg: dict, book: str | None) -> tuple[Path, list]:
+    Returns:
+        {"out_dir": text output folder, "items": sorted [(stem, group)] pairs}.
+    """
     out_dir = Path(cfg["output_folder"]) / "text"
     if not out_dir.is_dir():
-        raise SystemExit(f"No extracted text found in {out_dir} — run extract first")
+        raise SystemExit(f"No extracted text found in {out_dir}, run extract first")
     groups = book_groups(out_dir)
     if book:
         needle = book.casefold()
@@ -26,11 +27,12 @@ def _gather(cfg: dict, book: str | None) -> tuple[Path, list]:
     if not groups:
         raise SystemExit("No chapter files (text_<stem>_NN.md) found"
                          + (f" matching '{book}'" if book else "") + ".")
-    return out_dir, sorted(groups.items())
+    return {"out_dir": out_dir, "items": sorted(groups.items())}
 
 
 def run(cfg: dict, apply: bool = False, book: str | None = None) -> None:
-    out_dir, items = _gather(cfg, book)
+    gathered = _gather(cfg, book)
+    out_dir, items = gathered["out_dir"], gathered["items"]
 
     ui.step("Plan")
     ui.info("Step 1/2: Analyse books and plan repairs")
@@ -42,7 +44,8 @@ def run(cfg: dict, apply: bool = False, book: str | None = None) -> None:
     ui.step(f"Step 1/2: Analyse  [{len(items)} book(s)]")
     rows, changed, errors = [], 0, 0
     for i, (stem, group) in enumerate(items, 1):
-        ui.info(f"[{i}/{len(items)}] {_trunc(stem)}")
+        short_stem = stem if len(stem) <= _MAX_NAME else stem[: _MAX_NAME - 3] + "..."
+        ui.info(f"[{i}/{len(items)}] {short_stem}")
         try:
             bk = engine.load_book(stem, group)
             plan = engine.analyse(bk, cfg)

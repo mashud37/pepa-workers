@@ -49,11 +49,6 @@ def _file_features(path: Path) -> dict:
     }
 
 
-def _typical_chapter_chars(feats: list) -> int:
-    real = [f["chars"] for f in feats if f["chars"] >= _SHORT_ABS]
-    return statistics.median(real) if real else max((f["chars"] for f in feats), default=0)
-
-
 def _verdict(feat: dict, share: float, typical: float, lone: bool) -> str:
     if feat["chars"] < _MIN_KEEP_CHARS:
         return "reject:empty"
@@ -71,7 +66,11 @@ def _verdict(feat: dict, share: float, typical: float, lone: bool) -> str:
 def grade_book(group: list) -> list:
     feats = [_file_features(p) for _, p in group]
     total = sum(f["chars"] for f in feats) or 1
-    typical = _typical_chapter_chars(feats)
+    real_chapter_chars = [f["chars"] for f in feats if f["chars"] >= _SHORT_ABS]
+    if real_chapter_chars:
+        typical = statistics.median(real_chapter_chars)
+    else:
+        typical = max((f["chars"] for f in feats), default=0)
     lone = len(group) == 1
     rows = []
     for (idx, path), feat in zip(group, feats):
@@ -102,9 +101,18 @@ def apply_grades(out_dir: Path, stem: str, rows: list, dry: bool) -> None:
 
 def write_report(out_dir: Path, graded: dict) -> None:
     lines = ["# Chapter validation report", ""]
-    kept = sum(1 for rows in graded.values() for r in rows if not r[4].startswith("reject"))
-    rejected = sum(1 for rows in graded.values() for r in rows if r[4].startswith("reject"))
-    flagged = sum(1 for rows in graded.values() for r in rows if r[4].startswith("flag"))
+    kept = 0
+    rejected = 0
+    flagged = 0
+    for rows in graded.values():
+        for r in rows:
+            verdict = r[4]
+            if not verdict.startswith("reject"):
+                kept += 1
+            if verdict.startswith("reject"):
+                rejected += 1
+            if verdict.startswith("flag"):
+                flagged += 1
     lines.append(
         f"{len(graded)} books · {kept} kept ({flagged} flagged) · "
         f"{rejected} quarantined into `_review/`"

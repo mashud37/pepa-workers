@@ -11,9 +11,9 @@ def _add_pipeline_parsers(sub) -> None:
     sub.add_parser("extract", help="Categorise and extract PDFs to markdown")
     v = sub.add_parser("validate", help="Grade book chapters, quarantine junk, renumber")
     v.add_argument("-n", "--dry-run", action="store_true", help="Report only, move nothing")
-    sp = sub.add_parser("split", help="Manually mark chapter boundaries in single-block books")
+    sp = sub.add_parser("split", help="Manually correct chapter boundaries in any book")
     sp.add_argument("--file", metavar="PATH_OR_STEM",
-                    help="Path or stem of a specific single-block file (omit for interactive list)")
+                    help="Path or stem of a specific book (omit for interactive search)")
     rf = sub.add_parser("refine", help="Repair chapter files from text signals: merge "
                         "over-splits, split merged chapters, demote junk headings")
     rf.add_argument("--apply", action="store_true",
@@ -38,7 +38,7 @@ def _add_eval_parsers(sub) -> None:
 
 
 def _add_biblio_parser(sub) -> None:
-    b = sub.add_parser("biblio", help="Fetch bibliography from Crossref for pepa-sum papers")
+    b = sub.add_parser("biblio", help="Fetch bibliography from OpenAlex for pepa-sum papers")
     b.add_argument("--zotero", metavar="FILE",
                    help="Zotero CSL-JSON export (omit to auto-detect in input/)")
     b.add_argument("--corpus", metavar="DIR",
@@ -52,10 +52,11 @@ def _add_biblio_parser(sub) -> None:
 
 
 def _run_biblio(cfg, args) -> None:
+    run_cfg = dict(cfg)
     if args.corpus:
-        cfg["biblio_corpus"] = args.corpus
+        run_cfg["biblio_corpus"] = args.corpus
     from cli import biblio_cmd
-    biblio_cmd.run(cfg, zotero=args.zotero, cite=args.cite,
+    biblio_cmd.run(run_cfg, zotero=args.zotero, cite=args.cite,
                    force=args.force, quiet=args.quiet)
 
 

@@ -18,11 +18,11 @@ def _actions() -> list:
         ("Extract PDFs", "categorise and convert PDFs to markdown", extract_cmd.run),
         ("Validate output", "grade book chapters, quarantine junk, renumber",
          validate_cmd.run),
-        ("Split chapters", "manually mark chapter boundaries in single-block books",
+        ("Split chapters", "manually correct chapter boundaries in any book",
          split_cmd.run),
         ("Refine chapters", "repair over-/under-split chapter files from text signals",
          _run_refine),
-        ("Fetch bibliography", "match Zotero + Crossref metadata for pepa-sum papers",
+        ("Fetch bibliography", "match Zotero + OpenAlex metadata for pepa-sum papers",
          lambda cfg: _run_biblio(cfg, cite=False)),
         ("Fetch bibliography + citations",
          "also download citation networks from OpenCitations",
@@ -48,14 +48,13 @@ def _actions() -> list:
 def main() -> int:
     while True:
         cfg = cfg_mod.load()
-        ui.header("pepa-prep  —  PDF → Markdown")
+        ui.header("pepa-prep: PDF → Markdown")
         ui.info(f"Input:  {cfg['input_folder']}   Output: {cfg['output_folder']}")
         actions = _actions()
         choice = ui.menu("Action", [(title, desc) for title, desc, _ in actions])
         if choice is None:
             return 0
-        actions[choice][2](cfg)
-    return 0
+        ui.run_action(actions[choice][2], cfg)
 
 
 def _run_refine(cfg: dict) -> None:

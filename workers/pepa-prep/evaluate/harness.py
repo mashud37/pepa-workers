@@ -1,7 +1,6 @@
-"""Drive the label → correct → score workflow and write the evaluation report.
-
-Pure orchestration helpers (no printing); the CLI layer owns the loops and UI.
-Streams and correction files live under data/eval/ (gitignored runtime data).
+"""Orchestrate the label, correct, and score workflow and write the
+evaluation report. The CLI layer owns the loops and UI; streams and
+corrections live under data/eval/.
 """
 import statistics
 from pathlib import Path
@@ -56,14 +55,18 @@ def build_stream(path: Path, cfg: dict, keep: set | None = None) -> dict:
     return stream
 
 
-def write_review(stream: dict) -> tuple[Path, bool]:
-    """Render the correctable tag file; never overwrite existing corrections."""
+def write_review(stream: dict) -> dict:
+    """Render the correctable tag file; never overwrite existing corrections.
+
+    Returns:
+        {"path": written or existing file, "kept": True if an existing file was left alone}.
+    """
     path = REVIEW_DIR / f"{stream['name']}{_SUFFIX}"
     if path.exists():
-        return path, True
+        return {"path": path, "kept": True}
     texts = [rec["text"] for rec in stream["lines"]]
     path.write_text(review.render(texts, predict.predict(stream)), encoding="utf-8")
-    return path, False
+    return {"path": path, "kept": False}
 
 
 def pending() -> list:
@@ -76,17 +79,22 @@ def pending() -> list:
     return out
 
 
-def grade_one(stream_path: Path, review_path: Path) -> tuple:
-    """Score the gold tags against both the pre-merge baseline and the merged predictor."""
+def grade_one(stream_path: Path, review_path: Path) -> dict:
+    """Score the gold tags against both the pre-merge baseline and the merged predictor.
+
+    Returns:
+        {"base": metrics dict or None, "merged": metrics dict or None, "note": message}.
+    """
     stream = lines.load(stream_path)
-    gold, _ = review.parse(review_path.read_text(encoding="utf-8"))
+    gold = review.parse(review_path.read_text(encoding="utf-8"))["labels"]
     base = predict.predict(stream, merge=False)
     if len(gold) != len(base):
-        return None, None, (f"line count mismatch (file {len(gold)} vs stream {len(base)}) — "
-                            "lines were added/removed; re-create with label")
+        note = (f"line count mismatch (file {len(gold)} vs stream {len(base)}): "
+                "lines were added/removed; re-create with label")
+        return {"base": None, "merged": None, "note": note}
     merged = predict.predict(stream, merge=True)
     note = "tags identical to baseline (uncorrected, or already perfect)" if gold == base else ""
-    return metrics.score(gold, base), metrics.score(gold, merged), note
+    return {"base": metrics.score(gold, base), "merged": metrics.score(gold, merged), "note": note}
 
 
 def aggregate(scores: list) -> dict:

@@ -1,8 +1,5 @@
-"""OpenCitations COCI API client — references and citation lookups by DOI.
-
-Returns lists of DOI strings so callers stay decoupled from the raw API shape.
-All requests use stdlib urllib. A 0.25 s delay respects the service's fair-use
-guidance; OpenCitations has no hard rate limit but requests politeness.
+"""Fetch reference and citation DOI lists from the OpenCitations COCI API
+by DOI, using stdlib urllib only.
 """
 import json
 import time

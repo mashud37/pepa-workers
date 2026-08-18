@@ -11,4 +11,4 @@ tesseract_cmd: ""
 biblio_corpus: ../pepa-sum/output   # path to pepa-sum output/ with sum_*.md files
 biblio_output: ./output             # biblio JSON files go into <biblio_output>/biblio/
 biblio_zotero: ""                   # default Zotero CSL-JSON path (blank = auto-detect in input/)
-crossref_email: ""                  # your email for the Crossref polite pool (~50 req/s)
+openalex_email: ""                  # your email for the OpenAlex polite pool (faster rate limit)

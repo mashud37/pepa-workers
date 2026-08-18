@@ -1,8 +1,6 @@
-"""Chapter-boundary evaluation: gold start pages vs the production detector.
-
-Gold files hold one row per chapter start; correcting is editing rows. The
-detector re-runs at scoring time, so pipeline improvements re-score without
-relabelling. Gold files live under data/eval/chapters/ (gitignored runtime data).
+"""Score the chapter-boundary detector against hand-corrected gold files
+under data/eval/chapters/. The detector reruns at scoring time, so pipeline
+improvements rescore without relabelling.
 """
 import re
 import statistics
@@ -23,11 +21,11 @@ _SUFFIX = ".chapters.md"
 TOLERANCE = 1
 
 _LEGEND = (
-    "# Chapter gold — one row per chapter start: <pdf-page><TAB><title>.\n"
+    "# Chapter gold: one row per chapter start: <pdf-page><TAB><title>.\n"
     "# Pages are 1-based PDF pages (what a PDF viewer shows), not printed folios.\n"
     "# Fix wrong pages, delete spurious rows, add missing rows; titles are context only.\n"
     "# A ToC/outline-listed part divider is its own unit; an unlisted one (title-only\n"
-    "# page before a chapter) opens the following chapter — one row at the divider page.\n"
+    "# page before a chapter) opens the following chapter, one row at the divider page.\n"
 )
 _ROW_RE = re.compile(r"^\s*(\d{1,4})(?:[\t ]+(.*))?$")
 
@@ -60,26 +58,31 @@ def predict_book(path: Path, cfg: dict) -> dict:
     scan = scan_one(path, fitz)
     if scan is None:
         raise ValueError("unreadable PDF")
-    n, fraction = scan
+    n, fraction = scan["pages"], scan["fraction"]
     r = route(n, fraction, cfg)
     if r != "book":
         return {"name": path.stem, "route": r, "bounds": [], "meta": {"strategy": "none"}}
     with fitz.open(str(path)) as doc:
         pages = doc_lines(doc, range(doc.page_count), _text_flags(fitz))
         dims = doc_dims(doc, range(doc.page_count))
-        bounds, meta = detect_chapters(doc, pages, dims, doc_stats(pages), cfg)
+        detected = detect_chapters(doc, pages, dims, doc_stats(pages), cfg)
+        bounds, meta = detected["bounds"], detected["meta"]
     return {"name": path.stem, "route": r, "bounds": bounds, "meta": meta}
 
 
-def write_gold(pred: dict) -> tuple[Path, bool]:
-    """Write the correctable gold file; never overwrite existing corrections."""
+def write_gold(pred: dict) -> dict:
+    """Write the correctable gold file; never overwrite existing corrections.
+
+    Returns:
+        {"path": written or existing file, "kept": True if an existing file was left alone}.
+    """
     path = GOLD_DIR / f"{pred['name']}{_SUFFIX}"
     if path.exists():
-        return path, True
+        return {"path": path, "kept": True}
     rows = [f"{b['page'] + 1}\t{b['title']}" for b in pred["bounds"]]
     path.write_text(_LEGEND + "\n" + "\n".join(rows) + ("\n" if rows else ""),
                     encoding="utf-8")
-    return path, False
+    return {"path": path, "kept": False}
 
 
 def parse_gold(text: str) -> list:
@@ -123,20 +126,26 @@ def score(gold: list, pred: list, tol: int = TOLERANCE) -> dict:
     }
 
 
-def grade_one(pdf_path: Path, gold_path: Path, cfg: dict) -> tuple:
+def grade_one(pdf_path: Path, gold_path: Path, cfg: dict) -> dict:
+    """Score one book's detected chapters against its gold file.
+
+    Returns:
+        {"result": score dict or None, "note": explanation when result is None}.
+    """
     if not pdf_path.exists():
-        return None, "source PDF not found"
+        return {"result": None, "note": "source PDF not found"}
     gold = [pg for pg, _ in parse_gold(gold_path.read_text(encoding="utf-8"))]
     pred = predict_book(pdf_path, cfg)
     if pred["route"] != "book":
-        return None, f"route is {pred['route']} — chapter detection only runs on the book route"
+        note = f"route is {pred['route']}: chapter detection only runs on the book route"
+        return {"result": None, "note": note}
     pages = [b["page"] for b in pred["bounds"]] or [0]
     res = score(gold, pages)
     res["strategy"] = pred["meta"]["strategy"]
     res["offset"] = pred["meta"].get("offset")
     res["verified"] = pred["meta"].get("verified")
     res["notes"] = pred["meta"].get("notes", [])
-    return res, ""
+    return {"result": res, "note": ""}
 
 
 def aggregate(scores: list) -> dict:

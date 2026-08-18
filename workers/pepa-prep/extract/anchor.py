@@ -20,14 +20,14 @@ _MIN_DERIVE = 3
 _NUM_PREFIX_RE = re.compile(r"^(?:(?:chapter|kapitel|part|teil) )?[0-9ivxlcdm]{1,7} ")
 
 
-def _key(text: str) -> str:
+def text_key(text: str) -> str:
     t = unicodedata.normalize("NFKD", text.casefold())
     t = "".join(c for c in t if not unicodedata.combining(c))
     return re.sub(r"[^a-z0-9]+", " ", t).strip()
 
 
 def _variants(text: str) -> list:
-    key = _key(text)
+    key = text_key(text)
     out = [key]
     stripped = _NUM_PREFIX_RE.sub("", key)
     if stripped and stripped != key:
@@ -46,8 +46,8 @@ def _is_candidate(ln: dict, body: float, heads: list) -> bool:
     return caps or _is_heading(ln, body, heads)
 
 
-def _page_candidates(pno: int, lines: list, stats: tuple) -> list:
-    body, heads, lh = stats
+def _page_candidates(pno: int, lines: list, stats: dict) -> list:
+    body, heads, lh = stats["body"], stats["heads"], stats["lh"]
     cands: list = []
     cur = None
     for ln in lines:
@@ -58,19 +58,32 @@ def _page_candidates(pno: int, lines: list, stats: tuple) -> list:
             cur["text"] = norm(cur["text"] + " " + ln["text"])
             cur["y1"] = ln["y1"]
         else:
-            cur = {"page": pno, "text": norm(ln["text"]),
-                   "y1": ln["y1"], "size": ln["size"]}
+            cur = {
+                "page": pno,
+                "text": norm(ln["text"]),
+                "y1": ln["y1"],
+                "size": ln["size"],
+            }
             cands.append(cur)
     return cands
 
 
-def heading_index(pages: list, dims: list, stats: tuple) -> list:
+def _page_lines(page: list, dk: set) -> list:
+    lines = []
+    for block in page:
+        for ln in block:
+            if ln["text"].strip() and hdr_key(ln["text"]) not in dk:
+                lines.append(ln)
+    return lines
+
+
+def heading_index(pages: list, dims: list, stats: dict) -> list:
     """Per-page heading candidates with multi-line headings assembled into one.
 
     Args:
         pages: Per-page line blocks from doc_lines().
         dims: Per-page (width, height) from doc_dims().
-        stats: (body, heads, lh) from doc_stats().
+        stats: {"body", "heads", "lh"} from doc_stats().
 
     Returns:
         [{"page", "text"}] with 0-based pages, reading order preserved.
@@ -78,8 +91,7 @@ def heading_index(pages: list, dims: list, stats: tuple) -> list:
     dk = drop_keys(pages)
     out: list = []
     for pno, page in enumerate(pages):
-        lines = [ln for block in page for ln in block
-                 if ln["text"].strip() and hdr_key(ln["text"]) not in dk]
+        lines = _page_lines(page, dk)
         cands = _page_candidates(pno, lines, stats)
         if lines and lines[0]["y0"] > _OPENER_FRACTION * dims[pno][1]:
             opener = norm(lines[0]["text"])
@@ -107,8 +119,16 @@ def _pairs(x: str, y: str) -> list:
 
 
 def _score(a: str, b: str) -> float:
-    combos = [(x, y) for x in _variants(a) for y in _variants(b) if x and y]
-    return max((_ratio(p, q) for x, y in combos for p, q in _pairs(x, y)), default=0.0)
+    combos = []
+    for x in _variants(a):
+        for y in _variants(b):
+            if x and y:
+                combos.append((x, y))
+    ratios = []
+    for x, y in combos:
+        for p, q in _pairs(x, y):
+            ratios.append(_ratio(p, q))
+    return max(ratios, default=0.0)
 
 
 def _matches_exactly(v: str, text: str) -> bool:
@@ -118,34 +138,41 @@ def _matches_exactly(v: str, text: str) -> bool:
     return False
 
 
-def _exact(title: str, cands: list) -> tuple | None:
+def _exact(title: str, cands: list) -> dict | None:
     for v in _variants(title):
         if len(v) < _MIN_CONTAIN:
             continue
         for c in cands:
             if _matches_exactly(v, c["text"]):
-                return c["page"], 1.0
+                return {"page": c["page"], "score": 1.0}
     return None
 
 
-def _fuzzy(title: str, cands: list, threshold: float, need_gap: bool = False) -> tuple | None:
+def _fuzzy(title: str, cands: list, threshold: float, need_gap: bool = False) -> dict | None:
     scored = sorted(((_score(title, c["text"]), c["page"]) for c in cands), reverse=True)
     if not scored or scored[0][0] < threshold:
         return None
     best_score, best_page = scored[0]
     if need_gap:
-        runner = next((s for s, p in scored[1:] if p != best_page), 0.0)
+        runner = 0.0
+        for s, p in scored[1:]:
+            if p != best_page:
+                runner = s
+                break
         if best_score - runner < _AMBIGUITY_GAP:
             return None
-    return best_page, best_score
+    return {"page": best_page, "score": best_score}
 
 
-def match(title: str, index: list, target: int | None) -> tuple | None:
+def match(title: str, index: list, target: int | None) -> dict | None:
     """Find the body-heading page for a title: exact tier, then fuzzy tier.
 
     A known target page restricts the search to ±2 pages and lowers the fuzzy
     threshold; without one the whole book is searched and an ambiguity gap over
     the runner-up is required.
+
+    Returns:
+        {"page", "score"} for the best match, or None.
     """
     if not title:
         return None
@@ -178,7 +205,7 @@ def derive_offset(entries: list, index: list) -> int | None:
     return off if cnt >= _MIN_DERIVE else None
 
 
-def verify(candidates: list, index: list) -> tuple[list, float]:
+def verify(candidates: list, index: list) -> dict:
     """Anchor candidate boundaries to body headings.
 
     Args:
@@ -186,7 +213,7 @@ def verify(candidates: list, index: list) -> tuple[list, float]:
         index: Heading index from heading_index().
 
     Returns:
-        (bounds, verified_fraction): bounds as [{"title", "page"}], strictly
+        {"bounds", "verified_fraction"}: bounds as [{"title", "page"}], strictly
         increasing. A matched heading keeps the arithmetic page when the heading
         follows it by ≤2 pages (dividers and full-page art open the unit);
         unmatched candidates keep their arithmetic page only when ≥70% of
@@ -197,14 +224,14 @@ def verify(candidates: list, index: list) -> tuple[list, float]:
         target = cand.get("page")
         hit = match(cand.get("title", ""), index, target)
         if hit is not None:
-            page = hit[0]
+            page = hit["page"]
             if target is not None and 0 <= page - target <= _TOL:
                 page = target
             hits.append((cand, page, True))
         elif target is not None:
             hits.append((cand, target, False))
     if not candidates:
-        return [], 0.0
+        return {"bounds": [], "verified_fraction": 0.0}
     frac = sum(1 for _, _, ok in hits if ok) / len(candidates)
     keep_arith = frac >= _VERIFY_KEEP
     bounds = sorted(
@@ -216,4 +243,4 @@ def verify(candidates: list, index: list) -> tuple[list, float]:
     for b in bounds:
         if not out or b["page"] > out[-1]["page"]:
             out.append(b)
-    return out, frac
+    return {"bounds": out, "verified_fraction": frac}

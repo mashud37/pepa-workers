@@ -10,14 +10,14 @@ def run() -> None:
         import fitz  # noqa: F401
         ui.ok("PyMuPDF (fitz)")
     except ImportError:
-        ui.error("PyMuPDF missing — run: pip install PyMuPDF")
+        ui.error("PyMuPDF missing, run: pip install PyMuPDF")
         ok = False
 
     try:
         import yaml  # noqa: F401
         ui.ok("PyYAML")
     except ImportError:
-        ui.error("PyYAML missing — run: pip install PyYAML")
+        ui.error("PyYAML missing, run: pip install PyYAML")
         ok = False
 
     try:
@@ -25,7 +25,7 @@ def run() -> None:
         import pytesseract  # noqa: F401
         ui.ok("pytesseract + Pillow (OCR available)")
     except ImportError:
-        ui.warn("pytesseract / Pillow not installed — OCR route unavailable")
+        ui.warn("pytesseract / Pillow not installed, OCR route unavailable")
         ui.info("To enable: pip install pytesseract Pillow")
         ui.info("Also install Tesseract: https://tesseract-ocr.github.io/")
 

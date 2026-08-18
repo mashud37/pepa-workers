@@ -1,8 +1,6 @@
-"""Unit-boundary evaluation for markdown refinement: gold rows vs the engine.
-
-Gold files hold one row per true unit start, identified by the unit's first
-line in the book's concatenated markdown. The engine re-runs at scoring time,
-so refinement improvements re-score without relabelling.
+"""Score the markdown refinement engine against gold rows marking true unit
+starts in the book's concatenated markdown. The engine reruns at scoring
+time, so refinement changes rescore without relabelling.
 """
 import statistics
 from pathlib import Path
@@ -35,7 +33,7 @@ _LEGEND = (
     "# appears earlier in the book, so the first match is not the real start.\n"
     "#\n"
     "# To avoid the issue entirely, use a line from the chapter's opening\n"
-    "# paragraph rather than its heading as <first line> — body text rarely\n"
+    "# paragraph rather than its heading as <first line>: body text rarely\n"
     "# repeats, so occurrence stays 1.\n"
     "#\n"
     "# Correct wrong rows, delete rows that are not real chapter starts, and add\n"
@@ -61,31 +59,33 @@ def _norm(text: str) -> str:
     return " ".join(text.replace("#", " ").split()).casefold()[:_ROW_CHARS - 10]
 
 
-def _first_line(lines: list, start: int) -> str:
-    return next((ln.strip() for ln in lines[start:] if ln.strip()), "")
-
-
-def _occurrence(lines: list, start: int, text: str) -> int:
-    key = _norm(text)
-    return sum(1 for ln in lines[: start + 1] if _norm(ln) == key)
-
-
 def prefill(book: dict) -> list:
     rows = []
     for start in book["starts"]:
-        text = _first_line(book["lines"], start)[:_ROW_CHARS]
-        rows.append((_occurrence(book["lines"], start, text), text))
+        text = ""
+        for ln in book["lines"][start:]:
+            if ln.strip():
+                text = ln.strip()
+                break
+        text = text[:_ROW_CHARS]
+        key = _norm(text)
+        occurrence = sum(1 for ln in book["lines"][: start + 1] if _norm(ln) == key)
+        rows.append((occurrence, text))
     return rows
 
 
-def write_gold(stem: str, rows: list) -> tuple[Path, bool]:
-    """Write the correctable gold file; never overwrite existing corrections."""
+def write_gold(stem: str, rows: list) -> dict:
+    """Write the correctable gold file; never overwrite existing corrections.
+
+    Returns:
+        {"path": written or existing file, "kept": True if an existing file was left alone}.
+    """
     path = GOLD_DIR / f"{stem}{_SUFFIX}"
     if path.exists():
-        return path, True
+        return {"path": path, "kept": True}
     body = "\n".join(f"{occ}\t{text}" for occ, text in rows)
     path.write_text(_LEGEND + "\n" + body + ("\n" if body else ""), encoding="utf-8")
-    return path, False
+    return {"path": path, "kept": False}
 
 
 def parse_gold(text: str) -> list:
@@ -99,8 +99,12 @@ def parse_gold(text: str) -> list:
     return rows
 
 
-def locate(rows: list, lines: list) -> tuple[list, list]:
-    """Resolve gold rows to global line indices; returns (bounds, misses)."""
+def locate(rows: list, lines: list) -> dict:
+    """Resolve gold rows to global line indices.
+
+    Returns:
+        {"bounds": sorted matched line indices, "misses": gold texts that could not be found}.
+    """
     bounds, misses = [], []
     for occ, text in rows:
         key = _norm(text)
@@ -112,18 +116,24 @@ def locate(rows: list, lines: list) -> tuple[list, list]:
             bounds.append(hits[occ - 1])
         else:
             misses.append(text)
-    return sorted(bounds), misses
+    return {"bounds": sorted(bounds), "misses": misses}
 
 
 def pending() -> list:
     return [(gp.name[: -len(_SUFFIX)], gp) for gp in sorted(GOLD_DIR.glob(f"*{_SUFFIX}"))]
 
 
-def grade_one(stem: str, group: list, gold_path: Path, cfg: dict) -> tuple:
+def grade_one(stem: str, group: list, gold_path: Path, cfg: dict) -> dict:
+    """Score refinement's chapter starts against one book's gold file.
+
+    Returns:
+        {"result": score dict or None, "note": explanation or a missing-rows warning}.
+    """
     book = engine.load_book(stem, group)
-    gold, misses = locate(parse_gold(gold_path.read_text(encoding="utf-8")), book["lines"])
+    located = locate(parse_gold(gold_path.read_text(encoding="utf-8")), book["lines"])
+    gold, misses = located["bounds"], located["misses"]
     if not gold:
-        return None, "no gold row could be located in the markdown"
+        return {"result": None, "note": "no gold row could be located in the markdown"}
     plan = engine.analyse(book, cfg)
     res = {
         "base": score(gold, book["starts"], tol=TOLERANCE),
@@ -131,7 +141,7 @@ def grade_one(stem: str, group: list, gold_path: Path, cfg: dict) -> tuple:
         "plan": plan,
     }
     note = f"{len(misses)} gold row(s) not found" if misses else ""
-    return res, note
+    return {"result": res, "note": note}
 
 
 def aggregate(scores: list) -> dict:

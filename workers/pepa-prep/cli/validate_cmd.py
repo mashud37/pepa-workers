@@ -8,15 +8,11 @@ from . import ui
 _MAX_STEM = 50
 
 
-def _trunc(s: str) -> str:
-    return s if len(s) <= _MAX_STEM else s[: _MAX_STEM - 3] + "..."
-
-
 def run(cfg: dict, dry: bool = False) -> None:
     out_dir = Path(cfg["output_folder"]) / "text"
 
     if not out_dir.is_dir():
-        raise SystemExit(f"No extracted text found in {out_dir} — run extract first")
+        raise SystemExit(f"No extracted text found in {out_dir}, run extract first")
 
     groups = validate.book_groups(out_dir)
     if not groups:
@@ -35,7 +31,8 @@ def run(cfg: dict, dry: bool = False) -> None:
     total = len(groups)
 
     for i, (stem, group) in enumerate(sorted(groups.items()), 1):
-        ui.info(f"[{i}/{total}] {_trunc(stem)}")
+        short_stem = stem if len(stem) <= _MAX_STEM else stem[: _MAX_STEM - 3] + "..."
+        ui.info(f"[{i}/{total}] {short_stem}")
         rows = validate.grade_book(group)
         graded[stem] = rows
         keep = sum(1 for r in rows if r[4] == "keep")
@@ -54,9 +51,17 @@ def run(cfg: dict, dry: bool = False) -> None:
 
     validate.write_report(out_dir, graded)
 
-    kept = sum(1 for rows in graded.values() for r in rows if not r[4].startswith("reject"))
-    rejected = sum(1 for rows in graded.values() for r in rows if r[4].startswith("reject"))
-    flagged = sum(1 for rows in graded.values() for r in rows if r[4].startswith("flag"))
+    kept = 0
+    rejected = 0
+    flagged = 0
+    for stem_rows in graded.values():
+        for r in stem_rows:
+            if not r[4].startswith("reject"):
+                kept += 1
+            if r[4].startswith("reject"):
+                rejected += 1
+            if r[4].startswith("flag"):
+                flagged += 1
     verb = "would quarantine" if dry else "quarantined"
 
     ui.step("Done")
