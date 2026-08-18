@@ -1,9 +1,6 @@
-"""WS3 — Interactive discovery over the sum_ corpus.
-
-Maintains an active body of works across turns. After each response the user
-can ask a follow-up on the same works, expand the body, or start a new search.
-Default corpus size is _K=40; manual preselection is backfilled to that limit
-by semantic similarity.
+"""WS3: interactive discovery over the sum_ corpus, maintaining an active
+body of works across turns that the user can follow up on, expand, or
+replace with a new search.
 """
 import config
 from cli import ui, progress
@@ -15,21 +12,12 @@ _K = 40
 
 def run(query=None):
     ui.header("Explore the literature")
-    _show_cluster_hint()
+    maps = sorted(config.OUTPUT_DIR.glob("corpus_map_*.md"))
+    if maps:
+        ui.info(f"corpus map available: {maps[-1].name}  (run 'python manage.py map' to refresh)")
 
-    active = []
     history = []
-
-    if query:
-        active = _fetch(query)
-        if active:
-            _reply(query, active, history)
-            history.append(query)
-    else:
-        active, seed_query = _build_corpus()
-        if active and seed_query:
-            _reply(seed_query, active, history)
-            history.append(seed_query)
+    active = _start_conversation(query, history)
 
     while True:
         if not active:
@@ -52,56 +40,84 @@ def run(query=None):
 
         if action == 0:
             q = ui.ask("Question")
-            if q:
-                _reply(q, active, history)
-                history.append(q)
-                if len(history) > 12:
-                    history = history[-12:]
+            if not q:
+                continue
+            _reply(q, active, history)
+            history.append(q)
+            if len(history) > 12:
+                history = history[-12:]
 
         elif action == 1:
             terms = ui.ask("Search terms to add")
-            if terms:
-                new_hits = _fetch(terms)
-                before = len(active)
-                active = _merge(active, new_hits)
-                ui.ok(f"corpus: {before} → {len(active)} works")
-                _print_corpus(active)
+            if not terms:
+                continue
+            new_hits = _fetch(terms)
+            before = len(active)
+            seen = {h["base"] for h in active}
+            active = active + [h for h in new_hits if h["base"] not in seen]
+            ui.ok(f"corpus: {before} → {len(active)} works")
+            _print_corpus(active)
 
         elif action == 2:
-            active, seed_query = _build_corpus()
             history = []
-            if active and seed_query:
-                _reply(seed_query, active, history)
-                history.append(seed_query)
+            active = _start_conversation(None, history)
+
+
+def _start_conversation(query, history):
+    """Fetch or select the first work set and fire an opening reply.
+
+    Args:
+        query: a query string to retrieve by, or None to prompt for a
+            corpus source (query search or manual selection).
+        history: the conversation history list, appended to in place.
+
+    Returns:
+        The list of active work-record dicts, possibly empty.
+    """
+    if query:
+        active = _fetch(query)
+        if active:
+            _reply(query, active, history)
+            history.append(query)
+        return active
+
+    corpus = _build_corpus()
+    active = corpus["active"]
+    if active and corpus["seed_query"]:
+        _reply(corpus["seed_query"], active, history)
+        history.append(corpus["seed_query"])
+    return active
 
 
 def _build_corpus():
     """Pick query-retrieval or manual preselection.
 
-    Returns (active_hits, seed_query) where seed_query is the user's query
-    string when method=Query (so the caller can fire an initial response),
-    or None when method=Manual (corpus is already shown; no auto-response).
+    Returns:
+        dict with keys "active" (list of work-record dicts) and "seed_query"
+        (the user's query string when method=Query, so the caller can fire
+        an initial response, or None when method=Manual since the corpus
+        is already shown and no auto-response is needed).
     """
     method = ui.menu("Corpus source", [
         ("Query",           f"retrieve top {_K} works by semantic similarity"),
         ("Select manually", "pick works by author/title keyword, fill remainder to threshold"),
     ])
     if method is None:
-        return [], None
+        return {"active": [], "seed_query": None}
 
     if method == 0:
         q = ui.ask("Query")
         if not q:
-            return [], None
-        return _fetch(q), q
+            return {"active": [], "seed_query": None}
+        return {"active": _fetch(q), "seed_query": q}
 
     selected = _keyword_select()
     if not selected:
-        return [], None
+        return {"active": [], "seed_query": None}
     active = _fill_to_k(selected)
     ui.ok(f"corpus: {len(selected)} selected + {len(active) - len(selected)} auto-filled = {len(active)} works")
     _print_corpus(active)
-    return active, None
+    return {"active": active, "seed_query": None}
 
 
 def _fetch(query):
@@ -165,28 +181,43 @@ def _keyword_select():
         visible = matches[:30]
         for i, r in enumerate(visible, 1):
             mark = "✓" if r["base"] in selected_bases else " "
-            label = f"{r.get('authors', '')} — {r.get('title', '')[:55]}"
+            label = f"{r.get('authors', '')}: {r.get('title', '')[:55]}"
             print(f"  [{i:2}] {mark} {label}")
         if len(matches) > 30:
-            ui.info(f"  … {len(matches) - 30} more — refine your search term")
+            ui.info(f"  … {len(matches) - 30} more: refine your search term")
 
         raw = ui.ask("Add by number (comma-separated, blank to skip)")
         if not raw:
             continue
-        for part in raw.split(","):
-            p = part.strip()
-            if p.isdigit():
-                i = int(p) - 1
-                if 0 <= i < len(visible):
-                    r = visible[i]
-                    if r["base"] not in selected_bases:
-                        selected.append(r)
-                        selected_bases.add(r["base"])
-                        ui.ok(f"Added: {r.get('authors', '')}")
+        _add_by_number(raw, visible, selected, selected_bases)
 
     if selected:
         ui.info(f"{len(selected)} works selected")
     return selected
+
+
+def _add_by_number(raw, visible, selected, selected_bases):
+    """Add records named by 1-based index in a comma-separated string.
+
+    Args:
+        raw: comma-separated index string typed by the user.
+        visible: the numbered records currently shown on screen.
+        selected: list of chosen records, appended to in place.
+        selected_bases: set of chosen record "base" ids, updated in place.
+    """
+    for part in raw.split(","):
+        p = part.strip()
+        if not p.isdigit():
+            continue
+        i = int(p) - 1
+        if not (0 <= i < len(visible)):
+            continue
+        r = visible[i]
+        if r["base"] in selected_bases:
+            continue
+        selected.append(r)
+        selected_bases.add(r["base"])
+        ui.ok(f"Added: {r.get('authors', '')}")
 
 
 def _reply(query, active, history):
@@ -215,19 +246,14 @@ def _reply(query, active, history):
 def _print_corpus(active):
     ui.info(f"Works in context ({len(active)}):")
     for h in active:
-        ui.info(f"  {h.get('authors', '')} — {h.get('title', '')[:60]}")
-
-
-def _merge(existing, new_hits):
-    seen = {h["base"] for h in existing}
-    return existing + [h for h in new_hits if h["base"] not in seen]
+        ui.info(f"  {h.get('authors', '')}: {h.get('title', '')[:60]}")
 
 
 def _format_hits(hits):
     parts = []
     for h in hits:
         parts.append(
-            f"**{h.get('authors', '')} — {h.get('title', '')}**\n"
+            f"**{h.get('authors', '')}: {h.get('title', '')}**\n"
             f"Question: {h.get('question', '')}\n"
             f"Arguments: {h.get('arguments_text', '')[:500]}\n"
             f"Conclusions: {h.get('conclusions', '')[:300]}"

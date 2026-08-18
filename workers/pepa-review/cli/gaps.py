@@ -1,9 +1,6 @@
-"""WS2 — Draft gap-check, section by section.
-
-Splits a draft into sections, maps semantically similar but uncited corpus works
-to the section that surfaced them, derives distinctive terms for each, and asks
-Claude (per section, in parallel) for the works to add, arguments to engage, and
-terms to incorporate. The report mirrors a kopi-editor section-by-section worksheet.
+"""WS2: checks a draft section by section for gaps, mapping uncited but
+similar corpus works to each section and asking Claude in parallel for
+works, arguments, and terms to add.
 """
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -39,7 +36,31 @@ def run(input_file=None):
     sections = _split_sections(draft_text)
     ui.info(f"{len(sections)} sections to check")
 
+    _map_sections_to_candidates(sections, cited_bases)
+
+    active = [s for s in sections if s["candidates"]]
+    if not active:
+        ui.ok("No gaps found: the draft engages well with the corpus.")
+        return
+
+    _synthesise_all(active)
+
+    out = _write_gaps(sections, Path(draft_path).name)
+    ui.ok(f"gap report saved to {out}")
+    ui.rule()
+    for i, s in enumerate(sections, 1):
+        label = s["heading"] or f"Section {i}"
+        n = len(s.get("suggestions", {}).get("works", [])) if s["candidates"] else 0
+        ui.info(f"  {label[:50]}: {n} works to add" if n else f"  {label[:50]}: engages the corpus well")
+
+
+def _map_sections_to_candidates(sections, cited_bases):
+    """Retrieve candidate works per paragraph and roll them up per section.
+
+    Fills in "candidates" and "terms" on each section dict in place.
+    """
     from index.store import retrieve_hybrid
+
     n_para = sum(len([p for p in s["paragraphs"] if len(p) >= _MIN_PARA_CHARS]) for s in sections)
     ui.info(f"mapping {n_para} paragraphs against the corpus…")
 
@@ -54,12 +75,8 @@ def run(input_file=None):
                     continue
                 done += 1
                 sp._label = f"mapping [{done}/{n_para}]"
-                for h in retrieve_hybrid(para, k=config.GAPS_PARA_K):
-                    base = h["base"]
-                    if base in cited_bases:
-                        continue
-                    if base not in cands or cands[base]["score"] < h["score"]:
-                        cands[base] = h
+                hits = _score_paragraph(para, cited_bases, retrieve_hybrid)
+                cands = _merge_candidates(cands, hits)
             s["candidates"] = sorted(cands.values(), key=lambda h: h["score"], reverse=True)[:_PER_SECTION]
             s["terms"] = _section_terms(s)
         sp.done(f"{done} paragraphs mapped")
@@ -67,11 +84,29 @@ def run(input_file=None):
         sp.done("error")
         raise SystemExit(str(e))
 
-    active = [s for s in sections if s["candidates"]]
-    if not active:
-        ui.ok("No gaps found — the draft engages well with the corpus.")
-        return
 
+def _score_paragraph(para, cited_bases, retrieve_hybrid):
+    """Return candidate work hits for one paragraph, keyed by work base id."""
+    found = {}
+    for h in retrieve_hybrid(para, k=config.GAPS_PARA_K):
+        base = h["base"]
+        if base in cited_bases:
+            continue
+        if base not in found or found[base]["score"] < h["score"]:
+            found[base] = h
+    return found
+
+
+def _merge_candidates(cands, hits):
+    """Return cands with hits folded in, keeping the higher score per work."""
+    merged = dict(cands)
+    for base, hit in hits.items():
+        if base not in merged or merged[base]["score"] < hit["score"]:
+            merged[base] = hit
+    return merged
+
+
+def _synthesise_all(active):
     sp = progress.StepSpinner(f"synthesising suggestions for {len(active)} sections")
     sp.start()
     try:
@@ -83,14 +118,6 @@ def run(input_file=None):
     except Exception as e:
         sp.done("error")
         raise SystemExit(str(e))
-
-    out = _write_gaps(sections, Path(draft_path).name)
-    ui.ok(f"gap report saved to {out}")
-    ui.rule()
-    for i, s in enumerate(sections, 1):
-        label = s["heading"] or f"Section {i}"
-        n = len(s.get("suggestions", {}).get("works", [])) if s["candidates"] else 0
-        ui.info(f"  {label[:50]} — {n} works to add" if n else f"  {label[:50]} — engages the corpus well")
 
 
 def _suggest(section):
@@ -118,29 +145,30 @@ def _section_terms(section):
 
 def _briefs(cands):
     return "\n\n".join(
-        f"[{h['authors']} — {h['title']}]\n{h.get('question', '')[:300]}"
+        f"[{h['authors']}: {h['title']}]\n{h.get('question', '')[:300]}"
         for h in cands
     )
 
 
-def _parse_suggestions(response):
-    def bullets(label, stops):
-        alts = "|".join(r"\*\*" + re.escape(s) for s in stops)
-        lookahead = ("(?=" + alts + r"|\Z)") if alts else r"(?=\Z)"
-        m = re.search(r"\*\*" + re.escape(label) + r":\*\*\s*(.+?)" + lookahead, response, re.DOTALL)
-        if not m:
-            return []
-        out = []
-        for line in m.group(1).splitlines():
-            line = line.lstrip("-•· ").strip().rstrip("*").strip()
-            if line and line.lower() != "none":
-                out.append(line)
-        return out
+def _bullets(response, label, stops):
+    alts = "|".join(r"\*\*" + re.escape(s) for s in stops)
+    lookahead = ("(?=" + alts + r"|\Z)") if alts else r"(?=\Z)"
+    m = re.search(r"\*\*" + re.escape(label) + r":\*\*\s*(.+?)" + lookahead, response, re.DOTALL)
+    if not m:
+        return []
+    out = []
+    for line in m.group(1).splitlines():
+        line = line.lstrip("-•· ").strip().rstrip("*").strip()
+        if line and line.lower() != "none":
+            out.append(line)
+    return out
 
+
+def _parse_suggestions(response):
     return {
-        "works":     bullets("Works to add", ["Arguments to engage", "Terms to incorporate"]),
-        "arguments": bullets("Arguments to engage", ["Terms to incorporate"]),
-        "terms":     bullets("Terms to incorporate", []),
+        "works":     _bullets(response, "Works to add", ["Arguments to engage", "Terms to incorporate"]),
+        "arguments": _bullets(response, "Arguments to engage", ["Terms to incorporate"]),
+        "terms":     _bullets(response, "Terms to incorporate", []),
     }
 
 
@@ -220,7 +248,7 @@ def _write_gaps(sections, draft_name):
         label = s["heading"] or f"Section {i}"
         lines += [f"## {label}", ""]
         if not s["candidates"]:
-            lines += ["_Engages the corpus well — no notable gaps._", "", "---", ""]
+            lines += ["_Engages the corpus well, no notable gaps._", "", "---", ""]
             continue
         sug = s.get("suggestions", {})
         if sug.get("works"):
@@ -238,7 +266,7 @@ def _write_gaps(sections, draft_name):
 
     ranked = sorted(seen.values(), key=lambda h: h["score"], reverse=True)[:15]
     lines += ["## Raw ranked candidates", ""]
-    lines += [f"- **{h['authors']}** — {h['title']} (score: {h['score']:.3f})" for h in ranked]
+    lines += [f"- **{h['authors']}**: {h['title']} (score: {h['score']:.3f})" for h in ranked]
 
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(lines), encoding="utf-8")

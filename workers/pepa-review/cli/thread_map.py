@@ -1,9 +1,5 @@
-"""WS5 — Thread-level map: re-cluster the works of one thread at finer granularity.
-
-Pick a saved corpus map, choose one thread (or all), and re-run the corpus-map
-pipeline (cli/map.py) over just that thread's works. The works are recovered from
-the map's JSON sidecar (thread -> index `base` ids); for older maps without a
-sidecar we fall back to matching the rendered 'authors — title' lines to the index.
+"""WS5: re-clusters one thread of a saved corpus map at finer granularity
+by rerunning the corpus-map pipeline over just that thread's works.
 """
 import json
 import re
@@ -25,19 +21,24 @@ def run(map_file=None, thread=None):
     if not chosen:
         return
 
-    records_by_base, index_model = _index_by_base()
+    index = _index_by_base()
+    records_by_base = index["by_base"]
+    index_model = index["model"]
     total = len(chosen)
     for i, t in enumerate(chosen, 1):
         ui.info(f"[{i}/{total}] thread: {t['name']}")
         bases = list(dict.fromkeys(t["bases"] + t.get("also_bases", [])))
-        records, vecs = _gather(bases, records_by_base)
+        gathered = _gather(bases, records_by_base)
+        records = gathered["records"]
+        vecs = gathered["vectors"]
         if len(records) < config.MAP_SUB_MIN_THREADS + 1:
-            ui.warn(f"only {len(records)} works resolved — too few to sub-cluster, skipping")
+            ui.warn(f"only {len(records)} works resolved, too few to sub-cluster, skipping")
             continue
+        slug = re.sub(r"[^a-z0-9]+", "_", t["name"].lower()).strip("_")[:40] or "thread"
         map_cmd.build_map(
             records, np.array(vecs, dtype=float),
-            title=f"Thread map — {t['name']}",
-            stem=f"thread_map_{_slug(t['name'])}",
+            title=f"Thread map: {t['name']}",
+            stem=f"thread_map_{slug}",
             index_model=index_model,
             min_threads=config.MAP_SUB_MIN_THREADS,
             max_threads=config.MAP_SUB_MAX_THREADS,
@@ -45,7 +46,7 @@ def run(map_file=None, thread=None):
         )
 
 
-# ── map / thread selection ────────────────────────────────────────────────────
+# ---- Map and thread selection ----
 
 def _resolve_map(map_file):
     """Return the sidecar dict for the chosen corpus map (loaded or reconstructed)."""
@@ -65,7 +66,7 @@ def _resolve_map(map_file):
     sidecar = path.with_suffix(".json")
     if sidecar.exists():
         return json.loads(sidecar.read_text(encoding="utf-8"))
-    ui.warn("no sidecar — matching works from the map text (may be approximate)")
+    ui.warn("no sidecar, matching works from the map text (may be approximate)")
     return _parse_md_fallback(path)
 
 
@@ -86,30 +87,45 @@ def _choose_threads(threads, thread):
     return threads if choice == 0 else [threads[choice - 1]]
 
 
-# ── index lookup ──────────────────────────────────────────────────────────────
+# ---- Index lookup ----
 
 def _index_by_base():
+    """Load the embedding index keyed by work base id.
+
+    Returns:
+        dict with keys "by_base" (dict of base id to (record, vector) pair)
+        and "model" (the index's provider/model string).
+    """
     if not config.INDEX_FILE.exists():
         raise SystemExit("No index found. Run: python manage.py index")
     idx = json.loads(config.INDEX_FILE.read_text(encoding="utf-8"))
     by_base = {r["base"]: (r, v) for r, v in zip(idx["records"], idx["vectors"])}
-    return by_base, idx.get("model", "")
+    return {"by_base": by_base, "model": idx.get("model", "")}
 
 
 def _gather(bases, records_by_base):
+    """Return the records and vectors for the given base ids that resolve.
+
+    Returns:
+        dict with keys "records" and "vectors", parallel lists.
+    """
     records, vecs = [], []
     for b in bases:
         if b in records_by_base:
             r, v = records_by_base[b]
             records.append(r)
             vecs.append(v)
-    return records, vecs
+    return {"records": records, "vectors": vecs}
 
 
-# ── fallback: reconstruct threads from the rendered .md ───────────────────────
+# ---- Fallback: reconstruct threads from the rendered .md ----
 
 def _parse_md_fallback(md_path):
-    by_line = _index_by_line()
+    idx = json.loads(config.INDEX_FILE.read_text(encoding="utf-8"))
+    by_line = {
+        _norm(f"{r.get('authors', '')} — {r.get('title', '')}"): r["base"]
+        for r in idx["records"]
+    }
     text = md_path.read_text(encoding="utf-8")
     threads = []
     for block in re.split(r"\n## ", text)[1:]:
@@ -117,25 +133,12 @@ def _parse_md_fallback(md_path):
         name = re.sub(r"^\d+\.\s*", "", header).strip()
         if name.lower().startswith("cross-cutting"):
             continue
-        threads.append({"name": name, "bases": _bases_from_lines(body, by_line), "also_bases": []})
+        matched = (re.match(r"-\s+(.*)", ln) for ln in body)
+        bases = [by_line.get(_norm(m.group(1))) for m in matched if m]
+        bases = [b for b in bases if b]
+        threads.append({"name": name, "bases": bases, "also_bases": []})
     return {"map_file": md_path.name, "threads": threads}
-
-
-def _bases_from_lines(lines, by_line):
-    matched = (re.match(r"-\s+(.*)", ln) for ln in lines)
-    bases = (by_line.get(_norm(m.group(1))) for m in matched if m)
-    return [b for b in bases if b]
-
-
-def _index_by_line():
-    idx = json.loads(config.INDEX_FILE.read_text(encoding="utf-8"))
-    return {_norm(f"{r.get('authors', '')} — {r.get('title', '')}"): r["base"]
-            for r in idx["records"]}
 
 
 def _norm(s):
     return re.sub(r"\s+", " ", s).strip().lower().rstrip(".")
-
-
-def _slug(name):
-    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")[:40] or "thread"

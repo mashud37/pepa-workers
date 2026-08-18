@@ -1,8 +1,5 @@
-"""Terminal UI helpers — colored output, symbols, and prompts.
-
-House style: a bold header rule, `step` markers for phases, and ✓ / ⚠ / · / ✗
-status lines, plus ask / ask_choice / confirm prompts. Colour and unicode
-degrade gracefully when stdout is not a TTY or NO_COLOR is set.
+"""Terminal UI helpers: header rule, step markers, status lines, and prompts.
+Colour and unicode degrade when stdout is not a TTY or NO_COLOR is set.
 """
 import os
 import sys
@@ -106,8 +103,18 @@ def confirm(question, default_yes=True):
 
 
 def menu(title, options):
-    """Print a numbered menu and return a 0-based index, or None for Back/quit.
-    `options` is a list of (label, description) tuples or plain strings."""
+    """Print a numbered menu and return a 0-based index, or None to close it.
+
+    None means the user chose [0], typed q/quit/exit, submitted an empty line, or
+    pressed Ctrl-C; every caller treats it as "close this menu level".
+
+    Args:
+        title: Heading printed above the entries.
+        options: (label, description) tuples or plain strings.
+
+    Returns:
+        0-based index of the chosen option, or None to close the menu.
+    """
     print(); rule(); print(_c(BOLD, f"  {title}"))
     width = max((len(o[0]) if isinstance(o, tuple) else len(o)) for o in options)
     for i, o in enumerate(options, 1):
@@ -124,3 +131,22 @@ def menu(title, options):
         if raw.isdigit() and 1 <= int(raw) <= len(options):
             return int(raw) - 1
         warn("invalid choice")
+
+
+def run_action(action, *args, **kwargs):
+    """Run a menu action so a failure returns to the menu instead of the shell.
+
+    Args:
+        action: Callable invoked with *args/**kwargs.
+
+    Returns:
+        Whatever `action` returns, or None if it failed or was interrupted.
+    """
+    try:
+        return action(*args, **kwargs)
+    except SystemExit as e:
+        if isinstance(e.code, str):
+            error(e.code)
+    except KeyboardInterrupt:
+        warn("interrupted")
+    return None

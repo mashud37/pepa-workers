@@ -1,11 +1,5 @@
-"""WS1 — Literature review assembly.
-
-The user gives an outline or rough prompt; works are selected either through a map-driven,
-interactive loop (themes shown, free-text feedback re-queries the corpus and re-groups), by
-searching author/title keywords, or by importing a stem list (e.g. exported from pepa-reader);
-then the review is either drafted along the user's outline or synthesised into 3–4 sections
-built from the literature's key terms and tensions. When bibliographic data is enabled,
-older highly-cited anchors are paired with nearer recent works to stage debates.
+"""Assemble a literature review from works chosen by map browsing, keyword search, or a
+stem list, then draft or synthesise them into sections.
 """
 import json
 import os
@@ -13,6 +7,8 @@ import re
 import subprocess
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
+from functools import partial
+from itertools import count
 from datetime import datetime
 from pathlib import Path
 
@@ -34,7 +30,9 @@ def run(outline_file=None, auto=False, list_file=None):
     if not works:
         raise SystemExit("No papers found in corpus. Check CORPUS_DIR configuration.")
 
-    outline, outline_stem = _get_outline(outline_file)
+    outline_result = _get_outline(outline_file)
+    outline = outline_result["text"]
+    outline_stem = outline_result["stem"]
     if not outline:
         raise SystemExit("No outline provided.")
     ui.ok(f"outline: {len(outline)} chars")
@@ -62,7 +60,7 @@ def run(outline_file=None, auto=False, list_file=None):
     print(review_text)
 
 
-# ── selection (map-driven, interactive) ───────────────────────────────────────
+# ---- Selection (map-driven, interactive) ----
 
 def _select(outline, auto, works):
     from index.store import retrieve
@@ -96,7 +94,7 @@ def _select(outline, auto, works):
     sp.done(f"{len(groups)} themes")
 
     if auto:
-        return _dedupe(r for g in groups for r in g["records"])
+        return _dedupe(_flatten_groups(groups))
 
     while True:
         _show_groups(groups)
@@ -113,11 +111,19 @@ def _select(outline, auto, works):
         groups = _group_candidates(candidates)
         sp.done(f"{len(groups)} themes")
 
-    return _dedupe(r for g in groups for r in g["records"])
+    return _dedupe(_flatten_groups(groups))
+
+
+def _flatten_groups(groups):
+    records = []
+    for g in groups:
+        for r in g["records"]:
+            records.append(r)
+    return records
 
 
 def _group_candidates(candidates):
-    """Group candidates into themes — reuse the latest corpus map, else cluster live."""
+    """Group candidates into themes: reuse the latest corpus map, else cluster live."""
     groups = _groups_from_map(candidates)
     if groups:
         return groups
@@ -197,21 +203,28 @@ def _keyword_select(works):
         raw = ui.ask("Add numbers (comma-separated, blank to skip)")
         if not raw:
             continue
-        for part in raw.split(","):
-            p = part.strip()
-            if p.isdigit():
-                idx = int(p) - 1
-                if 0 <= idx < len(matches) and matches[idx]["base"] not in selected_bases:
-                    selected.append(matches[idx])
-                    selected_bases.add(matches[idx]["base"])
-                    ui.ok(f"Added: {matches[idx]['authors']}")
+        _add_matches_by_number(raw, matches, selected, selected_bases)
     if not selected:
-        ui.warn("No works selected — falling back to map-guided")
+        ui.warn("No works selected: falling back to map-guided")
         from index.store import retrieve
-        return _dedupe(r for g in _group_candidates(retrieve("academic research", k=15))
-                       for r in g["records"])
-    # enrich keyword picks with brief fields from the index for downstream drafting
+        fallback_groups = _group_candidates(retrieve("academic research", k=15))
+        return _dedupe(_flatten_groups(fallback_groups))
     return _attach_briefs(selected)
+
+
+def _add_matches_by_number(raw, matches, selected, selected_bases):
+    for part in raw.split(","):
+        p = part.strip()
+        if not p.isdigit():
+            continue
+        idx = int(p) - 1
+        if not (0 <= idx < len(matches)):
+            continue
+        if matches[idx]["base"] in selected_bases:
+            continue
+        selected.append(matches[idx])
+        selected_bases.add(matches[idx]["base"])
+        ui.ok(f"Added: {matches[idx]['authors']}")
 
 
 def _list_select(works, list_file):
@@ -229,7 +242,7 @@ def _list_select(works, list_file):
     for s in stems:
         w = by_base.get(s)
         if w is None:
-            ui.warn(f"No work matches stem '{s}' — skipping")
+            ui.warn(f"No work matches stem '{s}', skipping")
             continue
         selected.append(w)
     if not selected:
@@ -238,7 +251,7 @@ def _list_select(works, list_file):
     return _attach_briefs(selected)
 
 
-# ── structure mode ────────────────────────────────────────────────────────────
+# ---- Structure mode ----
 
 def _ask_mode():
     choice = ui.menu("Review structure", [
@@ -286,31 +299,34 @@ def _draft_synthesise(outline, selected, debates):
 
     sections = _parse_plan(plan)
     if not sections:
-        ui.warn("could not parse a structure — drafting in one pass")
+        ui.warn("could not parse a structure: drafting in one pass")
         return _draft_follow(outline, selected, _debate_block_global(debates))
 
     for s in sections:
         s["records"] = _works_for_section(s, selected)
 
     total = len(sections)
-    completed = [0]
-
-    def _draft_with_progress(s):
-        result = _draft_one_section(s, debates)
-        completed[0] += 1
-        sp._label = f"drafting [{completed[0]}/{total}]"
-        return result
+    counter = count(1)
 
     sp = progress.StepSpinner(f"drafting [0/{total}]")
     sp.start()
     try:
+        draft_one = partial(_draft_section_with_progress, debates=debates,
+                            sp=sp, counter=counter, total=total)
         with ThreadPoolExecutor(max_workers=min(config.LLM_MAX_WORKERS, total)) as pool:
-            drafts = list(pool.map(_draft_with_progress, sections))
+            drafts = list(pool.map(draft_one, sections))
         sp.done(f"{total} sections")
     except Exception as e:
         sp.done("error")
         raise SystemExit(str(e))
     return "\n\n".join(drafts)
+
+
+def _draft_section_with_progress(section, debates, sp, counter, total):
+    result = _draft_one_section(section, debates)
+    done = next(counter)
+    sp._label = f"drafting [{done}/{total}]"
+    return result
 
 
 def _draft_one_section(section, debates):
@@ -347,7 +363,7 @@ def _works_for_section(section, selected):
     return matched if len(matched) >= 2 else list(selected)
 
 
-# ── biblio anchoring ──────────────────────────────────────────────────────────
+# ---- Biblio anchoring ----
 
 def _biblio_debates(selected):
     from biblio import store
@@ -407,7 +423,7 @@ def _debate_lines(debates, only):
 def _wrap_debate(lines):
     if not lines:
         return ""
-    return "CITATION SIGNALS — work these debates into the writing:\n" + "\n".join(lines) + "\n\n"
+    return "CITATION SIGNALS: work these debates into the writing:\n" + "\n".join(lines) + "\n\n"
 
 
 def _pctl(values, p):
@@ -421,7 +437,7 @@ def _cos(a, b):
     return float(a @ b / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-9))
 
 
-# ── briefs / terms ────────────────────────────────────────────────────────────
+# ---- Briefs and terms ----
 
 def _candidate_terms(selected):
     try:
@@ -436,7 +452,7 @@ def _format_briefs(hits):
     parts = []
     for h in hits:
         parts.append(
-            f"### {h.get('authors', '')} — {h.get('title', '')}\n"
+            f"### {h.get('authors', '')}: {h.get('title', '')}\n"
             f"**Question:** {h.get('question', '')}\n\n"
             f"**Arguments:** {h.get('arguments_text', '')}\n\n"
             f"**Conclusions:** {h.get('conclusions', '')}\n\n"
@@ -445,14 +461,20 @@ def _format_briefs(hits):
     return "\n\n---\n\n".join(parts)
 
 
-# ── outline input ─────────────────────────────────────────────────────────────
+# ---- Outline input ----
 
 def _get_outline(outline_file):
+    """Read the outline text to draft the review from.
+
+    Returns:
+        dict with keys "text" (the outline text, or None if the user
+        cancelled) and "stem" (a filename stem to base the output on).
+    """
     if outline_file:
         p = Path(outline_file)
         if not p.exists():
             raise SystemExit(f"File not found: {outline_file}")
-        return p.read_text(encoding="utf-8").strip(), p.stem
+        return {"text": p.read_text(encoding="utf-8").strip(), "stem": p.stem}
 
     input_files = sorted(config.INPUT_DIR.glob("*.md")) + sorted(config.INPUT_DIR.glob("*.txt"))
     options = [("Open in editor", "write outline in $EDITOR / notepad")]
@@ -460,11 +482,11 @@ def _get_outline(outline_file):
 
     choice = ui.menu("Outline source", options)
     if choice is None:
-        return None, "draft"
+        return {"text": None, "stem": "draft"}
     if choice == 0:
-        return _editor_input(), "draft"
+        return {"text": _editor_input(), "stem": "draft"}
     f = input_files[choice - 1]
-    return f.read_text(encoding="utf-8").strip(), f.stem
+    return {"text": f.read_text(encoding="utf-8").strip(), "stem": f.stem}
 
 
 def _editor_input():
@@ -488,7 +510,7 @@ def _editor_cmd(editor, path):
     return [editor, path]
 
 
-# ── index helpers ─────────────────────────────────────────────────────────────
+# ---- Index helpers ----
 
 _INDEX_CACHE = None
 
@@ -556,7 +578,7 @@ def _parse_map_threads(path):
     return [(n, k) for n, k in threads if k]
 
 
-# ── output ────────────────────────────────────────────────────────────────────
+# ---- Output ----
 
 def _write_review(text, selected, sig=None, outline_stem="review"):
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")

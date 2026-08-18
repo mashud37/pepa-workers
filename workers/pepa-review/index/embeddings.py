@@ -1,7 +1,5 @@
-"""Embed texts via Gemini (default) or Ollama — stdlib HTTP only.
-
-Adapted from cli-chat/backends/embeddings.py. Provider is determined by config:
-Ollama wins if ollama_base_url is set; Gemini is the default with gemini_api_key.
+"""Embed texts via Gemini or Ollama over stdlib HTTP, using Ollama when
+ollama_base_url is set and Gemini by default.
 """
 import json
 import urllib.request
@@ -11,7 +9,7 @@ import config
 def _gemini(model, texts):
     import time
     import urllib.error
-    key = config.gemini_api_key()
+    key = config.setting("gemini_api_key")
     out = []
     for t in texts:
         url = (
@@ -57,8 +55,15 @@ def _ollama(base_url, model, texts):
 
 
 def embed(texts):
-    """Embed a list of texts. Returns (vectors, provider/model_string)."""
-    provider, model = config.embed_config()
+    """Embed a list of texts.
+
+    Returns:
+        dict with keys "vectors" (list of embedding vectors) and "model"
+        (the "provider/model_string" that produced them).
+    """
+    embed_cfg = config.embed_config()
+    provider = embed_cfg["provider"]
+    model = embed_cfg["model"]
     if provider is None:
         raise SystemExit(
             "No embedding provider configured.\n"
@@ -66,5 +71,6 @@ def embed(texts):
             "Run: python manage.py install"
         )
     if provider == "gemini":
-        return _gemini(model, texts), f"gemini/{model}"
-    return _ollama(config.ollama_base_url(), model, texts), f"ollama/{model}"
+        return {"vectors": _gemini(model, texts), "model": f"gemini/{model}"}
+    vectors = _ollama(config.setting("ollama_base_url"), model, texts)
+    return {"vectors": vectors, "model": f"ollama/{model}"}

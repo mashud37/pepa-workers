@@ -1,5 +1,7 @@
 """Per-workstream prompt builders."""
 
+MAX_CLUSTER_WORKS = 20
+
 
 def review_system():
     return (
@@ -15,7 +17,7 @@ def review_prompt(outline, briefs_text):
         f"USER OUTLINE AND ARGUMENTS:\n{outline}\n\n"
         f"SELECTED WORKS (sum_ briefs):\n{briefs_text}\n\n"
         "Follow the outline's structure: treat each numbered point, heading, or paragraph "
-        "marker in the outline as its own section with its own `##` heading — do not collapse "
+        "marker in the outline as its own section with its own `##` heading. Do not collapse "
         "them into a single section. Under each, synthesise the works that bear on that point, "
         "showing agreements, divergences, and gaps, and cite every claim inline. End with a "
         "short synthesis paragraph tying the sections together."
@@ -41,7 +43,7 @@ def review_plan_prompt(outline, briefs_text, terms, n_min, n_max):
         f"into {n_min} to {n_max} overarching sections that together structure a review answering "
         f"the prompt. Use exactly this format:\n\n"
         f"**Key terms and tensions:**\n"
-        f"- [term or tension — one line each, 4 to 7 items]\n\n"
+        f"- [term or tension, one line each, 4 to 7 items]\n\n"
         f"**Section:** [section title]\n"
         f"- Covers: [the terms/tensions this section develops]\n"
         f"- Works: [Author surnames of the works that belong here]\n\n"
@@ -87,7 +89,7 @@ def gaps_section_prompt(section_text, candidate_briefs, terms):
         f"{terms_block}"
         f"Use exactly this format; write 'none' under a heading if nothing applies:\n\n"
         f"**Works to add:**\n"
-        f"- [Authors — keyword]: the specific argument or evidence it would contribute here\n"
+        f"- [Authors, keyword]: the specific argument or evidence it would contribute here\n"
         f"**Arguments to engage:**\n"
         f"- [an argument from these works this section should address]\n"
         f"**Terms to incorporate:**\n"
@@ -99,7 +101,7 @@ def gaps_system():
     return (
         "You are a research assistant helping a scholar identify missed or underutilised sources. "
         "Be concise and specific. For each relevant work, write one line: "
-        "'[Authors — keyword]: <reason it is relevant to the draft>'."
+        "'[Authors, keyword]: <reason it is relevant to the draft>'."
     )
 
 
@@ -141,11 +143,11 @@ def map_system():
     )
 
 
-def map_thread_prompt(records, total_in_cluster, max_works=20, top_terms=None):
+def map_thread_prompt(records, total_in_cluster, max_works=MAX_CLUSTER_WORKS, top_terms=None):
     parts = []
     for r in records[:max_works]:
         entry = (
-            f"**{r.get('authors', '')} — {r.get('title', '')}**\n"
+            f"**{r.get('authors', '')}: {r.get('title', '')}**\n"
             f"Question: {r.get('question', '')}\n"
             f"Arguments: {r.get('arguments_text', '')[:350]}"
         )
@@ -170,13 +172,13 @@ def map_thread_prompt(records, total_in_cluster, max_works=20, top_terms=None):
         f"{works_text}\n\n"
         f"{terms_block}"
         f"---\n"
-        f"Provide all six sections below. Be specific — cite authors by surname.\n\n"
+        f"Provide all six sections below. Be specific: cite authors by surname.\n\n"
         f"**Theme:** [3–7 word thread name]\n"
         f"**Discussion:** [2–3 sentences on the thread's intellectual contribution and internal tensions]\n"
         f"**Key arguments:**\n"
-        f"- [empirical or analytical claim that recurs across works — 5 to 7 items]\n"
+        f"- [empirical or analytical claim that recurs across works, 5 to 7 items]\n"
         f"**Key concepts:**\n"
-        f"- [Term: brief definition (Author/s) — 4 to 6 items]\n"
+        f"- [Term: brief definition (Author/s), 4 to 6 items]\n"
         f"**Methods:** [1–2 sentences on dominant research approaches used]\n"
         f"**Empirical contexts:** [brief description of countries, platforms, cultural settings studied]\n"
     )

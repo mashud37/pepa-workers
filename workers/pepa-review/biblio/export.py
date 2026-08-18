@@ -1,10 +1,6 @@
-"""Export biblio.db to CSV — the human-readable document reference.
-
-Produces two files in output/:
-  works_{ts}.csv     — one row per corpus paper with DOI, venue, year, etc.
-  citations_{ts}.csv — full reference edge list
-
-Both are UTF-8 with BOM so Excel opens them directly without an import wizard.
+"""Export biblio.db to two timestamped CSV files in output/: works with
+DOI, venue, and year, and citations as a reference edge list, both UTF-8
+with BOM for Excel.
 """
 import csv
 from datetime import datetime
@@ -15,7 +11,11 @@ from biblio.schema import connect
 
 
 def export(output_dir=None):
-    """Write works and citations CSVs. Returns (works_path, citations_path)."""
+    """Write works and citations CSVs.
+
+    Returns:
+        dict with keys "works_path" and "citations_path".
+    """
     out = Path(output_dir) if output_dir else config.OUTPUT_DIR
     out.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -24,7 +24,7 @@ def export(output_dir=None):
     w_path = _write_works(con, out, ts)
     c_path = _write_citations(con, out, ts)
     con.close()
-    return w_path, c_path
+    return {"works_path": w_path, "citations_path": c_path}
 
 
 def _write_works(con, out, ts):
@@ -38,8 +38,19 @@ def _write_works(con, out, ts):
     path = out / f"works_{ts}.csv"
     with open(path, "w", encoding="utf-8-sig", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["base", "doi", "ext_id", "title", "authors", "venue",
-                    "year", "type", "cited_by_count", "concepts", "match_confidence"])
+        w.writerow([
+            "base",
+            "doi",
+            "ext_id",
+            "title",
+            "authors",
+            "venue",
+            "year",
+            "type",
+            "cited_by_count",
+            "concepts",
+            "match_confidence",
+        ])
         for r in rows:
             w.writerow(list(r))
     return path
@@ -64,9 +75,17 @@ def _write_citations(con, out, ts):
     path = out / f"citations_{ts}.csv"
     with open(path, "w", encoding="utf-8-sig", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["citing_base", "citing_authors", "citing_year",
-                    "cited_base", "cited_ext_id", "cited_doi",
-                    "cited_title", "cited_authors", "cited_year"])
+        w.writerow([
+            "citing_base",
+            "citing_authors",
+            "citing_year",
+            "cited_base",
+            "cited_ext_id",
+            "cited_doi",
+            "cited_title",
+            "cited_authors",
+            "cited_year",
+        ])
         for r in rows:
             w.writerow(list(r))
     return path

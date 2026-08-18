@@ -1,7 +1,6 @@
-"""Effective configuration: CORPUS_DIR, embeddings, LLM model IDs, I/O paths.
-
-Precedence for every value: environment variable -> secrets.yaml -> built-in default.
-secrets.yaml is gitignored; only secrets.example.yaml is committed.
+"""Resolve effective configuration (CORPUS_DIR, embeddings, LLM model
+IDs, I/O paths) with precedence: environment variable, then secrets.yaml,
+then a built-in default.
 """
 import os
 from pathlib import Path
@@ -46,7 +45,7 @@ GENERATION_MODEL_QUALITY = "claude-sonnet-4-6"
 EMBED_MODEL_GEMINI = "gemini-embedding-001"
 EMBED_MODEL_OLLAMA = "nomic-embed-text"
 
-# Corpus-map clustering (WS4) — UMAP -> consensus -> c-TF-IDF
+# Corpus-map clustering (WS4): UMAP -> consensus -> c-TF-IDF
 MAP_UMAP_DIM = 10
 MAP_MIN_THREADS = 6            # thread-count band floor (silhouette is swept within the band)
 MAP_MAX_THREADS = 40           # thread-count band ceiling
@@ -58,7 +57,7 @@ MAP_MULTI_MARGIN = 0.8         # second thread listed if its profile >= margin *
 MAP_MERGE_SIM = 0.9            # centroid cosine above which two threads may merge
 MAP_MERGE_TERM_J = 0.5         # plus top-term Jaccard above which two threads merge
 
-# Thread-level map (WS5) — re-cluster the works of one thread at finer granularity
+# Thread-level map (WS5): re-cluster the works of one thread at finer granularity
 MAP_SUB_MIN_THREADS = 2        # band floor when re-clustering a single thread's works
 MAP_SUB_MAX_THREADS = 12       # band ceiling for the sub-clustering sweep
 
@@ -75,6 +74,15 @@ _ENV_OVERRIDE = {
 
 _PLACEHOLDERS = {"", "REPLACE_ME", "changeme"}
 
+DEFAULTS = {
+    "corpus_dir": CORPUS_DIR_DEFAULT,
+    "anthropic_api_key": None,
+    "anthropic_model": GENERATION_MODEL_DEFAULT,
+    "review_model": GENERATION_MODEL_QUALITY,
+    "gemini_api_key": None,
+    "ollama_base_url": None,
+}
+
 
 def _secrets():
     if SECRETS_FILE.exists():
@@ -90,37 +98,27 @@ def get(key, default=None):
     return val if val not in (None, *_PLACEHOLDERS) else default
 
 
+def setting(name):
+    """Read one named config value: env var, then secrets.yaml, then DEFAULTS."""
+    return get(name, DEFAULTS.get(name))
+
+
 def corpus_dir():
-    return Path(get("corpus_dir", CORPUS_DIR_DEFAULT))
-
-
-def anthropic_api_key():
-    return get("anthropic_api_key")
-
-
-def anthropic_model():
-    return get("anthropic_model", GENERATION_MODEL_DEFAULT)
-
-
-def review_model():
-    return get("review_model", GENERATION_MODEL_QUALITY)
-
-
-def gemini_api_key():
-    return get("gemini_api_key")
-
-
-def ollama_base_url():
-    return get("ollama_base_url")
+    return Path(setting("corpus_dir"))
 
 
 def embed_config():
-    """Return (provider, model) or (None, None) if no embeddings configured."""
-    if ollama_base_url():
-        return ("ollama", get("embed_model", EMBED_MODEL_OLLAMA))
-    if gemini_api_key():
-        return ("gemini", get("embed_model", EMBED_MODEL_GEMINI))
-    return (None, None)
+    """Return the embedding provider and model to use.
+
+    Returns:
+        dict with keys "provider" and "model", both None if no embedding
+        backend is configured.
+    """
+    if setting("ollama_base_url"):
+        return {"provider": "ollama", "model": get("embed_model", EMBED_MODEL_OLLAMA)}
+    if setting("gemini_api_key"):
+        return {"provider": "gemini", "model": get("embed_model", EMBED_MODEL_GEMINI)}
+    return {"provider": None, "model": None}
 
 
 def use_biblio():

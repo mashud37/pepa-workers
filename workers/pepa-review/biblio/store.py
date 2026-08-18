@@ -1,8 +1,6 @@
-"""Query helpers over biblio.db.
-
-All public functions return plain dicts or lists of dicts so callers need not
-deal with sqlite3.Row or connection management. Functions return None / [] when
-the database is absent or a work has no record — callers degrade gracefully.
+"""Provide query helpers over biblio.db, returning plain dicts or lists of
+dicts so callers avoid sqlite3.Row and connection management, degrading to
+None or [] when data is absent.
 """
 import config
 from biblio.schema import connect

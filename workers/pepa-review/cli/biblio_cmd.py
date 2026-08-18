@@ -1,20 +1,29 @@
-"""Bibliographic enrichment commands (all require use_biblio=true in secrets.yaml).
-
-Subcommands
-  ingest   — load upstream works + citations CSV/JSONL into biblio.db
-  export   — write works.csv + citations.csv to output/
-  stats    — print summary counts
-  network  — build and export citation or coupling graph
+"""Run bibliographic enrichment subcommands: ingest, export, stats, and
+network, all requiring use_biblio=true in secrets.yaml.
 """
 import sys
+from functools import partial
 from pathlib import Path
 
 import config
 from cli import ui, progress
 
 
-def run(subcmd, works_file=None, citations_file=None,
-        graph_type="citation", fmt="html", output_dir=None):
+def run(subcmd, options=None):
+    """Dispatch a biblio subcommand.
+
+    Args:
+        subcmd: one of "ingest", "export", "stats", "network".
+        options: dict with keys "works_file", "citations_file",
+            "graph_type", "fmt", "output_dir", all optional.
+    """
+    options = options or {}
+    works_file = options.get("works_file")
+    citations_file = options.get("citations_file")
+    graph_type = options.get("graph_type", "citation")
+    fmt = options.get("fmt", "html")
+    output_dir = options.get("output_dir")
+
     if subcmd == "ingest":
         _ingest(works_file, citations_file)
     elif subcmd == "export":
@@ -25,6 +34,10 @@ def run(subcmd, works_file=None, citations_file=None,
         _network(graph_type, fmt, output_dir)
     else:
         raise SystemExit(f"Unknown biblio subcommand: {subcmd}")
+
+
+def _report_ingest_progress(sp, i, total, label):
+    sp._label = f"[{i}/{total}] {label[:18]}"
 
 
 def _ingest(works_file, citations_file):
@@ -49,24 +62,19 @@ def _ingest(works_file, citations_file):
     sp = progress.StepSpinner("ingesting works")
     sp.start()
 
-    def on_progress(i, total, label):
-        sp._label = f"[{i}/{total}] {label[:18]}"
-
     try:
         from biblio.ingest import ingest
-        n_works, n_cit, n_resolved = ingest(
-            works_path, cit_path, progress_cb=on_progress
-        )
-        sp.done(f"{n_works} works")
+        result = ingest(works_path, cit_path, progress_cb=partial(_report_ingest_progress, sp))
+        sp.done(f"{result['n_works']} works")
     except Exception as e:
         sp.done("error")
         raise SystemExit(str(e))
 
-    ui.ok(f"{n_works} works stored")
+    ui.ok(f"{result['n_works']} works stored")
     if cit_path:
-        ui.ok(f"{n_cit} citation edges stored")
-        ui.ok(f"{n_resolved} edges resolved to corpus works (internal graph)")
-    ui.info("biblio.db ready — set use_biblio: true in secrets.yaml to activate enrichment")
+        ui.ok(f"{result['n_citations']} citation edges stored")
+        ui.ok(f"{result['n_resolved']} edges resolved to corpus works (internal graph)")
+    ui.info("biblio.db ready: set use_biblio: true in secrets.yaml to activate enrichment")
 
 
 def _export(output_dir):
@@ -77,25 +85,25 @@ def _export(output_dir):
     sp.start()
     try:
         from biblio.export import export
-        w_path, c_path = export(output_dir)
+        paths = export(output_dir)
         sp.done("done")
     except Exception as e:
         sp.done("error")
         raise SystemExit(str(e))
 
-    ui.ok(f"works:     {w_path.name}")
-    ui.ok(f"citations: {c_path.name}")
-    ui.info(f"in {w_path.parent}")
+    ui.ok(f"works:     {paths['works_path'].name}")
+    ui.ok(f"citations: {paths['citations_path'].name}")
+    ui.info(f"in {paths['works_path'].parent}")
 
 
 def _stats():
-    ui.header("Bibliographic data — statistics")
+    ui.header("Bibliographic data: statistics")
     _require_db()
 
     from biblio.store import stats
     s = stats()
     if not s:
-        ui.warn("biblio.db is empty — run: python manage.py biblio ingest")
+        ui.warn("biblio.db is empty. Run: python manage.py biblio ingest")
         return
 
     ui.step("Works")
@@ -114,11 +122,11 @@ def _stats():
     ui.step("Toggle")
     ui.info(f"use_biblio: {enrichment}")
     if not config.use_biblio():
-        ui.warn("Enrichment is off — set use_biblio: true in secrets.yaml to activate")
+        ui.warn("Enrichment is off: set use_biblio: true in secrets.yaml to activate")
 
 
 def _network(graph_type, fmt, output_dir):
-    ui.header(f"Citation network — {graph_type}")
+    ui.header(f"Citation network: {graph_type}")
     _require_db()
 
     sp = progress.StepSpinner(f"building {graph_type} graph")
@@ -149,7 +157,7 @@ def _require_db():
 
 def _pick_file(prompt):
     if not sys.stdin.isatty():
-        raise SystemExit(f"No {prompt} provided and no TTY — pass it as an argument.")
+        raise SystemExit(f"No {prompt} provided and no TTY. Pass it as an argument.")
     raw = ui.ask(f"{prompt} path")
     if not raw:
         raise SystemExit("No file provided.")

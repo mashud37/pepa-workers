@@ -1,12 +1,24 @@
 """Build or refresh the embedding index (backbone shared by all workstreams)."""
+from functools import partial
+
 import config
 from cli import ui, progress
+
+
+def _report_embed_progress(sp, i, total, _label):
+    sp._label = f"embedding [{i}/{total}]"
+
+
+def _report_status(sp, msg):
+    sp._label = msg
 
 
 def run(force=False):
     ui.header("Build / refresh index")
 
-    provider, model = config.embed_config()
+    embed = config.embed_config()
+    provider = embed["provider"]
+    model = embed["model"]
     if not provider:
         raise SystemExit(
             "No embedding provider configured.\n"
@@ -31,18 +43,16 @@ def run(force=False):
     sp = progress.StepSpinner("indexing")
     sp.start()
 
-    def on_progress(i, total_, _label):
-        sp._label = f"embedding [{i}/{total_}]"
-
-    def on_status(msg):
-        sp._label = msg
-
     try:
         from index.store import build_index
-        n, model_used = build_index(force=force, progress_cb=on_progress, status_cb=on_status)
-        sp.done(f"{n} records")
+        result = build_index(
+            force=force,
+            progress_cb=partial(_report_embed_progress, sp),
+            status_cb=partial(_report_status, sp),
+        )
+        sp.done(f"{result['n_records']} records")
     except BaseException as e:
         sp.done("error")
         raise SystemExit(str(e)) from None
 
-    ui.ok(f"index ready: {n} records, {model_used}")
+    ui.ok(f"index ready: {result['n_records']} records, {result['model_used']}")

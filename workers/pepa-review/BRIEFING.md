@@ -1,4 +1,4 @@
-# BRIEFING — build the `pepa-review` repo
+# BRIEFING: build the `pepa-review` repo
 
 You (a Sonnet agent) are scaffolding a new personal-scale Python CLI package, **`pepa-review`**, at
 `C:\Users\andreas\OneDrive\Development\pepa-review` (this folder). It is a **downstream consumer of
@@ -10,18 +10,18 @@ a research tool.
 
 `pepa-review` supports four research workstreams over the `pepa-sum` outputs:
 
-1. **Literature review assembly** — user gives a rough outline + arguments and selects works/authors;
+1. **Literature review assembly**: user gives a rough outline + arguments and selects works/authors;
    the tool assembles a literature review, drawing primarily on the `sum_` briefs.
-2. **Draft gap-check** — user gives a draft (finished or WIP); via embeddings the tool finds
+2. **Draft gap-check**: user gives a draft (finished or WIP); via embeddings the tool finds
    `sum_`/`para_` overlaps and suggests works that are missed or underused.
-3. **Discovery** — user is new to a literature and wants an intelligent way to explore and interrogate
+3. **Discovery**: user is new to a literature and wants an intelligent way to explore and interrogate
    the information in the `sum_` briefs.
-4. **Knowledge graph** — cluster works by `sum_`-level similarity, support adding/updating works, and
+4. **Knowledge graph**: cluster works by `sum_`-level similarity, support adding/updating works, and
    let the graph evolve to surface recurring topics, themes, arguments, and literatures.
 
 **Locked design decisions:**
 - **Name:** `pepa-review` (sibling to `pepa-sum`).
-- **Interface:** CLI only — `manage.py` menu + scriptable subcommands, fully policy-conformant.
+- **Interface:** CLI only: `manage.py` menu + scriptable subcommands, fully policy-conformant.
 - **Scope:** scaffold all four workstreams now (breadth-first), on one shared core.
 - **Embeddings:** reuse `cli-chat`'s `embeddings.py` (Gemini + Ollama), **default Gemini**;
   provider stamped into the index.
@@ -52,20 +52,20 @@ will be checked against:
 
 Each paper yields three files named `<prefix>_<base>.md`, sharing one `<base>`:
 
-- **`sum_<base>.md`** — the structured brief. **Fixed shape**, every file identical, so they parse
+- **`sum_<base>.md`**: the structured brief. **Fixed shape**, every file identical, so they parse
   deterministically:
   - **Line 1:** the source filename, e.g. `Alaimo Kallinikos_Objects metrics and practices….pdf`.
-    The convention is `<AuthorLastnames>_<Title>.pdf` — **authors are the substring before the
+    The convention is `<AuthorLastnames>_<Title>.pdf`: **authors are the substring before the
     first `_`; title is after it.**
-  - **`## <one-line title>`** — H2 heading.
+  - **`## <one-line title>`**: H2 heading.
   - Bold-labelled fields, always in this order: **`- **Question & context:**`**,
     **`Empirical context:`**, **`Literature drawn on:`**, **`Methods:`**, **`Arguments:`** (a
     numbered sub-list, each item often `**bold lead.** explanation`), **`Key conclusions:`**,
     **`Discussion items:`**. Parse on these labels.
-- **`para_<base>.md`** — line 1 = source filename; then a numbered list, one sentence per source
+- **`para_<base>.md`**: line 1 = source filename; then a numbered list, one sentence per source
   paragraph, in document order.
-- **`quote_<base>.md`** — line 1 = source filename; then a bullet list of verbatim quotes. **Note:
-  these are noisy** — some bullets are extracted headers/footers/citation boilerplate (e.g. "LSE
+- **`quote_<base>.md`**: line 1 = source filename; then a bullet list of verbatim quotes. **Note:
+  these are noisy**, some bullets are extracted headers/footers/citation boilerplate (e.g. "LSE
   Research Online is the repository…"). Treat `quote_` as lower-trust detail, not primary signal.
 
 Build the index and all reasoning primarily on **`sum_`** (clean, structured), use **`para_`** for
@@ -74,9 +74,9 @@ finer-grained overlap detection (WS2), and **`quote_`** only for illustrative pu
 ## 2. Repo layout to create (function-named, flat root)
 
 ```
-manage.py              entrypoint — no args = menu; subcommands also work
+manage.py              entrypoint: no args = menu; subcommands also work
 config.py              CORPUS_DIR (default ../pepa-sum/output), embeddings + model IDs, paths, env override
-requirements.txt       pyyaml, numpy   (lazy/optional: scikit-learn, networkx — note in README, not core)
+requirements.txt       pyyaml, numpy   (lazy/optional: scikit-learn, networkx, note in README, not core)
 secrets.example.yaml   gemini_api_key, anthropic_api_key, gcp_project, gcp_region  (secrets.yaml gitignored)
 README.md              per readme-structure.md
 .gitignore             canonical (security.md §5)
@@ -114,13 +114,13 @@ Sonnet for synthesis-heavy WS1; embeddings default Gemini `text-embedding-004`).
 `secrets.yaml`+`secrets.example.yaml` shape (this repo is not a Cloud Run app, so prefer
 `secrets.yaml` over `env.yaml`).
 
-## 3. Shared core — build and prove this BEFORE the four workstreams
+## 3. Shared core: build and prove this BEFORE the four workstreams
 
 All four sit on the same two pieces; get them solid first:
-1. **`corpus/` parse** — `load.py` pairs files by `<base>`; `parse_sum.py` splits a `sum_` doc into
+1. **`corpus/` parse**: `load.py` pairs files by `<base>`; `parse_sum.py` splits a `sum_` doc into
    its labelled fields; `metadata.py` yields the `{authors, title, base}` work-list used by every
    selection menu. A handful of unit-style checks against real files in `../pepa-sum/output`.
-2. **`index/` embed + retrieve** — adapt `cli-chat`'s `embeddings.py` (stdlib HTTP, gemini default)
+2. **`index/` embed + retrieve**: adapt `cli-chat`'s `embeddings.py` (stdlib HTTP, gemini default)
    and `projects.py`'s `build_index`/`retrieve`/cosine into `index/store.py`. **Index unit = one
    `sum_` brief** (optionally one record per Argument for finer recall); stamp `provider`/`model`/`dim`
    into the JSON cache in `data/`; on provider mismatch raise the same re-index `SystemExit` cli-chat
@@ -128,38 +128,38 @@ All four sit on the same two pieces; get them solid first:
    - **Retrieval quality (`cs_ir_stats_reference.md` §6).** Pure dense cosine is the baseline, but the
      reference's durable lesson is **hybrid retrieve-then-rerank**: dense embeddings (§6.8) catch
      paraphrase, BM25 (§6.2) catches exact terms, and they fuse cleanly with **Reciprocal Rank Fusion**
-     (§6.6 — ~6 lines, no score normalization). `pepa-sum` already computes BM25 locally, so a
-     BM25⊕dense RRF blend is a cheap, high-recall upgrade for WS2/WS3 — keep it **optional**, default
+     (§6.6, ~6 lines, no score normalization). `pepa-sum` already computes BM25 locally, so a
+     BM25⊕dense RRF blend is a cheap, high-recall upgrade for WS2/WS3: keep it **optional**, default
      to cosine. (TREC-style nDCG/MAP evaluation in §7 is overkill for a personal tool; skip unless you
      want to measure a ranking change.)
 
 ## 4. The four workstreams (scaffold all; each is a `cli/` module + menu entry + subcommand)
 
-**WS1 — Literature review assembly (`review.py`, `review`).**
+**WS1: Literature review assembly (`review.py`, `review`).**
 User supplies a rough outline + arguments (free text via `$EDITOR` or a file in `input/`) and
 **selects works/authors**. Per `cli.md` *enumerate, don't interrogate*: list the parsed work/author
-set for numbered multi-select (`ui.menu`), with a free-text/path fallback — never a blind prompt.
+set for numbered multi-select (`ui.menu`), with a free-text/path fallback: never a blind prompt.
 Then: embed the outline → retrieve relevant `sum_` briefs (restricted to the selection when given),
 feed their structured **Arguments/Key conclusions/Literature** fields + the outline to the LLM, and
 draft a thematically-organised review that synthesises and cites the selected works, pulling `para_`
 detail where needed. Write the review to `output/`.
 
-**WS2 — Draft gap-check (`gaps.py`, `gaps`).**
+**WS2: Draft gap-check (`gaps.py`, `gaps`).**
 User supplies a draft (file in `input/` or a path). Chunk + embed the draft; for each chunk retrieve
 nearest `sum_`/`para_` records. Detect which corpus works the draft **already engages** (match author
 surnames / titles in the draft text), then surface works that are **semantically close but absent or
 underused**, ranked by similarity, each with a one-line "why" naming the overlapping `sum_` field.
 
-**WS3 — Discovery (`explore.py`, `explore`).**
+**WS3: Discovery (`explore.py`, `explore`).**
 Interactive RAG over the `sum_` corpus: user asks about a topic → embed → retrieve top briefs →
 present their titles + Question/Arguments → allow follow-ups. Same retrieval core as WS2/WS4,
 specialised to the `sum_` structure; surface emergent themes/clusters from WS4 when available.
 
-**WS4 — Knowledge graph (`graph.py`, `graph`).**
-Over the shared `sum_` embeddings (computed **once** and reused everywhere —
+**WS4: Knowledge graph (`graph.py`, `graph`).**
+Over the shared `sum_` embeddings (computed **once** and reused everywhere:
 `cs_ir_stats_reference.md` golden rule #1). For "recurring topics, themes" the reference's headline
 recipe is **embedding-based clustering, not classical LDA/NMF**: it recommends **UMAP → HDBSCAN**
-(§2.6 / §5.4) — exactly what **BERTopic** wraps (§3.5: embeddings → UMAP → HDBSCAN → c-TF-IDF), which
+(§2.6 / §5.4), exactly what **BERTopic** wraps (§3.5: embeddings → UMAP → HDBSCAN → c-TF-IDF), which
 it calls the most interpretable option, auto-picks the topic count, supports **hierarchical topic
 reduction** (good for the "evolving graph"), and **reuses the embeddings you already built**. Use
 BERTopic to label themes (**lazy/optional** per `dependencies.md`); fall back to spherical/cosine
@@ -170,7 +170,7 @@ triples (§4.5–4.7). Persist the graph as JSON in `data/` (nodes = works + met
 similarity). **Incremental update:** when new `sum_` files appear in `CORPUS_DIR`, embed and assign
 them to the nearest cluster and extend the graph rather than rebuilding; to track how the literature
 **drifts** over corpus additions, compare cluster word-distributions with **Jensen-Shannon** (§1.11,
-a true metric). Since the interface is CLI-only, **view the graph as an exported file** — GraphML or a
+a true metric). Since the interface is CLI-only, **view the graph as an exported file**: GraphML or a
 standalone HTML (`networkx`/`pyvis`, lazy-optional) written to `output/`.
 
 ## 5. Models, deps, CLI shape
@@ -201,10 +201,10 @@ a runnable example → Cost estimates with the "estimates only" disclaimer.
 
 ## 7. Verification (prove it works)
 
-1. `python manage.py install` — creates `secrets.yaml`, reports the `CORPUS_DIR` paper count (~426).
-2. `python manage.py index` — builds the embedding index over `sum_` briefs; provider stamped; re-run
+1. `python manage.py install`: creates `secrets.yaml`, reports the `CORPUS_DIR` paper count (~426).
+2. `python manage.py index`: builds the embedding index over `sum_` briefs; provider stamped; re-run
    skips/refreshes incrementally.
-3. `python manage.py explore` with a topic query returns relevant briefs by title — proves
+3. `python manage.py explore` with a topic query returns relevant briefs by title: proves
    parse+embed+retrieve end to end.
 4. `python manage.py gaps --input <a-draft.md>` lists plausibly-missed works with a why-line.
 5. `python manage.py review` with a small outline + a 3-work selection produces a cited review in

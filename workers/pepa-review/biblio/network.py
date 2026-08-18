@@ -1,16 +1,5 @@
-"""Internal citation network over the corpus.
-
-Builds three derived graph views from biblio.db:
-  citation   — directed (A cites B); authority / PageRank
-  coupling   — undirected (A, B share ≥ N cited works); bibliographic coupling
-  cocitation — undirected (X, Y cited together by ≥ 2 corpus papers)
-
-Exports each as GraphML (networkx) or HTML (pyvis), reusing the same export
-helpers as cli/graph.py.  All functions return None when networkx is not
-installed and print a hint.
-
-PageRank and in-degree authority scores are computed here and stored back to
-biblio.db via biblio/store.py so other workstreams can query them cheaply.
+"""Build citation, coupling, and cocitation graph views from biblio.db, export each as
+GraphML or HTML, and store PageRank and authority scores back to biblio.db.
 """
 import json
 from datetime import datetime
@@ -21,9 +10,21 @@ from biblio.schema import connect
 from biblio import store
 
 _PALETTE = [
-    "#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6",
-    "#1abc9c", "#e67e22", "#34495e", "#16a085", "#8e44ad",
-    "#d35400", "#27ae60", "#2980b9", "#c0392b", "#7f8c8d",
+    "#e74c3c",
+    "#3498db",
+    "#2ecc71",
+    "#f39c12",
+    "#9b59b6",
+    "#1abc9c",
+    "#e67e22",
+    "#34495e",
+    "#16a085",
+    "#8e44ad",
+    "#d35400",
+    "#27ae60",
+    "#2980b9",
+    "#c0392b",
+    "#7f8c8d",
 ]
 
 

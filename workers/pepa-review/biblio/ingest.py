@@ -1,15 +1,6 @@
-"""Ingest upstream bibliographic data into biblio.db.
-
-Upstream delivers two files (CSV or JSONL):
-  works file    — one row per corpus paper (see schema.py for field list)
-  citations file — reference edge list (citing_base -> cited work)
-
-After loading, resolves cited_ext_id / cited_doi -> cited_base for any
-referenced work that is itself in the corpus, forming the internal citation
-network.
-
-Calling ingest() is idempotent: existing rows are replaced (upsert on base /
-on citing_base+cited_ext_id+cited_doi).
+"""Ingest upstream works and citations files (CSV or JSONL) into
+biblio.db, resolving cited works that are themselves in the corpus into an
+internal citation network. Idempotent: existing rows are replaced.
 """
 import csv
 import json
@@ -21,8 +12,10 @@ from biblio.schema import connect, ensure_schema
 def ingest(works_path, citations_path=None, progress_cb=None):
     """Load works and (optionally) citations into biblio.db.
 
-    Returns (n_works, n_citations, n_resolved) where n_resolved is the number
-    of citation edges whose cited_base was resolved to a corpus work.
+    Returns:
+        dict with keys "n_works", "n_citations", and "n_resolved", where
+        n_resolved is the number of citation edges whose cited_base was
+        resolved to a corpus work.
     """
     con = connect()
     ensure_schema(con)
@@ -35,10 +28,12 @@ def ingest(works_path, citations_path=None, progress_cb=None):
     n_resolved = 0
     if citations_path:
         cit_rows = _load_file(Path(citations_path))
-        n_citations, n_resolved = _upsert_citations(con, cit_rows)
+        citation_result = _upsert_citations(con, cit_rows)
+        n_citations = citation_result["n_citations"]
+        n_resolved = citation_result["n_resolved"]
 
     con.close()
-    return n_works, n_citations, n_resolved
+    return {"n_works": n_works, "n_citations": n_citations, "n_resolved": n_resolved}
 
 
 def resolve_cited_bases(con=None):
@@ -67,18 +62,14 @@ def resolve_cited_bases(con=None):
 def _load_file(path):
     suffix = path.suffix.lower()
     if suffix == ".csv":
-        return _read_csv(path)
+        with open(path, encoding="utf-8-sig", newline="") as f:
+            return list(csv.DictReader(f))
     if suffix in (".jsonl", ".ndjson"):
         return _read_jsonl(path)
     if suffix == ".json":
         data = json.loads(path.read_text(encoding="utf-8"))
         return data if isinstance(data, list) else [data]
     raise SystemExit(f"Unsupported file format: {path.suffix}  (expected .csv, .jsonl, .json)")
-
-
-def _read_csv(path):
-    with open(path, encoding="utf-8-sig", newline="") as f:
-        return list(csv.DictReader(f))
 
 
 def _read_jsonl(path):
@@ -91,8 +82,19 @@ def _read_jsonl(path):
 
 
 def _upsert_works(con, rows, progress_cb):
-    fields = ("base", "doi", "ext_id", "title", "authors", "venue",
-              "year", "type", "cited_by_count", "concepts", "match_confidence")
+    fields = (
+        "base",
+        "doi",
+        "ext_id",
+        "title",
+        "authors",
+        "venue",
+        "year",
+        "type",
+        "cited_by_count",
+        "concepts",
+        "match_confidence",
+    )
     sql = f"""
         INSERT OR REPLACE INTO works ({', '.join(fields)})
         VALUES ({', '.join('?' for _ in fields)})
@@ -138,7 +140,7 @@ def _upsert_citations(con, rows):
     con.commit()
     n = len(rows)
     resolved = resolve_cited_bases(con)
-    return n, resolved
+    return {"n_citations": n, "n_resolved": resolved}
 
 
 def _str(row, key):

@@ -1,27 +1,25 @@
-"""Claude (Anthropic) client — default generation backend.
-
-Adapted from pepa-sum/backends/anthropic_client.py.
-"""
+"""Call Claude, Anthropic's API, as the default generation backend."""
 import time
 import config
 
 _RETRYABLE = (429, 500, 502, 503, 529)
+DEFAULT_MAX_TOKENS = 4000
 
 
-def complete(system, prompt, max_tokens=4000, model=None):
+def complete(system, prompt, max_tokens=DEFAULT_MAX_TOKENS, model=None):
     try:
         import anthropic
     except ImportError:
         raise SystemExit("anthropic package missing. Run: pip install -r requirements.txt")
 
-    key = config.anthropic_api_key()
+    key = config.setting("anthropic_api_key")
     if not key:
         raise SystemExit(
             "No ANTHROPIC_API_KEY. Set it in secrets.yaml or the ANTHROPIC_API_KEY env "
             "var. Run: python manage.py install"
         )
 
-    _model = model or config.anthropic_model()
+    _model = model or config.setting("anthropic_model")
     client = anthropic.Anthropic(api_key=key)
     for attempt in range(3):
         try:

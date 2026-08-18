@@ -1,13 +1,6 @@
-"""Work-list derived from base filenames — the source for all selection menus."""
+"""Derive the work list from base filenames, the source for every selection menu.
+"""
 from corpus.load import load_corpus
-
-
-def _authors(base):
-    return base.split("_")[0].strip() if "_" in base else base
-
-
-def _title(base):
-    return base.split("_", 1)[1].strip() if "_" in base else base
 
 
 def work_list():
@@ -15,10 +8,12 @@ def work_list():
     works = []
     for entry in load_corpus():
         base = entry["base"]
+        authors = base.split("_")[0].strip() if "_" in base else base
+        title = base.split("_", 1)[1].strip() if "_" in base else base
         works.append({
             "base": base,
-            "authors": _authors(base),
-            "title": _title(base),
+            "authors": authors,
+            "title": title,
             "sum_path": entry["sum_path"],
             "para_path": entry["para_path"],
             "quote_path": entry["quote_path"],
@@ -30,4 +25,4 @@ def display_label(work):
     title = work["title"]
     if len(title) > 60:
         title = title[:57] + "..."
-    return f"{work['authors']} — {title}"
+    return f"{work['authors']}: {title}"

@@ -1,7 +1,6 @@
-"""Parse a sum_ Markdown file into a structured dict.
-
-The sum_ format is fixed: line 1 = source filename; ## title; then a sequence
-of bold-labelled fields always in the same order.
+"""Parse a sum_ Markdown file into a structured dict: line one is the
+source filename, then a title heading and fixed bold-labelled fields in
+order.
 """
 import re
 from pathlib import Path
@@ -45,7 +44,8 @@ def parse_sum(path):
         fields[name] = text[end:next_start].strip()
 
     args_text = fields.get("arguments", "")
-    args_list = _parse_arguments(args_text)
+    args_items = re.split(r"\n\s*\d+\.\s+", args_text)
+    args_list = [item.strip() for item in args_items if item.strip()]
 
     stem = Path(path).stem
     base = stem[4:] if stem.startswith("sum_") else stem
@@ -63,8 +63,3 @@ def parse_sum(path):
         "conclusions": fields.get("conclusions", ""),
         "discussion": fields.get("discussion", ""),
     }
-
-
-def _parse_arguments(text):
-    items = re.split(r"\n\s*\d+\.\s+", text)
-    return [item.strip() for item in items if item.strip()]

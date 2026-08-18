@@ -4,7 +4,7 @@ import argparse
 from cli import menu, install, ui
 
 
-def main():
+def _build_parser():
     parser = argparse.ArgumentParser(prog="manage.py", description="pepa-review")
     sub = parser.add_subparsers(dest="command")
 
@@ -44,9 +44,9 @@ def main():
     bi.add_argument("subcmd", choices=["ingest", "export", "stats", "network"],
                     help="ingest | export | stats | network")
     bi.add_argument("--works", default=None, metavar="FILE",
-                    help="Works metadata file (CSV or JSONL) — required for ingest")
+                    help="Works metadata file (CSV or JSONL), required for ingest")
     bi.add_argument("--citations", default=None, metavar="FILE",
-                    help="Citations edge-list file (CSV or JSONL) — optional for ingest")
+                    help="Citations edge-list file (CSV or JSONL), optional for ingest")
     bi.add_argument("--graph-type", default="citation", choices=["citation", "coupling"],
                     metavar="TYPE", help="citation (default) or coupling")
     bi.add_argument("--format", default="html", choices=["html", "graphml"],
@@ -54,6 +54,11 @@ def main():
     bi.add_argument("--output", default=None, metavar="DIR",
                     help="Output directory (default: output/)")
 
+    return parser
+
+
+def main():
+    parser = _build_parser()
     args = parser.parse_args()
 
     if args.command is None:
@@ -83,14 +88,13 @@ def main():
         install.run()
     elif args.command == "biblio":
         from cli import biblio_cmd
-        biblio_cmd.run(
-            args.subcmd,
-            works_file=args.works,
-            citations_file=args.citations,
-            graph_type=args.graph_type,
-            fmt=args.format,
-            output_dir=args.output,
-        )
+        biblio_cmd.run(args.subcmd, {
+            "works_file": args.works,
+            "citations_file": args.citations,
+            "graph_type": args.graph_type,
+            "fmt": args.format,
+            "output_dir": args.output,
+        })
 
 
 if __name__ == "__main__":

@@ -1,14 +1,6 @@
-"""SQLite schema for bibliographic enrichment.
-
-Two tables mirror the upstream data contract:
-
-  works      — one row per corpus paper: DOI, venue, year, citation count, etc.
-  citations  — one row per (citing paper → cited work) reference edge
-
-Both keyed on `base` (the pepa-sum filename stem) so they join cleanly to
-index.json records. External cited works that are NOT in the corpus are stored
-with cited_base = NULL; when cited_base IS set the row forms an internal edge
-(the citation network over the corpus itself).
+"""Define the SQLite schema for bibliographic enrichment: works and
+citations tables keyed on `base`, the pepa-sum filename stem, so they join
+cleanly to index.json records.
 """
 import sqlite3
 import config

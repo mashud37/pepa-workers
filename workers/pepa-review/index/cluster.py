@@ -1,23 +1,14 @@
-"""Consensus clustering of indexed works (cs_ir_stats_reference §2, §3, §5).
-
-Pure clustering math shared by the corpus map (cli/map.py) and the targeted
-sub-clustering used during literature-review selection (cli/review.py). No CLI or
-LLM concerns live here.
-
-Pipeline:
-  1. Ensemble features — dense embeddings + title TF-IDF->SVD + literature TF-IDF->SVD (§3.1).
-  2. UMAP reduction to a low-dim cosine manifold (§5.4).
-  3. Parameter selection by silhouette over a min_cluster_size band (§2).
-  4. Consensus clustering — HDBSCAN + spherical k-means + Ward fused via a co-association
-     matrix; final labels by average-linkage agglomerative on (1 - C) (§2.4/§2.6).
-  5. Confidence-aware assignment from the co-association profile (§2.3).
-  6. c-TF-IDF per thread (§3.5) for naming and near-duplicate-thread merging.
-
-Each stage degrades gracefully when an optional library is absent (dependencies.md).
+"""Cluster indexed works into thematic threads by ensemble features, UMAP
+reduction, and consensus clustering across HDBSCAN, k-means, and Ward,
+shared by the corpus map and literature-review selection.
 """
 import numpy as np
 
 import config
+
+TFIDF_COMPONENTS = 40
+CTFIDF_TOP_N = 12
+CENTRAL_MEMBERS = 20
 
 
 def cluster_records(records, vecs, n_threads=None):
@@ -39,26 +30,26 @@ def cluster_records(records, vecs, n_threads=None):
         features = vecs_norm
 
     coords = reduce_dims(features)
-    min_cs, k, sil = select_params(coords, n_threads)
-    labels, coassoc, strength = consensus_cluster(coords, k, min_cs)
-    primary, secondary, outliers = assign(coassoc, labels)
-    primary, secondary, terms = merge_threads(primary, secondary, coords, texts)
+    params = select_params(coords, n_threads)
+    consensus = consensus_cluster(coords, params["k"], params["min_cs"])
+    assigned = assign(consensus["coassoc"], consensus["labels"])
+    merged = merge_threads(assigned["primary"], assigned["secondary"], coords, texts)
 
     return {
-        "primary":   primary,
-        "secondary": secondary,
-        "outliers":  outliers,
-        "terms":     terms,
-        "strength":  strength,
+        "primary":   merged["primary"],
+        "secondary": merged["secondary"],
+        "outliers":  assigned["outliers"],
+        "terms":     merged["terms"],
+        "strength":  consensus["strength"],
         "vecs_norm": vecs_norm,
         "stats": {
-            "silhouette": sil,
-            "consensus":  float(np.mean(list(strength.values()))) if strength else 0.0,
+            "silhouette": params["silhouette"],
+            "consensus":  float(np.mean(list(consensus["strength"].values()))) if consensus["strength"] else 0.0,
         },
     }
 
 
-# ── features ────────────────────────────────────────────────────────────────
+# ---- Features ----
 
 def pool_text(r):
     return " ".join(p for p in (r.get("title", ""), r.get("question", ""),
@@ -67,27 +58,30 @@ def pool_text(r):
 
 def ensemble_features(records, vecs_norm):
     """Dense embeddings (weighted) + title TF-IDF->SVD + literature TF-IDF->SVD (§3.1, §2.1)."""
-    from sklearn.feature_extraction.text import TfidfVectorizer
-    from sklearn.decomposition import TruncatedSVD
     from sklearn.preprocessing import normalize
 
     titles = [r.get("title", r["base"]) for r in records]
     literature = [r.get("literature", "") for r in records]
 
-    def tfidf_svd(texts, n_components=40):
-        vec = TfidfVectorizer(stop_words="english", min_df=2, max_df=0.9, ngram_range=(1, 2))
-        X = vec.fit_transform(texts)
-        k = min(n_components, X.shape[1] - 1, X.shape[0] - 1)
-        if k < 2:
-            return np.zeros((len(texts), n_components))
-        return normalize(TruncatedSVD(n_components=k, random_state=42).fit_transform(X))
-
     combined = np.hstack([
         vecs_norm * config.MAP_WEIGHT_DENSE,
-        tfidf_svd(titles) * config.MAP_WEIGHT_TITLE,
-        tfidf_svd(literature) * config.MAP_WEIGHT_LITERATURE,
+        _tfidf_svd(titles) * config.MAP_WEIGHT_TITLE,
+        _tfidf_svd(literature) * config.MAP_WEIGHT_LITERATURE,
     ])
     return normalize(combined)
+
+
+def _tfidf_svd(texts, n_components=TFIDF_COMPONENTS):
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.decomposition import TruncatedSVD
+    from sklearn.preprocessing import normalize
+
+    vec = TfidfVectorizer(stop_words="english", min_df=2, max_df=0.9, ngram_range=(1, 2))
+    X = vec.fit_transform(texts)
+    k = min(n_components, X.shape[1] - 1, X.shape[0] - 1)
+    if k < 2:
+        return np.zeros((len(texts), n_components))
+    return normalize(TruncatedSVD(n_components=k, random_state=42).fit_transform(X))
 
 
 def reduce_dims(features):
@@ -110,10 +104,10 @@ def reduce_dims(features):
         return features
 
 
-# ── parameter selection (§2 validation) ──────────────────────────────────────
+# ---- Parameter selection (validation) ----
 
 def select_params(coords, n_threads=None, min_threads=None, max_threads=None):
-    """Pick thread count by silhouette over a band; return (min_cs, k, silhouette).
+    """Pick thread count by silhouette over a band.
 
     Silhouette alone collapses to k=2 on a single-domain corpus, so the sweep is
     bounded to a useful band (config MAP_MIN/MAX_THREADS, scaled by n). HDBSCAN's
@@ -124,11 +118,14 @@ def select_params(coords, n_threads=None, min_threads=None, max_threads=None):
     The floor scales with n (n//40) but is clamped below the ceiling: on a large
     corpus n//40 can exceed MAP_MAX_THREADS, which would otherwise invert the band
     to empty and silently collapse the map to a fixed fallback k.
+
+    Returns:
+        dict with keys "min_cs", "k", and "silhouette".
     """
     n = len(coords)
     if n_threads:
         k = int(n_threads)
-        return _min_cs_for(n, k), k, _silhouette_for_k(coords, k)
+        return {"min_cs": _min_cs_for(n, k), "k": k, "silhouette": _silhouette_for_k(coords, k)}
 
     floor = min_threads if min_threads is not None else config.MAP_MIN_THREADS
     ceil = max_threads if max_threads is not None else config.MAP_MAX_THREADS
@@ -137,10 +134,10 @@ def select_params(coords, n_threads=None, min_threads=None, max_threads=None):
     best = None
     for k in range(lo, hi + 1, 2):
         sil = _silhouette_for_k(coords, k)
-        if best is None or sil > best[2]:
-            best = (_min_cs_for(n, k), k, sil)
+        if best is None or sil > best["silhouette"]:
+            best = {"min_cs": _min_cs_for(n, k), "k": k, "silhouette": sil}
     if best is None:
-        return _min_cs_for(n, lo), lo, _silhouette_for_k(coords, lo)
+        return {"min_cs": _min_cs_for(n, lo), "k": lo, "silhouette": _silhouette_for_k(coords, lo)}
     return best
 
 
@@ -157,13 +154,15 @@ def _silhouette_for_k(coords, k):
     return float(silhouette_score(coords, labels))
 
 
-# ── consensus clustering (ensemble / co-association) ──────────────────────────
+# ---- Consensus clustering (ensemble, co-association) ----
 
 def consensus_cluster(coords, k, min_cs):
     """Fuse HDBSCAN + spherical k-means + Ward via a co-association matrix.
 
-    Returns (labels, coassoc, strength) where coassoc[i,j] is the fraction of base
-    clusterers placing i,j together and strength[i] is mean co-association to clustermates.
+    Returns:
+        dict with keys "labels", "coassoc" (coassoc[i,j] is the fraction of base
+        clusterers placing i,j together), and "strength" (strength[i] is mean
+        co-association to clustermates).
     """
     from sklearn.cluster import KMeans, AgglomerativeClustering
     from sklearn.preprocessing import normalize
@@ -197,17 +196,19 @@ def consensus_cluster(coords, k, min_cs):
     for i in range(n):
         mates = [j for j in range(n) if final[j] == final[i] and j != i]
         strength[i] = float(coassoc[i, mates].mean()) if mates else 1.0
-    return list(final), coassoc, strength
+    return {"labels": list(final), "coassoc": coassoc, "strength": strength}
 
 
-# ── confidence-aware assignment (§2.3 soft idea) ──────────────────────────────
+# ---- Confidence-aware assignment (soft idea) ----
 
 def assign(coassoc, labels):
     """From the co-association profile assign primary/secondary threads + outliers.
 
-    Returns (primary, secondary, outliers): primary/secondary map record index -> thread
-    label (secondary is None unless the work bridges two threads); outliers is a list of
-    record indices that aligned with no thread above MAP_OUTLIER_THRESHOLD.
+    Returns:
+        dict with keys "primary", "secondary" (each mapping record index to thread
+        label, secondary is None unless the work bridges two threads), and
+        "outliers" (a list of record indices that aligned with no thread above
+        MAP_OUTLIER_THRESHOLD).
     """
     labels = np.array(labels)
     clusters = sorted(set(labels))
@@ -230,12 +231,12 @@ def assign(coassoc, labels):
                 secondary[i] = None
         else:
             secondary[i] = None
-    return primary, secondary, outliers
+    return {"primary": primary, "secondary": secondary, "outliers": outliers}
 
 
-# ── c-TF-IDF + thread merging (§3.5, §1.5) ────────────────────────────────────
+# ---- c-TF-IDF and thread merging ----
 
-def ctfidf(thread_members, texts, top_n=12):
+def ctfidf(thread_members, texts, top_n=CTFIDF_TOP_N):
     """Class-based TF-IDF: top distinctive terms per thread (BERTopic §3.5)."""
     from sklearn.feature_extraction.text import CountVectorizer
     tids = sorted(thread_members)
@@ -253,23 +254,21 @@ def ctfidf(thread_members, texts, top_n=12):
 
 
 def merge_threads(primary, secondary, coords, texts):
-    """Merge near-duplicate threads (centroid cosine AND top-term Jaccard above config)."""
+    """Merge near-duplicate threads (centroid cosine AND top-term Jaccard above config).
+
+    Returns:
+        dict with keys "primary", "secondary" (same shape as the inputs, with
+        merged thread ids), and "terms" (c-TF-IDF terms per merged thread).
+    """
     members = {}
     for i, t in primary.items():
         members.setdefault(t, []).append(i)
     if len(members) < 2:
-        return primary, secondary, ctfidf(members, texts)
+        return {"primary": primary, "secondary": secondary, "terms": ctfidf(members, texts)}
 
     terms = ctfidf(members, texts)
     tids = list(members)
     cents = {t: coords[members[t]].mean(axis=0) for t in tids}
-
-    def cos(a, b):
-        return float(a @ b / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-9))
-
-    def jacc(a, b):
-        sa, sb = set(a), set(b)
-        return len(sa & sb) / len(sa | sb) if (sa or sb) else 0.0
 
     remap = {t: t for t in tids}
     for ai in range(len(tids)):
@@ -278,8 +277,15 @@ def merge_threads(primary, secondary, coords, texts):
             ra, rb = _root(remap, a), _root(remap, b)
             if ra == rb:
                 continue
-            if (cos(cents[a], cents[b]) >= config.MAP_MERGE_SIM
-                    and jacc(terms[a], terms[b]) >= config.MAP_MERGE_TERM_J):
+            centroid_a, centroid_b = cents[a], cents[b]
+            centroid_sim = float(
+                centroid_a @ centroid_b
+                / (np.linalg.norm(centroid_a) * np.linalg.norm(centroid_b) + 1e-9)
+            )
+            terms_a, terms_b = set(terms[a]), set(terms[b])
+            term_union = terms_a | terms_b
+            term_sim = len(terms_a & terms_b) / len(term_union) if term_union else 0.0
+            if centroid_sim >= config.MAP_MERGE_SIM and term_sim >= config.MAP_MERGE_TERM_J:
                 remap[max(ra, rb)] = min(ra, rb)
 
     primary = {i: _root(remap, t) for i, t in primary.items()}
@@ -289,7 +295,7 @@ def merge_threads(primary, secondary, coords, texts):
     members = {}
     for i, t in primary.items():
         members.setdefault(t, []).append(i)
-    return primary, secondary, ctfidf(members, texts)
+    return {"primary": primary, "secondary": secondary, "terms": ctfidf(members, texts)}
 
 
 def _root(remap, t):
@@ -298,9 +304,9 @@ def _root(remap, t):
     return t
 
 
-# ── representative members ────────────────────────────────────────────────────
+# ---- Representative members ----
 
-def most_central(members, base_to_idx, vecs_norm, k=20):
+def most_central(members, base_to_idx, vecs_norm, k=CENTRAL_MEMBERS):
     if len(members) <= k:
         return members
     indices = [base_to_idx[r["base"]] for r in members if r["base"] in base_to_idx]

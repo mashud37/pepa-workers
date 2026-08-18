@@ -1,11 +1,8 @@
-"""WS4 — Corpus map: cluster all indexed works into thematic threads.
-
-The clustering math lives in index/cluster.py (cs_ir_stats_reference §2, §3, §5);
-this module orchestrates the stages with progress, asks Claude Sonnet to characterise
-each thread (theme, discussion, key arguments, key concepts, methods, contexts), and
-writes a single Markdown map to output/.
+"""Cluster every indexed work into thematic threads, ask Claude Sonnet to characterise
+each thread, and write one Markdown corpus map to output/.
 """
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -64,8 +61,12 @@ def build_map(records, vecs, n_threads=None, *, title="Corpus map", stem="corpus
     stats = {"silhouette": sil, "consensus": float(np.mean(list(strength.values())))}
     meta = {
         "ts": datetime.now().strftime("%Y%m%d_%H%M%S"),
-        "title": title, "stem": stem, "total_works": n,
-        "stats": stats, "index_model": index_model, "source": source,
+        "title": title,
+        "stem": stem,
+        "total_works": n,
+        "stats": stats,
+        "index_model": index_model,
+        "source": source,
     }
     out = _write_map(sections, outlier_recs, meta)
     sidecar = _write_sidecar(sections, outlier_recs, meta)
@@ -80,7 +81,7 @@ def build_map(records, vecs, n_threads=None, *, title="Corpus map", stem="corpus
     return out
 
 
-# ── clustering stages (with liveness) ─────────────────────────────────────────
+# ---- Clustering stages (with liveness) ----
 
 def _cluster_with_progress(records, vecs_norm, band):
     """Run the clustering pipeline stage by stage, each behind its own spinner.
@@ -108,7 +109,8 @@ def _cluster_with_progress(records, vecs_norm, band):
     sp = progress.StepSpinner("selecting granularity")
     sp.start()
     try:
-        min_cs, k, sil = cluster.select_params(coords, n_threads, min_threads, max_threads)
+        params = cluster.select_params(coords, n_threads, min_threads, max_threads)
+        k, min_cs, sil = params["k"], params["min_cs"], params["silhouette"]
         sp.done(f"k={k}  min_cs={min_cs}  silhouette={sil:.3f}")
     except Exception as e:
         sp.done("error")
@@ -117,24 +119,30 @@ def _cluster_with_progress(records, vecs_norm, band):
     sp = progress.StepSpinner("consensus clustering")
     sp.start()
     try:
-        labels, coassoc, strength = cluster.consensus_cluster(coords, k, min_cs)
-        sp.done(f"{len(set(labels))} threads")
+        consensus = cluster.consensus_cluster(coords, k, min_cs)
+        sp.done(f"{len(set(consensus['labels']))} threads")
     except Exception as e:
         sp.done("error")
         raise SystemExit(str(e))
 
-    primary, secondary, outliers = cluster.assign(coassoc, labels)
+    assigned = cluster.assign(consensus["coassoc"], consensus["labels"])
 
     sp = progress.StepSpinner("extracting terms (c-TF-IDF)")
     sp.start()
-    primary, secondary, terms = cluster.merge_threads(primary, secondary, coords, texts)
-    sp.done(f"{len(set(primary.values()))} threads after merge")
+    merged = cluster.merge_threads(assigned["primary"], assigned["secondary"], coords, texts)
+    sp.done(f"{len(set(merged['primary'].values()))} threads after merge")
 
-    return {"primary": primary, "secondary": secondary, "outliers": outliers,
-            "terms": terms, "strength": strength, "sil": sil}
+    return {
+        "primary": merged["primary"],
+        "secondary": merged["secondary"],
+        "outliers": assigned["outliers"],
+        "terms": merged["terms"],
+        "strength": consensus["strength"],
+        "sil": sil,
+    }
 
 
-# ── per-thread characterisation ───────────────────────────────────────────────
+# ---- Per-thread characterisation ----
 
 def _build_sections(thread_ids, records, clustering, vecs_norm, enriched_map):
     """Ask the LLM to characterise each thread; return parsed section dicts."""
@@ -166,7 +174,7 @@ def _build_sections(thread_ids, records, clustering, vecs_norm, enriched_map):
     return sections
 
 
-# ── enrichment ───────────────────────────────────────────────────────────────
+# ---- Enrichment ----
 
 def _load_enriched(records):
     """Load methods/empirical from sum_ files (not stored in index)."""
@@ -183,28 +191,28 @@ def _load_enriched(records):
     return out
 
 
-# ── LLM parse ────────────────────────────────────────────────────────────────
+# ---- LLM parse ----
+
+def _extract_field(response, label, stop_labels):
+    alts = "|".join(r"\*\*" + re.escape(s) for s in stop_labels)
+    lookahead = ("(?=" + alts + r"|\Z)") if alts else r"(?=\Z)"
+    pattern = r"\*\*" + re.escape(label) + r":\*\*\s*(.+?)" + lookahead
+    m = re.search(pattern, response, re.DOTALL)
+    if not m:
+        return ""
+    return re.sub(r"\s*\*+\s*$", "", m.group(1).strip())
+
+
+def _extract_bullets(response, label, stop_labels):
+    items = []
+    for line in _extract_field(response, label, stop_labels).splitlines():
+        line = line.lstrip("-•· ").strip()
+        if line:
+            items.append(line)
+    return items
+
 
 def _parse_response(response, records, also):
-    import re
-
-    def extract(label, stop_labels):
-        alts = "|".join(r"\*\*" + re.escape(s) for s in stop_labels)
-        lookahead = ("(?=" + alts + r"|\Z)") if alts else r"(?=\Z)"
-        pattern = r"\*\*" + re.escape(label) + r":\*\*\s*(.+?)" + lookahead
-        m = re.search(pattern, response, re.DOTALL)
-        if not m:
-            return ""
-        return re.sub(r"\s*\*+\s*$", "", m.group(1).strip())   # drop a dangling ** from a truncated next label
-
-    def extract_bullets(label, stop_labels):
-        items = []
-        for line in extract(label, stop_labels).splitlines():
-            line = line.lstrip("-•· ").strip()
-            if line:
-                items.append(line)
-        return items
-
     stops_after_disc = ["Key arguments", "Key concepts", "Methods", "Empirical contexts"]
     stops_after_args = ["Key concepts", "Methods", "Empirical contexts"]
     stops_after_conc = ["Methods", "Empirical contexts"]
@@ -217,15 +225,15 @@ def _parse_response(response, records, also):
         "name":       name,
         "records":    records,
         "also":       also,
-        "discussion": extract("Discussion", stops_after_disc),
-        "arguments":  extract_bullets("Key arguments", stops_after_args)[:7],
-        "concepts":   extract_bullets("Key concepts", stops_after_conc)[:6],
-        "methods":    extract("Methods", stops_after_meth),
-        "empirical":  extract("Empirical contexts", []),
+        "discussion": _extract_field(response, "Discussion", stops_after_disc),
+        "arguments":  _extract_bullets(response, "Key arguments", stops_after_args)[:7],
+        "concepts":   _extract_bullets(response, "Key concepts", stops_after_conc)[:6],
+        "methods":    _extract_field(response, "Methods", stops_after_meth),
+        "empirical":  _extract_field(response, "Empirical contexts", []),
     }
 
 
-# ── output ────────────────────────────────────────────────────────────────────
+# ---- Output ----
 
 def _write_map(sections, outliers, meta):
     stats = meta["stats"]
@@ -247,8 +255,12 @@ def _write_map(sections, outliers, meta):
         lines += _render_section(i, s)
 
     if outliers:
-        lines += [f"## Cross-cutting / outliers ({len(outliers)})", "",
-                  "_Works that did not align strongly with any single thread._", ""]
+        lines += [
+            f"## Cross-cutting / outliers ({len(outliers)})",
+            "",
+            "_Works that did not align strongly with any single thread._",
+            "",
+        ]
         lines += [_work_line(r) for r in sorted(outliers, key=lambda x: x.get("authors", ""))]
         lines += [""]
 

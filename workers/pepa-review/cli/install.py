@@ -16,8 +16,8 @@ def run():
     _check_deps()
     _check_corpus()
     ui.step("Next steps")
-    ui.info("1) python manage.py index   — build the embedding index")
-    ui.info("2) python manage.py         — open the menu")
+    ui.info("1) python manage.py index: build the embedding index")
+    ui.info("2) python manage.py: open the menu")
     return 0
 
 
@@ -35,18 +35,16 @@ def _ensure_secrets():
     else:
         ui.info("secrets.yaml already exists")
 
-    _prompt_key("anthropic_api_key", config.anthropic_api_key,
-                "ANTHROPIC_API_KEY", "  Anthropic API key (blank to skip): ")
-    _prompt_key("gemini_api_key", config.gemini_api_key,
-                "GEMINI_API_KEY", "  Gemini API key (blank to skip): ")
+    _prompt_key("anthropic_api_key", "ANTHROPIC_API_KEY", "  Anthropic API key (blank to skip): ")
+    _prompt_key("gemini_api_key", "GEMINI_API_KEY", "  Gemini API key (blank to skip): ")
 
 
-def _prompt_key(name, getter, env_hint, prompt_text):
-    if getter():
+def _prompt_key(name, env_hint, prompt_text):
+    if config.setting(name):
         ui.ok(f"{name} present")
         return
     if not sys.stdin.isatty():
-        ui.warn(f"{name} not set — add it to secrets.yaml or set {env_hint}")
+        ui.warn(f"{name} not set: add it to secrets.yaml or set {env_hint}")
         return
     key = getpass.getpass(prompt_text).strip()
     if key:
@@ -63,7 +61,7 @@ def _check_deps():
         except ImportError:
             missing.append(mod)
     if missing:
-        ui.warn(f"missing packages: {', '.join(missing)} — run: pip install -r requirements.txt")
+        ui.warn(f"missing packages: {', '.join(missing)}. Run: pip install -r requirements.txt")
     else:
         ui.ok("core dependencies present")
 
