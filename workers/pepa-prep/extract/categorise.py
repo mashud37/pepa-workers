@@ -14,6 +14,8 @@ def import_fitz():
         fitz.TOOLS.mupdf_display_errors(False)
     except Exception:
         pass
+    if hasattr(fitz, "no_recommend_layout"):
+        fitz.no_recommend_layout()
     return fitz
 
 

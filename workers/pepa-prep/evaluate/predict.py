@@ -8,6 +8,7 @@ from extract.text import (
     _continues,
     _is_heading,
     _is_text_heading,
+    _item_starts,
     norm,
 )
 
@@ -15,32 +16,59 @@ HEAD, PARA, CONT, LIST, DROP = "HEAD", "PARA", "CONT", "LIST", "DROP"
 BOUNDARY = {HEAD, PARA, LIST}
 
 
+def _line_dict(rec: dict) -> dict:
+    x0, y0, x1, y1, size, bold = rec["geom"]
+    return {
+        "text": rec["text"],
+        "x0": x0,
+        "y0": y0,
+        "x1": x1,
+        "y1": y1,
+        "size": size,
+        "bold": bold,
+    }
+
+
+def _blocks(stream: dict) -> list:
+    """Regroup the flat line stream into the blocks _segment_block works on."""
+    blocks: list = []
+    prev_bid = None
+    for rec in stream["lines"]:
+        if rec["bid"] != prev_bid:
+            blocks.append({"geom": tuple(rec["block_geom"]), "lines": []})
+            prev_bid = rec["bid"]
+        blocks[-1]["lines"].append(_line_dict(rec))
+    return blocks
+
+
+def _block_labels(block: dict, body: float, heads: list) -> list:
+    """Mirror extract.text._segment_block's per-line decisions for one block."""
+    lines, geom = block["lines"], block["geom"]
+    starts = _item_starts(lines)
+    labels: list = []
+    open_kind, prev = None, None
+    for i, ld in enumerate(lines):
+        if _is_heading(ld, body, heads):
+            labels.append(HEAD)
+            open_kind, prev = None, None
+        elif i in starts:
+            labels.append(LIST)
+            open_kind, prev = "list", ld
+        elif open_kind == "list" and prev and ld["y0"] - prev["y1"] <= 0.6 * geom[3]:
+            labels.append(CONT)
+            prev = ld
+        else:
+            broke = prev is not None and _breaks(prev, ld, geom)
+            labels.append(PARA if (open_kind != "para" or broke) else CONT)
+            open_kind, prev = "para", ld
+    return labels
+
+
 def _geometry(stream: dict) -> list:
     body, heads = stream["meta"]["body"], stream["meta"]["heads"]
     labels: list = []
-    prev = None
-    prev_bid = None
-    para_open = False
-    for rec in stream["lines"]:
-        if rec["bid"] != prev_bid:
-            para_open, prev = False, None
-        x0, y0, x1, y1, size, bold = rec["geom"]
-        ld = {
-            "text": rec["text"],
-            "x0": x0,
-            "y0": y0,
-            "x1": x1,
-            "y1": y1,
-            "size": size,
-            "bold": bold,
-        }
-        if _is_heading(ld, body, heads):
-            labels.append(HEAD)
-            para_open, prev, prev_bid = False, None, rec["bid"]
-            continue
-        broke = prev is not None and _breaks(prev, ld, tuple(rec["block_geom"]))
-        labels.append(PARA if (not para_open or broke) else CONT)
-        para_open, prev, prev_bid = True, ld, rec["bid"]
+    for block in _blocks(stream):
+        labels.extend(_block_labels(block, body, heads))
     return labels
 
 

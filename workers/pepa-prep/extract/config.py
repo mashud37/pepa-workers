@@ -16,6 +16,8 @@ _DEFAULT: dict = {
     "toc_headings": ["contents", "table of contents", "inhalt", "inhaltsverzeichnis"],
     "ocr_dpi": 300,
     "tesseract_cmd": "",
+    "refine_snap_lines": 0,
+    "refine_unit_slack": 1,
     # Bibliography enrichment (python manage.py biblio)
     "biblio_corpus": "../pepa-sum/output",
     "biblio_output": "./output",

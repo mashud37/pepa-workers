@@ -12,7 +12,7 @@ flowchart TD
     CAT -->|"born-digital, &gt; threshold pages"| BOOK["book route<br/><code>text_name_01.md</code> ..."]
     CAT -->|"no text layer (scanned)"| OCR["ocr route<br/>Tesseract"]
 
-    STRAIGHT --> GEOM["Recover paragraphs by geometry<br/>strip headers/footers/refs<br/>stitch hyphenation + columns"]
+    STRAIGHT --> GEOM["Recover paragraphs by geometry<br/>strip headers/footers/refs<br/>lift ruled tables, mark lists<br/>stitch hyphenation + columns"]
     OCR --> GEOM
     BOOK --> GEOM
 
@@ -86,7 +86,11 @@ Run `python manage.py` with no arguments for the interactive menu, or call any a
 
 Each PDF gets categorised on a first pass. A born-digital paper under the page threshold takes the straight route and becomes a single `text_<name>.md`; a longer born-digital file is treated as a book and split into numbered chapter files; a scanned PDF with no text layer goes through Tesseract OCR and is then handled like the others.
 
-Whichever route it took, paragraphs are recovered from the page geometry, the bounding-box gaps and indentation, rather than by trusting the PDF's own text blocks, which are usually wrong. Along the way the running headers and footers, page numbers, and reference lists are stripped, hyphenated line breaks are rejoined, and sentences split across columns are stitched back together.
+Whichever route it took, paragraphs are recovered from the page geometry, the bounding-box gaps and indentation, rather than by trusting the PDF's own text blocks, which are usually wrong. Along the way the running headers and footers, page numbers, and reference lists are stripped, and sentences split across columns are stitched back together.
+
+A hyphen at a line break is only closed up when the book itself writes that word solid somewhere else; if it writes it hyphenated, the hyphen stays, so a genuine compound survives the rejoin. Ligatures are expanded, soft hyphens and zero-width characters dropped, and accents composed, while curly quotes and dashes are left exactly as they were printed, because pepa-sum verifies quotes against this text character by character.
+
+Ruled tables are lifted out as markdown tables and their cells are kept out of the surrounding prose, so a table no longer arrives as a paragraph of loose numbers. Only tables the PDF actually draws rules around are taken; a text-alignment guess would turn every two-column page into a table. Bulleted lists become markdown list items, and a numbered list is recognised where a block holds at least two numbered items, so a sentence that merely opens with "1." is left as prose.
 
 For books there is one more problem: where do the chapters begin. pepa-prep tries three strategies in turn and takes the first that actually verifies against the printed page.
 
@@ -116,7 +120,9 @@ Every part of the pipeline that makes a judgement can be scored against a hand-c
 | Chapter detection | book chapter boundaries | F1 at 1-page tolerance, exact-page rate, strategy used, page offset |
 | Refinement | boundary repair, from the markdown only | a before/after match score against the corrected chapter starts |
 
-Refinement is the clearest case: on the current reference set it lifts the match score from the low thirties into the high fifties, measured before and after the repair pass.
+Refinement is the case worth watching, and the one to read sceptically. On the twenty-book reference set it breaks even: the match score is identical before and after the repair pass, and no book is made worse. Two gates hold it there, both set from the sweep that produced the number. `refine_unit_slack` stops a book gaining more chapters than the contents entries that actually anchored to a body heading, and `refine_snap_lines` is `0`, which keeps a boundary from being dragged onto a contents anchor; every non-zero distance measured worse, as did lifting the chapter cap.
+
+Read that break-even with the caveat that the reference books have already had `refine --apply` run on them, so the pass is being scored on its own past output and finds little left to do. The gates are what the sweep supports; the claim that the boundary repairs help a book that has never seen them is not yet evidenced. Rebuilding the reference set from unrefined extractions is what would settle it.
 
 ## Configuration
 
@@ -132,6 +138,8 @@ Edit `config.yaml` or use the Configure menu:
 | `toc_headings` | `contents, ...` | Words that mark a contents-page heading (lowers the bar; never required) |
 | `ocr_dpi` | `300` | Rasterisation DPI for scanned pages |
 | `tesseract_cmd` | `""` | Full path to the tesseract binary, or blank to use PATH |
+| `refine_snap_lines` | `40` | How far `refine` may move a boundary to reach a contents anchor |
+| `refine_unit_slack` | `1` | Chapters `refine` may add beyond the contents entries that anchored |
 
 Already-extracted files are skipped on a re-run.
 

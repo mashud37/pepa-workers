@@ -4,6 +4,7 @@ from pathlib import Path
 from .categorise import import_fitz
 from .chapter import detect_chapters, split_into_chapters, write_chapters
 from .ocr import ocr_pages
+from .tables import doc_tables
 from .text import (
     doc_dims,
     doc_lines,
@@ -52,9 +53,9 @@ def extract_straight(path: Path, out_dir: Path, cfg: dict) -> dict:
     fitz = import_fitz()
     with fitz.open(str(path)) as doc:
         pages = doc_lines(doc, range(doc.page_count), _text_flags(fitz))
+        tables = doc_tables(doc, range(doc.page_count))
     stats = doc_stats(pages)
-    body, heads, lh = stats["body"], stats["heads"], stats["lh"]
-    md = strip_references(render(segment(pages, body, heads, drop_keys(pages), lh)))
+    md = strip_references(render(segment(pages, stats, drop_keys(pages), tables)))
     dest = out_dir / f"text_{path.stem}.md"
     dest.write_text(md, encoding="utf-8")
     return {"result": f"text_{path.stem}.md ({len(md):,} chars)", "warnings": []}
@@ -71,15 +72,15 @@ def extract_book(path: Path, out_dir: Path, cfg: dict) -> dict:
         page_count = doc.page_count
         pages = doc_lines(doc, range(page_count), _text_flags(fitz))
         dims = doc_dims(doc, range(page_count))
+        tables = doc_tables(doc, range(page_count))
         stats = doc_stats(pages)
-        body, heads, lh = stats["body"], stats["heads"], stats["lh"]
         dk = drop_keys(pages)
         detected = detect_chapters(doc, pages, dims, stats, cfg)
         bounds, meta = detected["bounds"], detected["meta"]
-    whole = segment(pages, body, heads, dk, lh)
+    whole = segment(pages, stats, dk, tables)
     if meta["strategy"] in ("outline", "toc") and len(bounds) >= 2:
         starts = [b["page"] for b in bounds]
-        chapters = [segment(pages[a:z], body, heads, dk, lh)
+        chapters = [segment(pages[a:z], stats, dk, tables[a:z])
                     for a, z in zip(starts, starts[1:] + [page_count])]
     else:
         chapters = split_into_chapters(whole)

@@ -1,7 +1,11 @@
-"""Geometry-based paragraph reflow, heading detection, and markdown rendering."""
+"""Geometry-based paragraph reflow, heading detection, list and table placement, and
+markdown rendering."""
 import re
 import statistics
+import unicodedata
 from collections import Counter
+
+from . import tables as tables_mod
 
 _TEXT_THRESHOLD = 40
 _PAGE_NUM_RE = re.compile(r"^\s*(?:\d{1,4}|[ivxlcdm]{1,6})\s*$", re.IGNORECASE)
@@ -17,10 +21,40 @@ _SECTION_RE = re.compile(
     re.IGNORECASE,
 )
 _SENT_END = ".?!:’‘”“)\"'"
+_LIGATURES = {
+    "ﬀ": "ff",
+    "ﬁ": "fi",
+    "ﬂ": "fl",
+    "ﬃ": "ffi",
+    "ﬄ": "ffl",
+    "ﬅ": "st",
+    "ﬆ": "st",
+}
+_INVISIBLE_RE = re.compile("[\u00ad\u200b\u200c\u200d\ufeff]")
+_BULLET_RE = re.compile(r"^(?:[•·●▪◦⁃*]|-)\s+\S")
+_NUMBER_RE = re.compile(r"^\(?(?:\d{1,2}|[a-z]|[ivx]{1,4})[.)]\s+\S")
+_BULLET_STRIP_RE = re.compile(r"^(?:[•·●▪◦⁃*]|-)\s+")
+_WORD_RE = re.compile(r"[^\W\d_]{2,}")
+_HYPHENATED_RE = re.compile(r"[^\W\d_]{2,}-[^\W\d_]{2,}")
+_HYPHEN_TAIL_RE = re.compile(r"([^\W\d_]{2,})-$")
+_LEAD_WORD_RE = re.compile(r"^([^\W\d_]{2,})")
+_LIST_KINDS = ("bullet", "number")
+
+
+def normalise(text: str) -> str:
+    """Expand ligatures, drop invisible characters, and compose accents.
+
+    Curly quotes and dashes are left alone: pepa-sum verifies quotes against this
+    text character by character.
+    """
+    for ligature, plain in _LIGATURES.items():
+        text = text.replace(ligature, plain)
+    text = _INVISIBLE_RE.sub("", text)
+    return unicodedata.normalize("NFC", text)
 
 
 def norm(text: str) -> str:
-    return re.sub(r"\s+", " ", text).strip()
+    return re.sub(r"\s+", " ", normalise(text)).strip()
 
 
 def hdr_key(line: str) -> str | None:
@@ -92,12 +126,24 @@ def _line_sizes_and_heights(page: list) -> dict:
     return {"sizes": sizes, "heights": heights}
 
 
+def _vocabulary(pages: list) -> set:
+    words: set = set()
+    for page in pages:
+        for block in page:
+            for ln in block:
+                text = ln["text"]
+                words.update(w.casefold() for w in _WORD_RE.findall(text))
+                words.update(c.casefold() for c in _HYPHENATED_RE.findall(text))
+    return words
+
+
 def doc_stats(pages: list) -> dict:
-    """One pass over every line: body size, heading sizes, and median line height.
+    """One pass over every line: body size, heading sizes, median line height, and the
+    document's own words.
 
     Returns:
         {"body": most common font size, "heads": larger sizes descending,
-        "lh": median line height}.
+        "lh": median line height, "vocab": every word the document uses, casefolded}.
     """
     sizes: dict = {}
     heights: list = []
@@ -106,12 +152,13 @@ def doc_stats(pages: list) -> dict:
         for size, n in counts["sizes"].items():
             sizes[size] = sizes.get(size, 0) + n
         heights.extend(counts["heights"])
+    vocab = _vocabulary(pages)
     if not sizes:
-        return {"body": 0.0, "heads": [], "lh": 12.0}
+        return {"body": 0.0, "heads": [], "lh": 12.0, "vocab": vocab}
     body = max(sizes, key=sizes.get)
     heads = sorted((s for s in sizes if s > body + 0.5), reverse=True)
     lh = statistics.median(heights) if heights else 12.0
-    return {"body": body, "heads": heads, "lh": lh}
+    return {"body": body, "heads": heads, "lh": lh, "vocab": vocab}
 
 
 def drop_keys(pages: list) -> set:
@@ -152,21 +199,37 @@ def _level(ln: dict, heading_sizes: list) -> int:
     return min(len(heading_sizes) + 1, 4) if heading_sizes else 2
 
 
-def _concat(text: str, s: str) -> str:
+def _keeps_hyphen(text: str, s: str, vocab: set) -> bool:
+    """True when the book itself writes this broken word as a real compound."""
+    tail = _HYPHEN_TAIL_RE.search(text)
+    lead = _LEAD_WORD_RE.match(s.lstrip())
+    if not tail or not lead:
+        return False
+    joined = (tail.group(1) + lead.group(1)).casefold()
+    if joined in vocab:
+        return False
+    return f"{tail.group(1)}-{lead.group(1)}".casefold() in vocab
+
+
+def _concat(text: str, s: str, vocab: set | None = None) -> str:
     if not text:
         return s
     if text.endswith("-") and len(text) > 1 and text[-2].isalpha():
+        if vocab and _keeps_hyphen(text, s, vocab):
+            return text + s.lstrip()
         return text[:-1] + s.lstrip()
     return text + " " + s.lstrip()
 
 
-def _flush(lines: list) -> tuple:
+def _flush(lines: list, vocab: set, kind: str = "para") -> tuple:
     text = ""
     for ln in lines:
         s = ln["text"].strip()
         if s:
-            text = _concat(text, s)
-    return ("para", 0, norm(text))  # lint-style: ignore DT001
+            text = _concat(text, s, vocab)
+    if kind == "bullet":
+        text = _BULLET_STRIP_RE.sub("", text, count=1)
+    return (kind, 0, norm(text))  # lint-style: ignore DT001
 
 
 def _block_geom(block: list, page_lh: float) -> tuple:
@@ -210,44 +273,120 @@ def _merge_continuations(elements: list) -> list:
     return out
 
 
-def _segment_block(block: list, body: float, heading_sizes: list, drop: set, geom: tuple) -> list:
-    elements: list = []
-    para, prev = [], None
-    for ln in block:
+def _item_starts(block: list) -> dict:
+    """Line index to list kind for every line that opens a list item.
+
+    A bullet always opens one. A number opens one only when the block holds at
+    least two, so an ordinary sentence beginning "1. " is not mistaken for a list.
+    """
+    marks = {}
+    for i, ln in enumerate(block):
+        t = ln["text"].strip()
+        if _BULLET_RE.match(t):
+            marks[i] = "bullet"
+        elif _NUMBER_RE.match(t):
+            marks[i] = "number"
+    numbered = [i for i, kind in marks.items() if kind == "number"]
+    if len(numbered) < 2:
+        for i in numbered:
+            del marks[i]
+    return marks
+
+
+def _wraps_item(segments: list, prev: dict, ln: dict, lh: float) -> bool:
+    """True when this line is the wrapped remainder of the list item above it."""
+    if not segments or segments[-1]["kind"] not in _LIST_KINDS or prev is None:
+        return False
+    return ln["y0"] - prev["y1"] <= 0.6 * lh
+
+
+def _place(segments: list, ln: dict, opens: bool) -> None:
+    if opens or not segments or segments[-1]["kind"] != "para":
+        segments.append({"kind": "para", "lines": [ln]})
+    else:
+        segments[-1]["lines"].append(ln)
+
+
+def _segment_block(block: list, stats: dict, drop: set, tables: list) -> list:
+    geom = _block_geom(block, stats["lh"])
+    starts = _item_starts(block)
+    segments: list = []
+    prev = None
+    for i, ln in enumerate(block):
         t = ln["text"].strip()
         key = hdr_key(t)
         if (key and key in drop) or _PAGE_NUM_RE.match(t):
             continue
-        if _is_heading(ln, body, heading_sizes):
-            if para:
-                elements.append(_flush(para))
-                para = []
-            elements.append(("heading", _level(ln, heading_sizes), norm(t)))
+        table = tables_mod.covering(ln, tables)
+        if table:
+            segments.append({"kind": "table", "text": table["markdown"]})
             prev = None
             continue
-        if para and prev and _breaks(prev, ln, geom):
-            elements.append(_flush(para))
-            para = []
-        para.append(ln)
+        if _is_heading(ln, stats["body"], stats["heads"]):
+            segments.append({"kind": "heading", "level": _level(ln, stats["heads"]), "lines": [ln]})
+            prev = None
+            continue
+        if i in starts:
+            segments.append({"kind": starts[i], "lines": [ln]})
+        elif _wraps_item(segments, prev, ln, geom[3]):
+            segments[-1]["lines"].append(ln)
+        else:
+            _place(segments, ln, bool(prev and _breaks(prev, ln, geom)))
         prev = ln
-    if para:
-        elements.append(_flush(para))
-    return elements
+    return _elements(segments, stats["vocab"])
 
 
-def segment(pages: list, body: float, heading_sizes: list, drop: set, page_lh: float) -> list:
+def _elements(segments: list, vocab: set) -> list:
+    out: list = []
+    for seg in segments:
+        if seg["kind"] == "table":
+            out.append(("table", 0, seg["text"]))
+        elif seg["kind"] == "heading":
+            out.append(("heading", seg["level"], norm(seg["lines"][0]["text"])))
+        else:
+            out.append(_flush(seg["lines"], vocab, seg["kind"]))
+    return out
+
+
+def _page_elements(page: list, stats: dict, drop: set, tables: list) -> list:
+    """Segment one page, emitting each table once however many blocks it straddles."""
+    raw: list = []
+    for block in page:
+        raw.extend(_segment_block(block, stats, drop, tables))
+    out: list = []
+    seen: set = set()
+    for element in raw:
+        if element[0] != "table":
+            out.append(element)
+        elif element[2] not in seen:
+            seen.add(element[2])
+            out.append(element)
+    return out
+
+
+def segment(pages: list, stats: dict, drop: set, tables: list | None = None) -> list:
+    """Turn extracted page lines into ordered heading, paragraph, list, and table elements.
+
+    Args:
+        stats: {"body", "heads", "lh", "vocab"} from doc_stats().
+        tables: per-page table boxes from tables.doc_tables(), or None for no tables.
+    """
     elements: list = []
-    for page in pages:
-        for block in page:
-            geom = _block_geom(block, page_lh)
-            elements.extend(_segment_block(block, body, heading_sizes, drop, geom))
+    for index, page in enumerate(pages):
+        page_tables = tables[index] if tables and index < len(tables) else []
+        elements.extend(_page_elements(page, stats, drop, page_tables))
     return _merge_continuations(elements)
 
 
 def render(elements: list) -> str:
     lines = []
     for kind, level, text in elements:
-        lines.append("#" * level + " " + text if kind == "heading" else text)
+        if kind == "heading":
+            lines.append("#" * level + " " + text)
+        elif kind == "bullet":
+            lines.append("- " + text)
+        else:
+            lines.append(text)
     return "\n\n".join(lines).strip() + "\n"
 
 

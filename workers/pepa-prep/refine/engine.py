@@ -16,9 +16,16 @@ _QUAR_MAX_SHARE = 0.30
 _TOC_OVERLAP = 0.5
 _DEFAULT_TOC_WORDS = ("contents", "table of contents", "inhalt", "inhaltsverzeichnis")
 _HEAD_MARK_RE = re.compile(r"^#+\s*")
+_BACKOFF = (
+    (),
+    ("template",),
+    ("template", "ordinal"),
+    ("template", "ordinal", "anchor"),
+)
 _ACTION_LABELS = (
     ("demoted", "demote"),
     ("merged", "merges"),
+    ("moved to anchor", "moved"),
     ("split", "splits"),
     ("joined", "joins"),
     ("quarantined", "quarantine"),
@@ -254,11 +261,26 @@ def _gate_splits(book: dict, ctx: dict, bounds: list, cands: list) -> list:
     return out
 
 
+def _unit_cap(ctx: dict, cfg: dict) -> int | None:
+    """The most units the printed contents can justify, or None without a contents page.
+
+    Titles that were merely listed prove nothing; only titles anchored to a real body
+    heading do, so a repair pushing the count past those is splitting on something else.
+    """
+    toc = ctx["toc"]
+    if not toc or not toc["expected"]:
+        return None
+    return len(toc["anchors"]) + cfg.get("refine_unit_slack", 1)
+
+
 def _splits(book: dict, ctx: dict, bounds: list, cfg: dict) -> list:
     gated = _gate_splits(book, ctx, bounds, _split_candidates(book, ctx, bounds))
-    for dropped in ((), ("template",), ("template", "ordinal")):
+    cap = _unit_cap(ctx, cfg)
+    for dropped in _BACKOFF:
         chosen = [s for kind, s in gated if kind not in dropped]
         test = sorted(set(bounds) | set(chosen))
+        if cap is not None and len(test) > cap:
+            continue
         if not chosen or signals.plausible(signals.unit_spans(test, ctx["offs"]), cfg)["ok"]:
             return chosen
     return []
@@ -326,7 +348,10 @@ def analyse(book: dict, cfg: dict) -> dict:
     ctx = _context(book, cfg)
     removed = _merge_bounds(book, ctx)
     bounds = sorted((set(book["starts"]) - removed) | {0})
-    bounds = _nearest_snap(book["lines"], bounds, ctx["anchor_lines"], _SNAP_LINES)
+    snap_lines = cfg.get("refine_snap_lines", _SNAP_LINES)
+    unsnapped = set(bounds)
+    bounds = _nearest_snap(book["lines"], bounds, ctx["anchor_lines"], snap_lines)
+    moved = [b for b in bounds if b not in unsnapped]
     splits = _splits(book, ctx, bounds, cfg)
     bounds = sorted(set(bounds) | set(splits))
     chain_result = _adopt_chain(book, ctx, bounds)
@@ -345,6 +370,7 @@ def analyse(book: dict, cfg: dict) -> dict:
         "bounds": bounds,
         "demote": sorted(ctx["demoted"]),
         "merges": sorted(removed),
+        "moved": sorted(moved),
         "splits": sorted(splits),
         "quarantine": quarantine,
         "joins": joins,
@@ -355,7 +381,7 @@ def analyse(book: dict, cfg: dict) -> dict:
 
 
 def has_actions(plan: dict) -> bool:
-    return bool(plan["demote"] or plan["merges"] or plan["splits"]
+    return bool(plan["demote"] or plan["merges"] or plan["moved"] or plan["splits"]
                 or plan["quarantine"] or plan["joins"])
 
 
