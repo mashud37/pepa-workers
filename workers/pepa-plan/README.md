@@ -67,6 +67,8 @@ If `pepa-sum` lives somewhere other than `../pepa-sum`:
 corpus_dir: "C:/path/to/pepa-sum/output"
 ```
 
+`PEPAPLAN_CORPUS_DIR`, `PEPAPLAN_INPUT_DIR`, and `PEPAPLAN_OUTPUT_DIR` move the corpus, the idea folder, and the results folder without editing `secrets.yaml`, which is how pepa-console points the app at folders you chose.
+
 Then drop an idea file into `input/`, and optionally build the skeleton library first so outlining has a learned structure to draw on (see Commands below).
 
 ## Commands

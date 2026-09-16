@@ -6,8 +6,8 @@ import yaml
 ROOT = Path(__file__).resolve().parent
 CORPUS_DIR_DEFAULT = ROOT.parent / "pepa-sum" / "output"
 DATA_DIR = ROOT / "data"
-INPUT_DIR = ROOT / "input"
-OUTPUT_DIR = ROOT / "output"
+INPUT_DIR = Path(os.environ.get("PEPAPLAN_INPUT_DIR", str(ROOT / "input")))
+OUTPUT_DIR = Path(os.environ.get("PEPAPLAN_OUTPUT_DIR", str(ROOT / "output")))
 TEMPLATES_DIR = ROOT / "templates"
 EXAMPLE_TEMPLATE = TEMPLATES_DIR / "example.plan.md"
 SECRETS_FILE = ROOT / "secrets.yaml"
