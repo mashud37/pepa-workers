@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icon %}
+{% block title %}Keys · pepa{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div class="heading">
+    <h1>Keys</h1>
+    <p class="supporting">Stored once on this computer. Each app gets the key chosen here, or reads its own file.</p>
+  </div>
+  <button type="button" class="filled" data-open="key-dialog">{{ icon.plus() }}Add key</button>
+</div>
+
+{% if store.stored %}
+<div class="list">
+  {% for key in store.stored %}
+  <div class="row-item static">
+    <span class="name">{{ key.name }}</span>
+    <span class="supporting mono">{{ key.variable }}</span>
+    <span class="meta">{% if key.used_by %}{{ key.used_by | length }} app{% if key.used_by | length != 1 %}s{% endif %}{% else %}Unused{% endif %}</span>
+    <form method="post" action="{{ url_for('console.keys_delete') }}" data-confirm="Delete {{ key.name }}?" data-confirm-detail="Apps using it go back to their own file." data-confirm-button="Delete">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="name" value="{{ key.name }}">
+      <button class="icon" aria-label="Delete {{ key.name }}">{{ icon.remove() }}</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+
+<h2 class="section-title">Which key each app gets</h2>
+<form class="card table-card" method="post" action="{{ url_for('console.keys_assign') }}">
+  <input type="hidden" name="token" value="{{ token }}">
+  <table>
+    {% for app in store.apps %}
+    {% for row in app.rows %}
+    <tr>
+      <td class="app-cell">{% if loop.first %}{{ app.name }}{% endif %}</td>
+      <td class="mono supporting">{{ row.variable }}</td>
+      <td class="select-cell">
+        <select name="assign|{{ app.name }}|{{ row.variable }}" aria-label="{{ app.name }} {{ row.variable }}">
+          <option value="">Own file</option>
+          {% for option in row.options %}<option{% if option == row.chosen %} selected{% endif %}>{{ option }}</option>{% endfor %}
+        </select>
+      </td>
+    </tr>
+    {% endfor %}
+    {% endfor %}
+  </table>
+  <div class="form-actions"><button class="filled">Save</button></div>
+</form>
+{% else %}
+<div class="empty">
+  {{ draw_mascot("pepa", 5) }}
+  <h2>No keys yet</h2>
+  <p class="supporting">Until you add one, every app reads its own key file.</p>
+</div>
+{% endif %}
+<p class="meta footnote">{{ store.file }}</p>
+
+<dialog id="key-dialog" class="dialog">
+  <form method="post" action="{{ url_for('console.keys_add') }}" autocomplete="off">
+    <input type="hidden" name="token" value="{{ token }}">
+    <h2>Add key</h2>
+    <label class="field"><span>Name</span><input type="text" name="name" placeholder="anthropic-main" required></label>
+    <label class="field"><span>Variable</span><select name="variable">{% for variable in store.variables %}<option>{{ variable }}</option>{% endfor %}</select></label>
+    <label class="field"><span>Value</span><input type="password" name="value" autocomplete="new-password" required></label>
+    <label class="check"><input type="checkbox" name="everywhere" checked><span>Use for every app without a key</span></label>
+    <div class="actions">
+      <button type="button" class="text" data-close>Cancel</button>
+      <button class="filled">Save</button>
+    </div>
+  </form>
+</dialog>
+{% endblock %}

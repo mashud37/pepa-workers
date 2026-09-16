@@ -77,7 +77,7 @@ def _app_tree() -> Tree:
         for cmd in app.commands:
             label = f"{KIND_SYMBOL[cmd.kind]} {cmd.name}  "
             leaf = branch.add_leaf(label, data=(app.name, cmd))
-            if cmd.kind == "interactive":
+            if cmd.kind in ("interactive", "terminal"):
                 leaf.label = Text(label, style="dim strike")
     return tree
 
@@ -93,7 +93,7 @@ class ConsoleApp(App):
     """
     BINDINGS = [("q", "quit", "Quit"), ("x", "clear", "Clear log")]
     TITLE = "pepa-console"
-    SUB_TITLE = "orchestrating pepa-worker/*"
+    SUB_TITLE = "orchestrating pepa-workers/*"
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -123,9 +123,9 @@ class ConsoleApp(App):
         if not data:
             return
         app_name, cmd = data
-        if cmd.kind == "interactive":
-            self._log(f"⚠ [yellow]{app_name} {cmd.name}[/] is interactive-only, "
-                      f"run it in a terminal: [dim]python {app_name}/manage.py {cmd.name}[/]")
+        if cmd.kind in ("interactive", "terminal", "service"):
+            self._log(f"⚠ [yellow]{app_name} {cmd.name}[/] does not finish on its own, "
+                      f"run it in a terminal or the web console: [dim]python {app_name}/manage.py {cmd.name}[/]")
             return
         if cmd.kind == "heavy":
             prompt = f"Run {app_name} {cmd.name}? This does real work and may cost money."

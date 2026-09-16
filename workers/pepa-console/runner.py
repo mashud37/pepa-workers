@@ -66,12 +66,13 @@ async def run_command(
     command = get_command(app_name, command_name)
     if app is None or command is None:
         raise ValueError(f"unknown command: {app_name} {command_name}")
-    if command.kind == "interactive":
-        raise ValueError(f"{app_name} {command_name} is interactive-only, run it in a terminal")
+    if command.kind in ("interactive", "terminal", "service"):
+        raise ValueError(f"{app_name} {command_name} does not finish on its own, run it in a terminal")
 
     proc = await asyncio.create_subprocess_exec(
         *build_argv(command, extra_flags),
         cwd=str(app.path),
+        stdin=asyncio.subprocess.DEVNULL,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )

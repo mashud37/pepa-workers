@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icon %}
+{% block title %}Folders · pepa{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div class="heading">
+    <h1>Folders</h1>
+    <p class="supporting">Where each app reads and writes. A folder you link is marked read only: nothing in it is ever written, moved or renamed, so your own library stays as it is. Files are copied only into an app's own folders, from its page. A library that keeps each paper in a folder of its own needs sub-folder scanning, offered on the row as soon as there is something down there to find.</p>
+  </div>
+</div>
+
+{% for app in apps %}
+<h2 class="section-title">{{ app.name }}</h2>
+<div class="list">
+  {% for row in app.rows %}
+  <div class="row-item static place">
+    <span class="name">{{ row.label }}</span>
+    <span class="role">{% if row.role == "reads" %}Reads{% else %}Writes{% endif %}</span>
+    <span class="supporting mono">{{ row.path }}</span>
+    {% if row.read_only %}<span class="chip">Read only</span>{% endif %}
+    {% if row.deep %}<span class="chip">With sub-folders</span>{% endif %}
+    {% if not row.exists %}<span class="chip missing">Not there yet</span>{% endif %}
+    <div class="actions">
+      {% if row.can_scan and (row.deeper or row.deep) %}
+      <form method="post" action="{{ url_for('console.folders_subfolders') }}">
+        <input type="hidden" name="token" value="{{ token }}">
+        <input type="hidden" name="app" value="{{ app.name }}">
+        <input type="hidden" name="slot" value="{{ row.slot }}">
+        <input type="hidden" name="wanted" value="{% if row.deep %}off{% else %}on{% endif %}">
+        <button class="text">{% if row.deep %}Stop scanning sub-folders{% else %}Scan {{ "{:,}".format(row.deeper) }}{% if row.capped %}+{% endif %} in sub-folders{% endif %}</button>
+      </form>
+      {% endif %}
+      <button type="button" class="text" data-pick data-app="{{ app.name }}" data-slot="{{ row.slot }}" data-path="{{ row.path }}" data-label="{{ app.name }}: {{ row.label | lower }}">Change</button>
+      <form method="post" action="{{ url_for('console.folders_open') }}">
+        <input type="hidden" name="token" value="{{ token }}">
+        <input type="hidden" name="path" value="{{ row.path }}">
+        <button class="icon" aria-label="Open {{ row.label }} in the file manager">{{ icon.open_new() }}</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endfor %}
+
+<p class="meta footnote">{{ store }}</p>
+
+<dialog id="pick" class="dialog wide" data-browse="{{ url_for('console.folders_browse') }}">
+  <form method="post" action="{{ url_for('console.folders_set') }}">
+    <input type="hidden" name="token" value="{{ token }}">
+    <input type="hidden" name="app" data-pick-app>
+    <input type="hidden" name="slot" data-pick-slot>
+    <h2 data-pick-title>Choose a folder</h2>
+    <div class="crumbs">
+      <button type="button" class="text" data-pick-up hidden>{{ icon.back() }}Up</button>
+      <span class="mono" data-pick-here></span>
+    </div>
+    <ul class="picker" data-pick-list></ul>
+    <label class="field">
+      <span>Folder</span>
+      <input type="text" name="path" data-pick-path placeholder="Leave blank to use the app's own folder">
+    </label>
+    <p class="supporting" data-pick-note></p>
+    <div class="actions">
+      <button type="button" class="text" data-close>Cancel</button>
+      <button class="filled">Use this folder</button>
+    </div>
+  </form>
+</dialog>
+{% endblock %}

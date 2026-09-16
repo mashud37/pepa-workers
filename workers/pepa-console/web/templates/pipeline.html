@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icon %}
+{% block title %}Pipeline · pepa{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Pipeline</h1>
+  <div class="actions">
+    <a class="button text" href="{{ url_for('console.folders_page') }}">{{ icon.folder() }}Link a source folder</a>
+    <form method="post" action="{{ url_for('console.pipeline_copy') }}" enctype="multipart/form-data">
+      <input type="hidden" name="token" value="{{ token }}">
+      <label class="button tonal">{{ icon.copy_in() }}Copy PDFs in<input type="file" name="pdfs" accept=".pdf" multiple hidden data-autosubmit></label>
+    </form>
+    <button type="button" class="filled" data-open="run-dialog">{{ icon.play() }}Run</button>
+  </div>
+</div>
+
+<ol class="flow">
+  <li><a href="{{ url_for('console.app_page', name='pepa-prep') }}"><span class="count">{{ "{:,}".format(summary.pdfs) }}{% if summary.pdfs_capped %}+{% endif %}</span><span class="label">PDFs waiting</span></a></li>
+  <li><a href="{{ url_for('console.app_page', name='pepa-prep') }}"><span class="count">{{ "{:,}".format(summary.prepared) }}</span><span class="label">Prepared</span></a></li>
+  <li><a href="{{ url_for('console.app_page', name='pepa-sum') }}"><span class="count">{{ "{:,}".format(summary.summarised) }}</span><span class="label">Summarised</span></a></li>
+  <li><a href="{{ url_for('console.read_page') }}"><span class="count">{{ summary.search_index or "None" }}</span><span class="label">Search index</span></a></li>
+  <li><a href="{{ url_for('console.app_page', name='pepa-review') }}"><span class="count">{{ summary.review_index or "None" }}</span><span class="label">Review index</span></a></li>
+</ol>
+
+<div class="run-slot pipeline-run" id="pipeline-run">
+  {% if chain %}{% with run = chain, log_url = url_for('console.chain_log', chain_id=chain.id) %}{% include "_run.html" %}{% endwith %}{% endif %}
+</div>
+
+<dialog id="run-dialog" class="dialog">
+  <form method="post" action="{{ url_for('console.pipeline_run') }}" data-fetch="run" data-slot="pipeline-run">
+    <input type="hidden" name="token" value="{{ token }}">
+    <h2>Run pipeline</h2>
+    <p class="supporting">Steps run in order. If one fails, the rest are skipped.</p>
+    <div class="checklist">
+      {% for step in steps %}
+      <label class="check"><input type="checkbox" name="step" value="{{ step.app }} {{ step.command }}" checked><span class="grow">{{ step.label }}</span>{% if step.paid %}<span class="chip">Paid</span>{% endif %}</label>
+      {% endfor %}
+    </div>
+    <div class="actions">
+      <button type="button" class="text" data-close>Cancel</button>
+      <button class="filled">Run</button>
+    </div>
+  </form>
+</dialog>
+{% endblock %}

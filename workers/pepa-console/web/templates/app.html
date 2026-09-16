@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icon %}
+{% block title %}{{ app.name }} · pepa{% endblock %}
+
+{% macro file_card(app_name, place) %}
+<section class="card files">
+  <header><span class="title">{{ place.label }}</span><span class="meta">{{ "{:,}".format(place.total) }}{% if place.capped %}+{% endif %}</span></header>
+  <p class="folder-path mono">{{ place.path }}</p>
+  {% if place.deep %}<p class="meta folder-note">Including sub-folders</p>{% endif %}
+  {% if place.rows %}
+  <ul>
+    {% for row in place.rows %}
+    <li>
+      {% if row.is_folder %}
+      <span class="entry"><span class="file-name">{{ row.name }}/</span><span class="meta">{{ row.when }}</span></span>
+      {% else %}
+      <a class="entry" href="{{ url_for('console.app_file', name=app_name, slot=place.slot, relative=row.name) }}" target="_blank"><span class="file-name">{{ row.name }}</span><span class="meta">{{ row.when }}</span></a>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="meta files-empty">{% if place.exists %}Empty{% else %}Not there yet{% endif %}</p>
+  {% endif %}
+  <div class="files-actions">
+    {% if place.takes_copies %}
+    <form method="post" action="{{ url_for('console.app_copy', name=app_name) }}" enctype="multipart/form-data">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="slot" value="{{ place.slot }}">
+      <label class="button text">{{ icon.copy_in() }}Copy files here<input type="file" name="files" multiple hidden data-autosubmit></label>
+    </form>
+    {% endif %}
+    {% if place.exists %}
+    <form method="post" action="{{ url_for('console.folders_open') }}">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="path" value="{{ place.path }}">
+      <input type="hidden" name="back" value="{{ request.path }}">
+      <button class="text">{{ icon.open_new() }}Open folder</button>
+    </form>
+    {% endif %}
+  </div>
+</section>
+{% endmacro %}
+
+{% block content %}
+{% set assigned = key_sources | selectattr("key") | map(attribute="key") | unique | list %}
+<div class="page-head">
+  <div class="heading">
+    <h1>{{ app.name }}</h1>
+    <p class="supporting">{{ app.blurb }}</p>
+  </div>
+  {% if key_sources %}
+  <a class="chip chip-link" href="{{ url_for('console.keys_page') }}">{% if assigned %}Key: {{ assigned | join(", ") }}{% else %}Own key file{% endif %}</a>
+  {% endif %}
+</div>
+
+<datalist id="paths">{% for path in paths %}<option value="{{ path }}">{% endfor %}</datalist>
+<div class="list">
+  {% for command in app.commands %}
+  {% set job = latest[command.name] %}
+  <details class="row-item{% if command.kind == 'terminal' %} muted{% endif %}"{% if job and job.status == "running" %} open{% endif %}>
+    <summary>
+      <span class="name">{{ command.name }}</span>
+      <span class="supporting">{{ command.help }}</span>
+      {% if command.kind == "terminal" %}<span class="chip">Terminal</span>{% elif command.kind == "service" %}<span class="chip">Service</span>{% endif %}
+      <span class="dot{% if job %} dot-{{ job.status }}{% endif %}" data-dot{% if not job %} hidden{% endif %}></span>
+      {{ icon.chevron() }}
+    </summary>
+    <div class="row-body">
+      {% if command.kind == "terminal" %}
+      <code class="command-line">cd "{{ app.path }}"; python manage.py {{ command.name }}</code>
+      {% elif command.kind == "service" %}
+      <a class="button tonal" href="{{ url_for('console.read_page') }}">Open Read</a>
+      {% else %}
+      <form method="post" action="{{ url_for('console.app_run', name=app.name, command_name=command.name) }}" data-fetch="run" data-slot="run-{{ command.name }}"{% if command.kind == "heavy" %} data-confirm="Run {{ app.name }} {{ command.name }}?" data-confirm-detail="This does real work and may call a paid model."{% endif %}>
+        <input type="hidden" name="token" value="{{ token }}">
+        {% set entries = command.fields | rejectattr("type", "equalto", "bool") | list %}
+        {% set switches = command.fields | selectattr("type", "equalto", "bool") | list %}
+        {% if entries %}
+        <div class="fields">
+          {% for field in entries %}
+          {% set required = not field.name.startswith("-") %}
+          <label class="field">
+            <span>{{ field.name.lstrip("-") | replace("-", " ") | capitalize }}{% if required %} *{% endif %}</span>
+            {% if field.type == "choice" %}
+            <select name="{{ field.name }}"{% if required %} required{% endif %}>
+              {% if not required %}<option value="">Default</option>{% endif %}
+              {% for choice in field.choices %}<option>{{ choice }}</option>{% endfor %}
+            </select>
+            {% elif field.type == "int" %}
+            <input type="number" min="0" name="{{ field.name }}" placeholder="{{ field.help }}"{% if required %} required{% endif %}>
+            {% elif field.type in ["file", "folder"] %}
+            <input type="text" name="{{ field.name }}" list="paths" placeholder="{{ field.help }}"{% if required %} required{% endif %}>
+            {% else %}
+            <input type="text" name="{{ field.name }}" placeholder="{{ field.help }}"{% if required %} required{% endif %}>
+            {% endif %}
+          </label>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% for field in switches %}
+        <label class="check"><input type="checkbox" name="{{ field.name }}"><span>{{ field.help }}</span></label>
+        {% endfor %}
+        <div class="form-actions"><button class="filled">Run</button></div>
+      </form>
+      <div class="run-slot" id="run-{{ command.name }}">
+        {% if job %}{% with run = job, log_url = url_for('console.job_log', job_id=job.id) %}{% include "_run.html" %}{% endwith %}{% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </details>
+  {% endfor %}
+</div>
+
+<div class="section-head">
+  <h2 class="section-title">Files</h2>
+  <a class="button text" href="{{ url_for('console.folders_page') }}">{{ icon.folder() }}Change folders</a>
+</div>
+<div class="grid two">
+  {% for place in places %}{{ file_card(app.name, place) }}{% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icon %}
+{% block head %}{% if refresh %}<meta http-equiv="refresh" content="3">{% endif %}{% endblock %}
+{% block title %}Jobs · pepa{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Jobs</h1></div>
+
+{% if not jobs and not chains %}
+<div class="empty">
+  {{ draw_mascot("pepa", 5) }}
+  <h2>Nothing has run yet</h2>
+  <p class="supporting">Anything you start appears here with a live log.</p>
+</div>
+{% endif %}
+
+{% for chain in chains %}
+<section class="card chain">
+  <header>
+    <span class="title">Pipeline run</span>
+    <span class="meta">{{ chain.started_at }}</span>
+    <span class="status status-{{ chain.status }}">{{ status_label[chain.status] }}</span>
+  </header>
+  <ol class="steps">
+    {% for step in chain.steps %}
+    <li>
+      {% if step.job_id %}
+      <a href="{{ url_for('console.job_page', job_id=step.job_id) }}"><span class="dot dot-{{ step.status }}"></span>{{ step.label }}</a>
+      {% else %}
+      <span><span class="dot dot-{{ step.status }}"></span>{{ step.label }}</span>
+      {% endif %}
+      {% if step.error %}<span class="meta">{{ step.error }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+</section>
+{% endfor %}
+
+{% if jobs %}
+<div class="list">
+  {% for job in jobs %}
+  <a class="row-item" href="{{ url_for('console.job_page', job_id=job.id) }}">
+    <span class="dot dot-{{ job.status }}"></span>
+    <span class="name">{{ job.app }} {{ job.command }}</span>
+    <span class="supporting">{{ job.last_line }}</span>
+    <span class="meta">{{ job.started_at }} · {{ job.elapsed }}</span>
+    {{ icon.arrow() }}
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

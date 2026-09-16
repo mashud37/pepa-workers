@@ -7,17 +7,17 @@ import argparse
 import sys
 
 from cli import ui
-from registry import APPS, get_command
+from registry import APPS, KIND_SYMBOL, get_command
 
 
 def cmd_status() -> int:
     for app in APPS:
         print(f"{app.name}  :  {app.blurb}")
         for c in app.commands:
-            mark = {"safe": "·", "heavy": "▶", "interactive": "✗"}[c.kind]
+            mark = KIND_SYMBOL[c.kind]
             flags = " ".join(c.default_flags)
             tail = f"  ({flags})" if flags else ""
-            print(f"  {mark} {c.name:<10} {c.kind:<11} {c.help}{tail}")
+            print(f"  {mark} {c.name:<14} {c.kind:<11} {c.help}{tail}")
         print()
     return 0
 
@@ -27,7 +27,7 @@ def cmd_config() -> int:
     interactive = 0
     for app in APPS:
         for command in app.commands:
-            if command.kind == "interactive":
+            if command.kind in ("interactive", "terminal"):
                 interactive += 1
     print(f"root         {ROOT}")
     print(f"apps         {len(APPS)}")
@@ -38,11 +38,15 @@ def cmd_config() -> int:
 
 def cmd_install() -> int:
     ui.step("Checking pepa-console")
-    try:
-        import textual  # noqa: F401
-        ui.ok("textual is installed")
-    except ImportError:
-        ui.error("textual missing, run: pip install -r requirements.txt")
+    missing = []
+    for module in ("textual", "flask"):
+        try:
+            __import__(module)
+            ui.ok(f"{module} is installed")
+        except ImportError:
+            missing.append(module)
+    if missing:
+        ui.error(f"{', '.join(missing)} missing, run: pip install -r requirements.txt")
         return 1
     for a in APPS:
         found = a.path.exists()
@@ -66,6 +70,10 @@ def main() -> int:
     r.add_argument("cmd", help="Subcommand, e.g. config")
     r.add_argument("extra", nargs=argparse.REMAINDER, help="Extra flags passed to the child")
 
+    w = sub.add_parser("web", help="Open the web console in the browser (test version)")
+    w.add_argument("--port", type=int, default=None, metavar="N", help="Port (default: 5190)")
+    w.add_argument("--no-browser", action="store_true", help="Do not open a browser tab")
+
     sub.add_parser("status", help="List apps and their commands")
     sub.add_parser("config", help="Show effective configuration")
     sub.add_parser("install", help="Check dependencies and discover apps")
@@ -75,10 +83,14 @@ def main() -> int:
     if args.command is None:
         if not (sys.stdin.isatty() and sys.stdout.isatty()):
             print("pepa-console needs a terminal for the TUI. "
-                  "Use: python manage.py {run|status|config|install}", file=sys.stderr)
+                  "Use: python manage.py {web|run|status|config|install}", file=sys.stderr)
             return 1
         from console.app import run
         run()
+        return 0
+    if args.command == "web":
+        from web.app import run as run_web
+        run_web(args.port, open_browser=not args.no_browser)
         return 0
     if args.command == "status":
         return cmd_status()

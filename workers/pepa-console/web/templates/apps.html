@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Apps · pepa{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Apps</h1></div>
+<div class="grid">
+  {% for app in apps %}
+  <a class="card" href="{{ url_for('console.app_page', name=app.name) }}">
+    <span class="title">{{ app.name }}</span>
+    <span class="supporting">{{ app.blurb }}</span>
+  </a>
+  {% endfor %}
+</div>
+{% endblock %}
