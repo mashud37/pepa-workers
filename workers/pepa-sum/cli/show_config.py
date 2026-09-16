@@ -6,6 +6,7 @@ from cli import ui
 def run():
     ui.header("Effective configuration")
     ui.info(f"input dir    {config.INPUT_DIR}")
+    ui.info(f"sub-folders  {'read too' if config.scan_subfolders() else 'not read'}")
     ui.info(f"output dir   {config.OUTPUT_DIR}")
     ui.info(f"backend      {config.load('BACKEND')}")
     ui.info(f"para method  {config.load('PARA_METHOD')}")
@@ -19,7 +20,7 @@ def run():
         ui.info(f"endpoint     {config.load('BASE_URL') or '(not deployed)'}")
         ui.info(f"token        {'set' if config.load('JOB_TOKEN') else 'missing'}")
 
-    ui.info(f"text budget  {config.TEXT_BUDGET:,} chars sent per paper")
+    ui.info(f"text budget  {config.text_budget():,} chars sent per paper")
     ui.info(f"run mode     {config.load('MODE')}  ·  speed tier {config.speed()}  ·  "
             f"local stage {config.local_workers()} process(es)")
     ui.info(f"concurrency  {config.paper_workers()} papers at once  ·  "

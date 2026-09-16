@@ -8,8 +8,8 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parent
-INPUT_DIR = ROOT / "input"
-OUTPUT_DIR = ROOT / "output"
+INPUT_DIR = Path(os.environ.get("PEPA_INPUT_DIR", str(ROOT / "input")))
+OUTPUT_DIR = Path(os.environ.get("PEPA_OUTPUT_DIR", str(ROOT / "output")))
 DATA_DIR = ROOT / "data"
 ENV_FILE = ROOT / "env.yaml"
 ENV_EXAMPLE = ROOT / "env.yaml.example"
@@ -19,6 +19,7 @@ _ENV_OVERRIDE = {
     "BACKEND": "PEPA_BACKEND",
     "PARA_METHOD": "PEPA_PARA_METHOD",
     "ON_EXISTING": "PEPA_ON_EXISTING",
+    "SUBFOLDERS": "PEPA_SUBFOLDERS",
     "ANTHROPIC_API_KEY": "ANTHROPIC_API_KEY",
     "ANTHROPIC_MODEL": "PEPA_ANTHROPIC_MODEL",
     "BASE_URL": "PEPA_BASE_URL",
@@ -41,6 +42,7 @@ DEFAULTS = {
     "BACKEND": "anthropic",
     "PARA_METHOD": "llm",
     "ON_EXISTING": "ask",
+    "SUBFOLDERS": "off",
     "ANTHROPIC_API_KEY": None,
     "ANTHROPIC_MODEL": "claude-haiku-4-5-20251001",
     "BASE_URL": None,
@@ -145,6 +147,17 @@ def ocr_mode():
         return "auto"
     val = str(raw).lower()
     return val if val in OCR_MODES else "auto"
+
+
+def scan_subfolders():
+    """Whether papers inside the input folder's own folders are summarised too.
+
+    Tolerates YAML's boolean coercion the way ocr_mode does: an unquoted
+    `on`/`off` in env.yaml arrives as Python True/False, not as a word."""
+    raw = get("SUBFOLDERS", "off")
+    if raw is True or raw is False:
+        return raw
+    return str(raw).lower() in ("1", "true", "yes", "on")
 
 
 def ocr_dpi():

@@ -56,7 +56,8 @@ def run(input_dir=None, output_dir=None, force=False, mode=None):
 
     in_dir = (input_dir or config.INPUT_DIR)
     out_dir = (output_dir or config.OUTPUT_DIR)
-    in_dir.mkdir(parents=True, exist_ok=True)
+    if not in_dir.is_dir():
+        raise SystemExit(f"Input folder not found: {in_dir}")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     sources = _discover_sources(in_dir)
@@ -66,7 +67,10 @@ def run(input_dir=None, output_dir=None, force=False, mode=None):
 
     on_existing = config.load('ON_EXISTING')
     ui.header("pepa-sum: summarising papers")
-    ui.info(f"{len(sources)} paper(s) in {in_dir}")
+    where = str(in_dir)
+    if config.scan_subfolders():
+        where += " (including sub-folders)"
+    ui.info(f"{len(sources)} paper(s) in {where}")
     ui.info(f"backend: {config.load('BACKEND')}  ·  paragraph rundown: {config.load('PARA_METHOD')}")
 
     planned = _plan_work(sources, out_dir, force, on_existing)
@@ -97,11 +101,16 @@ def _discover_sources(in_dir):
     paper.pdf + paper.md), the text file wins: it is already reflowed and
     reference-stripped, so re-reading the PDF would be wasted work and could
     disagree with it. Both still map to the same sum_<stem>.md output, so taking
-    one prevents a silent overwrite."""
+    one prevents a silent overwrite. With SUBFOLDERS on, papers inside folders of
+    in_dir are found too, and the same stem rule applies across them all."""
     from extract import SUFFIXES
 
+    if config.scan_subfolders():
+        candidates = sorted(in_dir.rglob("*"))
+    else:
+        candidates = sorted(in_dir.iterdir())
     found = {}
-    for p in sorted(in_dir.iterdir()):
+    for p in candidates:
         if not (p.is_file() and p.suffix.lower() in SUFFIXES):
             continue
         stem = paper_stem(p.name)

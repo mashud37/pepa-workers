@@ -70,6 +70,10 @@ python manage.py              # launch menu
 
 Set `anthropic_api_key` in `env.yaml` (or the `ANTHROPIC_API_KEY` environment variable) for the default backend.
 
+`PEPA_INPUT_DIR` and `PEPA_OUTPUT_DIR` move the input and output folders, which is how pepa-console points the app at folders you chose; `--input` and `--output` still win for a single run. The input folder is only ever read, and a missing one is reported rather than created.
+
+`SUBFOLDERS` in `env.yaml`, or `PEPA_SUBFOLDERS=on`, reads papers inside the input folder's own folders too, which a library written by a reference manager needs. Summaries still land flat in the output folder, named after the paper, so two papers with the same file name in different sub-folders map to one summary.
+
 > **Self-hosted backend (optional):** run `python manage.py settings`, choose `cloudrun`, then `python manage.py deploy`. Deployment is Windows-first, `deploy` runs `deploy.ps1` (PowerShell, no `bash` needed); a POSIX mirror, `deploy.sh`, is also provided.
 
 > **Scanned PDFs (optional OCR):** image-only pages need `pip install pytesseract pdf2image` plus the system tools tesseract and poppler. Without them, born-digital PDFs still work; scanned pages are skipped with a warning.
