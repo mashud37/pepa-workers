@@ -175,8 +175,8 @@ def run(force: bool = False):
             "title": title,
             "authors": authors,
             "sections": sections,
-            "text_path": str(text_path) if text_path else None,
-            "sum_path": str(sum_path) if sum_path else None,
+            "text_path": text_path.name if text_path else None,
+            "sum_path": sum_path.name if sum_path else None,
             "text_mtime": text_mtime,
             "sum_mtime": sum_mtime,
         })

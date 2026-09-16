@@ -8,6 +8,7 @@ from cli import ui
 
 def _cmd_search(args):
     import config
+    from index import files
     from search.query import count, search
     try:
         results = search(config.DB_PATH, args.query, author=args.author,
@@ -26,7 +27,7 @@ def _cmd_search(args):
         flags = ("T" if r["has_text"] else "-") + ("S" if r["has_sum"] else "-")
         print(f"[{r['id']:>5}] {flags}  {r['stem']}")
         print(f"          {r['title']}  -- {r['authors_raw'] or '?'}")
-        print(f"          {r['sum_path'] or r['text_path']}")
+        print(f"          {files.sum_file(r['sum_path']) or files.text_file(r['text_path'])}")
 
     shown_from = args.offset + 1
     shown_to = args.offset + len(results)

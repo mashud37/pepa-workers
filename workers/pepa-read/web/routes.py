@@ -7,6 +7,7 @@ from flask import Blueprint, Response, jsonify, render_template, request, send_f
 from markupsafe import escape
 
 import config
+from index import files
 from index import lists as list_store
 from index.schema import ensure_schema
 from search.query import count, search
@@ -81,12 +82,12 @@ def _resolve_path(row, which: str | None) -> dict:
         isn't on record.
     """
     if which == "text":
-        return {"path": row["text_path"], "label": "text"}
+        return {"path": files.text_file(row["text_path"]), "label": "text"}
     if which == "sum":
-        return {"path": row["sum_path"], "label": "summary"}
+        return {"path": files.sum_file(row["sum_path"]), "label": "summary"}
     if row["sum_path"]:
-        return {"path": row["sum_path"], "label": "summary"}
-    return {"path": row["text_path"], "label": "text"}
+        return {"path": files.sum_file(row["sum_path"]), "label": "summary"}
+    return {"path": files.text_file(row["text_path"]), "label": "text"}
 
 
 def open_document(doc_id: int, which: str | None = None) -> str:
