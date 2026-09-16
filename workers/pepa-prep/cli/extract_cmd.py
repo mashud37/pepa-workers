@@ -15,6 +15,21 @@ def _trunc(name: str) -> str:
     return name if len(name) <= _MAX_NAME else name[: _MAX_NAME - 3] + "..."
 
 
+def _print_plan(src: Path, out_dir: Path, cfg: dict) -> None:
+    """The four phases and the folders they use, printed before any phase starts."""
+    where = str(src.resolve())
+    if cfg["scan_subfolders"]:
+        where += "  (including sub-folders)"
+    ui.step("Plan")
+    ui.info("Step 1/4: Categorise PDFs")
+    ui.info("Step 2/4: Extract straight documents")
+    ui.info("Step 3/4: Extract books (with chapter splitting)")
+    ui.info("Step 4/4: Extract scanned PDFs (OCR)")
+    ui.info(f"Input:    {where}")
+    ui.info(f"Output:   {out_dir.resolve()}")
+    ui.info(f"Workers:  {cfg['workers']}")
+
+
 def run(cfg: dict) -> None:
     src = Path(cfg["input_folder"])
     out_dir = Path(cfg["output_folder"]) / "text"
@@ -22,21 +37,16 @@ def run(cfg: dict) -> None:
     if not src.is_dir():
         raise SystemExit(f"Input folder not found: {src}")
 
-    pdfs = sorted(src.glob("*.pdf"))
+    if cfg["scan_subfolders"]:
+        pdfs = sorted(src.rglob("*.pdf"))
+    else:
+        pdfs = sorted(src.glob("*.pdf"))
     if not pdfs:
         raise SystemExit(f"No PDFs found in {src}")
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Step plan, always printed before any phase starts
-    ui.step("Plan")
-    ui.info("Step 1/4: Categorise PDFs")
-    ui.info("Step 2/4: Extract straight documents")
-    ui.info("Step 3/4: Extract books (with chapter splitting)")
-    ui.info("Step 4/4: Extract scanned PDFs (OCR)")
-    ui.info(f"Input:    {src.resolve()}")
-    ui.info(f"Output:   {out_dir.resolve()}")
-    ui.info(f"Workers:  {cfg['workers']}")
+    _print_plan(src, out_dir, cfg)
 
     scanned = _categorise_phase(pdfs, out_dir, cfg)
     groups = scanned["groups"]

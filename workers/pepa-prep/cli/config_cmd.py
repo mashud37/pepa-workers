@@ -5,6 +5,7 @@ from . import ui
 
 def _show(cfg: dict) -> None:
     ui.info(f"Input folder:       {cfg['input_folder']}")
+    ui.info(f"Sub-folders:        {'scanned too' if cfg['scan_subfolders'] else 'not scanned'}")
     ui.info(f"Output folder:      {cfg['output_folder']}")
     ui.info(f"Workers:            {cfg['workers']}")
     ui.info(f"Book page threshold:{cfg['book_page_threshold']}")
@@ -73,6 +74,7 @@ def _advanced(cfg: dict) -> dict:
             ("Max chapters", f"current: {cfg['max_chapters']}  (more than this → wrote one file, flagged)"),
             ("OCR DPI", f"current: {cfg['ocr_dpi']}  (higher = slower but better)"),
             ("Tesseract path", f"current: {cfg.get('tesseract_cmd') or '(from PATH)'}"),
+            ("Scan sub-folders", f"current: {'on' if cfg['scan_subfolders'] else 'off'}  (also read PDFs inside the input folder's folders)"),
         ])
         if choice is None:
             return cfg
@@ -88,3 +90,7 @@ def _advanced(cfg: dict) -> dict:
             cfg = {**cfg, "tesseract_cmd": v or ""}
             cfg_mod.save(cfg)
             ui.ok("Saved")
+        elif choice == 4:
+            cfg = {**cfg, "scan_subfolders": not cfg["scan_subfolders"]}
+            cfg_mod.save(cfg)
+            ui.ok("Sub-folders scanned too" if cfg["scan_subfolders"] else "Sub-folders left alone")

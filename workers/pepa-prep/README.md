@@ -131,6 +131,7 @@ Edit `config.yaml` or use the Configure menu:
 | Key | Default | Description |
 |---|---|---|
 | `input_folder` | `./input` | Folder of source PDFs |
+| `scan_subfolders` | `false` | Also read PDFs inside the input folder's own folders |
 | `output_folder` | `./output` | Parent output folder; markdown lands in `<output_folder>/text/` |
 | `workers` | `4` | Parallel extraction threads |
 | `book_page_threshold` | `100` | Pages above this take the book route |
@@ -142,6 +143,10 @@ Edit `config.yaml` or use the Configure menu:
 | `refine_unit_slack` | `1` | Chapters `refine` may add beyond the contents entries that anchored |
 
 Already-extracted files are skipped on a re-run.
+
+`PEPAPREP_INPUT_DIR` and `PEPAPREP_OUTPUT_DIR` override the two folders without touching `config.yaml`, which is how pepa-console points the app at folders you chose, and `PEPAPREP_SUBFOLDERS=on` turns sub-folder scanning on the same way. The source folder is only ever read.
+
+A library whose PDFs sit in folders of their own, as a reference manager writes them, needs `scan_subfolders` on. Extracted markdown still lands flat in `<output_folder>/text/`, named after the PDF, so two PDFs with the same file name in different sub-folders produce one file: the second is taken as already extracted and skipped.
 
 ## OCR
 
