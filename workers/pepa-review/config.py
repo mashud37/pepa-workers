@@ -10,8 +10,8 @@ import yaml
 ROOT = Path(__file__).resolve().parent
 CORPUS_DIR_DEFAULT = ROOT.parent / "pepa-sum" / "output"
 DATA_DIR = ROOT / "data"
-INPUT_DIR = ROOT / "input"
-OUTPUT_DIR = ROOT / "output"
+INPUT_DIR = Path(os.environ.get("PEPAREVIEW_INPUT_DIR", str(ROOT / "input")))
+OUTPUT_DIR = Path(os.environ.get("PEPAREVIEW_OUTPUT_DIR", str(ROOT / "output")))
 SECRETS_FILE = ROOT / "secrets.yaml"
 SECRETS_EXAMPLE = ROOT / "secrets.example.yaml"
 INDEX_FILE = DATA_DIR / "index.json"

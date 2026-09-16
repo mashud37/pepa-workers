@@ -32,7 +32,7 @@ a research tool.
 
 ## 0. Read these first (authoritative, not suggestions)
 
-Read every policy in `../00_policies/` before scaffolding and match each to a real repo as you go:
+Read every policy in `../../../policies/` before scaffolding and match each to a real repo as you go:
 `README.md` (the new-package checklist), `coding-style.md`, `architecture.md`, `dependencies.md`,
 `security.md`, `cli.md`, `cli-style.md`, `models.md`, `readme-structure.md`. Non-negotiables you
 will be checked against:

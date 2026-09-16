@@ -85,6 +85,8 @@ If `pepa-sum` lives somewhere other than `../pepa-sum`:
 corpus_dir: "C:/path/to/pepa-sum/output"
 ```
 
+`PEPAREVIEW_CORPUS_DIR`, `PEPAREVIEW_INPUT_DIR`, and `PEPAREVIEW_OUTPUT_DIR` move the corpus, the draft folder, and the results folder without editing `secrets.yaml`, which is how pepa-console points the app at folders you chose.
+
 Then build the index:
 
 ```
