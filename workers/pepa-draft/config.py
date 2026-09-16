@@ -10,8 +10,8 @@ except ImportError:
 
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "data"
-INPUT_DIR = ROOT / "input"
-OUTPUT_DIR = ROOT / "output"
+INPUT_DIR = Path(os.environ.get("PEPADRAFT_INPUT_DIR", str(ROOT / "input")))
+OUTPUT_DIR = Path(os.environ.get("PEPADRAFT_OUTPUT_DIR", str(ROOT / "output")))
 SECRETS_FILE = ROOT / "secrets.yaml"
 SECRETS_EXAMPLE = ROOT / "secrets.example.yaml"
 SECTIONS_FILE = DATA_DIR / "sections.json"

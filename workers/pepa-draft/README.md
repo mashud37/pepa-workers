@@ -68,6 +68,8 @@ input/review_my_topic.md
 input/outline_my_topic.md
 ```
 
+`PEPADRAFT_INPUT_DIR` and `PEPADRAFT_OUTPUT_DIR` move the input and results folders without editing `secrets.yaml`, which is how pepa-console points the app at folders you chose.
+
 ## Commands
 
 Run `python manage.py` with no arguments for the interactive menu, or call any action directly:
