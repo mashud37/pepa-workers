@@ -27,7 +27,6 @@ GATE_CHECKS = [
 GATE_COLUMNS = [
     "app",
     "released",
-    "ref",
     "licence",
     "free",
     "data root",
@@ -59,8 +58,8 @@ def app_text(folder):
 
 
 def has_clean_tree(folder):
-    """True when the app's repository holds no uncommitted change."""
-    asked = ["git", "-C", str(folder), "status", "--porcelain"]
+    """True when the app's folder holds no uncommitted change."""
+    asked = ["git", "-C", str(folder), "status", "--porcelain", "--", "."]
     found = subprocess.run(asked, capture_output=True, text=True)
     if found.returncode != 0:
         return False
@@ -88,7 +87,6 @@ def gate_row(name, entry):
     return {
         "app": name,
         "released": mark(entry["released"]),
-        "ref": entry["ref"],
         "licence": mark((folder / "LICENSE").exists()),
         "free": mark(not copyleft_in(folder)),
         "data root": mark("DATA_ROOT" in text),
@@ -113,7 +111,7 @@ def run():
     if ready:
         ui.ok(f"{len(ready)} of {len(rows)} app(s) clear the gate: {', '.join(row['app'] for row in ready)}")
     else:
-        ui.warn("No app clears the gate yet. The workspace TODO.md lists what is left.")
+        ui.warn("No app clears the gate yet. Every no in the table above is one thing left to fix.")
 
     blocked = [row for row in rows if row["released"] == "yes" and not clears_gate(row)]
     if blocked:

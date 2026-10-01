@@ -1,4 +1,4 @@
-"""Read workers.yaml and say which apps ship, at which commit, and under which extra."""
+"""Read workers.yaml and say which apps ship and under which extra."""
 from pathlib import Path
 
 import yaml
@@ -10,7 +10,6 @@ DIST_FOLDER = ROOT / "dist"
 
 REQUIRED_APP_KEYS = [
     "released",
-    "ref",
     "extra",
     "leave_out",
 ]
@@ -45,5 +44,5 @@ def chosen_apps(manifest, include_unreleased):
 
 
 def app_folder(name):
-    """Where one app's own repository sits beside this one."""
-    return ROOT / name
+    """Where one app sits in this repository."""
+    return ROOT / "workers" / name

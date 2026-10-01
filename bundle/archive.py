@@ -1,4 +1,4 @@
-"""Export each app's tracked files at one commit, so uncommitted work never reaches a wheel."""
+"""Export each app's committed files at HEAD, so uncommitted work never reaches a wheel."""
 import shutil
 import subprocess
 import zipfile
@@ -6,32 +6,29 @@ import zipfile
 from bundle import manifest
 
 
-def resolve_ref(name, ref):
-    """The commit one app's ref points at.
+def head_commit():
+    """The commit this repository's HEAD points at.
 
     Raises:
-        SystemExit: the app is not a repository here, or has no such ref.
+        SystemExit: the family folder is not a git repository with a commit.
     """
-    folder = manifest.app_folder(name)
-    if not (folder / ".git").is_dir():
-        raise SystemExit(f"{name} is not a git repository at {folder}.")
-    asked = ["git", "-C", str(folder), "rev-parse", "--verify", f"{ref}^{{commit}}"]
+    asked = ["git", "-C", str(manifest.ROOT), "rev-parse", "--verify", "HEAD^{commit}"]
     found = subprocess.run(asked, capture_output=True, text=True)
     if found.returncode != 0:
-        raise SystemExit(f"{name} has no ref {ref}.")
+        raise SystemExit(f"{manifest.ROOT} is not a git repository with a commit.")
     return found.stdout.strip()
 
 
-def export(name, ref, into):
-    """Write one app's tracked files at a ref into a folder.
+def export(name, into):
+    """Write one app's committed files at HEAD into a folder.
 
     Returns:
         dict with "commit" and "files", the number of files written.
     """
-    commit = resolve_ref(name, ref)
+    commit = head_commit()
     into.mkdir(parents=True, exist_ok=True)
     archive = into.parent / f"{name}.zip"
-    packing = ["git", "-C", str(manifest.app_folder(name)), "archive", "--format=zip", "-o", str(archive), commit]
+    packing = ["git", "-C", str(manifest.ROOT), "archive", "--format=zip", "-o", str(archive), f"{commit}:workers/{name}"]
     subprocess.run(packing, check=True)
     with zipfile.ZipFile(archive) as packed:
         packed.extractall(into)

@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""Build the pepa-workers package from the app repositories beside this one. No arguments opens
-the menu; every action is also a subcommand.
-"""
+"""Build the pepa-workers package from the apps in workers/. No arguments opens the menu."""
 import argparse
 import sys
 from functools import partial
@@ -16,7 +14,7 @@ _ACTIONS = [
     },
     {
         "label": "Release wheel",
-        "hint": "only the apps workers.yaml marks as released, each at its tag",
+        "hint": "only the apps workers.yaml marks as released",
         "run": bundle_cmd.run,
     },
     {

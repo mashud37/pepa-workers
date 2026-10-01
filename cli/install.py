@@ -1,4 +1,4 @@
-"""Check the bundle's own dependencies and report which app repositories sit beside it."""
+"""Check the bundle's own dependencies and report which apps sit in workers/."""
 import subprocess
 import sys
 
@@ -19,17 +19,11 @@ def module_missing(name):
 
 
 def app_row(name, entry):
-    """What one app looks like from here: its folder, its repository, and the ref the manifest names."""
+    """What one app looks like from here: its folder and whether workers.yaml releases it."""
     folder = manifest.app_folder(name)
-    if not folder.is_dir():
-        return {"app": name, "folder": "missing", "ref": entry["ref"], "commit": ""}
-    if not (folder / ".git").is_dir():
-        return {"app": name, "folder": "no repository", "ref": entry["ref"], "commit": ""}
-    asked = ["git", "-C", str(folder), "rev-parse", "--verify", f"{entry['ref']}^{{commit}}"]
-    found = subprocess.run(asked, capture_output=True, text=True)
-    if found.returncode != 0:
-        return {"app": name, "folder": "here", "ref": entry["ref"], "commit": "no such ref"}
-    return {"app": name, "folder": "here", "ref": entry["ref"], "commit": found.stdout.strip()[:8]}
+    found = "here" if folder.is_dir() else "missing"
+    released = "yes" if entry["released"] else "no"
+    return {"app": name, "folder": found, "released": released}
 
 
 def run():
@@ -45,5 +39,5 @@ def run():
     names = sorted(settings["apps"])
     ui.step(f"Apps  [{len(names)}]")
     rows = [app_row(name, settings["apps"][name]) for name in names]
-    ui.table(rows, ["app", "folder", "ref", "commit"])
+    ui.table(rows, ["app", "folder", "released"])
     return 0

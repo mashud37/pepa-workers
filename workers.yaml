@@ -11,13 +11,11 @@ base:
 apps:
   pepa-prep:
     released: false
-    ref: HEAD
     extra: prep
     leave_out:
       - data/eval
   pepa-sum:
     released: false
-    ref: HEAD
     extra: sum
     leave_out:
       - Dockerfile
@@ -28,29 +26,24 @@ apps:
       - serve
   pepa-read:
     released: false
-    ref: HEAD
     extra: read
     leave_out: []
   pepa-review:
     released: false
-    ref: HEAD
     extra: review
     leave_out:
       - BRIEFING.md
   pepa-plan:
     released: false
-    ref: HEAD
     extra: plan
     leave_out:
       - BRIEFING.md
       - benchmark
   pepa-draft:
     released: false
-    ref: HEAD
     extra: draft
     leave_out: []
   pepa-console:
     released: false
-    ref: HEAD
     extra: console
     leave_out: []
