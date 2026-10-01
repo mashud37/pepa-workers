@@ -1,0 +1,342 @@
+:root {
+  color-scheme: light dark;
+  --fg: #1a1a1a;
+  --bg: #ffffff;
+  --muted: #666;
+  --border: #ddd;
+  --accent: #2b5fd9;
+  --row-hover: #f4f6fb;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fg: #e8e8e8;
+    --bg: #1b1c1f;
+    --muted: #9a9a9a;
+    --border: #3a3b3f;
+    --accent: #6d94ff;
+    --row-hover: #26282e;
+  }
+}
+
+/* Manual toggle (web/static/theme.js) always wins over the OS preference above. */
+:root[data-theme="dark"] {
+  --fg: #e8e8e8;
+  --bg: #1b1c1f;
+  --muted: #9a9a9a;
+  --border: #3a3b3f;
+  --accent: #6d94ff;
+  --row-hover: #26282e;
+}
+
+:root[data-theme="light"] {
+  --fg: #1a1a1a;
+  --bg: #ffffff;
+  --muted: #666;
+  --border: #ddd;
+  --accent: #2b5fd9;
+  --row-hover: #f4f6fb;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, Segoe UI, Helvetica, Arial, sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+.search-page, .viewer {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
+}
+
+h1 {
+  font-size: 1.4rem;
+  margin-bottom: 1rem;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.page-header h1 {
+  margin: 0;
+}
+
+.theme-toggle {
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0.35rem 0.6rem;
+}
+
+.link-btn {
+  border: none;
+  background: none;
+  color: var(--accent);
+  padding: 0;
+  font-size: inherit;
+  cursor: pointer;
+}
+
+.link-btn:hover {
+  text-decoration: underline;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin: 0.2rem 0 0.6rem;
+}
+
+.hint code {
+  background: var(--row-hover);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+
+/* inline-flex on a span, not the <td> itself: overriding a table cell's own
+   display to flex/block strips its table-cell layout, so the browser's table
+   column-width algorithm miscomputes that column (often collapsing it),
+   making the content spill into the neighboring cell instead of staying put. */
+.actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  white-space: nowrap;
+}
+
+dialog#help-modal {
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  max-width: 560px;
+  width: 90vw;
+  padding: 1.25rem 1.5rem;
+}
+
+dialog#help-modal::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.help-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.help-modal-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.help-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  margin: 0.75rem 0;
+}
+
+.help-table th, .help-table td {
+  text-align: left;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.pager button {
+  font-size: 0.85rem;
+}
+
+.search-bar input {
+  width: 100%;
+  font-size: 1.05rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.search-bar input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.status {
+  color: var(--muted);
+  font-size: 0.85rem;
+  min-height: 1.2em;
+  margin: 0.5rem 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+th, td {
+  text-align: left;
+  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+tbody tr:hover {
+  background: var(--row-hover);
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  font-size: 0.85rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.viewer .meta {
+  color: var(--muted);
+  margin-top: -0.5rem;
+}
+
+.open-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.open-actions .download-btn {
+  display: inline-block;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--fg);
+}
+
+.open-actions .download-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.viewer .content {
+  margin-top: 1.5rem;
+  line-height: 1.55;
+}
+
+.viewer .content pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-right: 0.4rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: var(--row-hover);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.chip-x {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 0.9rem;
+  line-height: 1;
+  color: var(--muted);
+}
+
+.chip-x:hover {
+  color: var(--accent);
+}
+
+.list-select, .list-new-input {
+  font-size: 0.78rem;
+  padding: 0.15rem 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--fg);
+  max-width: 9rem;
+}
+
+#list-manager {
+  margin-top: 2rem;
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+
+#list-manager summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+#list-manager-table {
+  margin-top: 0.75rem;
+}
+
+.list-name-input {
+  font-size: 0.9rem;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--fg);
+  width: 100%;
+}
