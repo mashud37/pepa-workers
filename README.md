@@ -1,7 +1,7 @@
 # pepa-workers <img src="docs/logo.png" align="right" height="120" alt="" />
 
-An academic writing pipeline, split into one repository per stage so each stage can be run,
-tested, and replaced on its own. Papers enter as PDFs and leave as a first draft: preparation,
+An academic writing pipeline of seven apps, one per stage, each of which can be run, tested,
+and replaced on its own. Papers enter as PDFs and leave as a first draft: preparation,
 summarisation, search, literature review, planning, and drafting, with a console on top that
 drives all of them. Everything runs on one machine and single-user; only the language-model and
 embedding calls leave it, and those can point at a self-hosted endpoint.
