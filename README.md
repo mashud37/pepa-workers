@@ -47,7 +47,7 @@ flowchart LR
     CONSOLE[pepa-console] -.drives each app as a subprocess.-> PREP
 ```
 
-## Get started
+## Getting started
 
 1. Install Python 3.10 or newer from [python.org](https://www.python.org/downloads/). On Windows,
    tick **Add python.exe to PATH** on the installer's first screen.
@@ -61,51 +61,3 @@ pepa-console web
 The console opens in the browser at `http://127.0.0.1:5190`. Its pages take the API keys and the
 folders each worker reads and writes. Closing the PowerShell window stops it; `pepa-console web`
 starts it again, and `pip install --upgrade pepa-workers` updates every worker.
-
-> Scanned PDFs also need [Tesseract](https://tesseract-ocr.github.io/), which pip cannot install.
-> `pepa-prep install` says whether it is found.
-
-## Commands
-
-Every worker is also a command of its own: without arguments it opens its menu, and every menu
-action has a subcommand.
-
-| Action | Command |
-|---|---|
-| Open the web console | `pepa-console web` |
-| Run one worker through its menu | `pepa-prep`, `pepa-sum`, `pepa-read`, `pepa-review`, `pepa-plan`, `pepa-draft` |
-| See a worker's subcommands | `pepa-sum -h` |
-| Check what a worker still needs | `pepa-prep install` |
-
-## Working from the repository
-
-Each worker also runs from its own folder without the package:
-
-```powershell
-cd workers/pepa-sum
-pip install -r requirements.txt
-python manage.py
-```
-
-The repository's own `manage.py` builds the package. `bundle` exports each app's committed files
-at HEAD into one wheel with one command per app; a command puts only its own app's folder on the
-import path and runs that app's `manage.py`, so two apps can both have a `cli` and a `config`
-without colliding.
-
-```powershell
-python manage.py install            # the build's own dependencies
-python manage.py check              # what still blocks a release
-python manage.py bundle --dev       # a wheel from every app
-python manage.py bundle             # the release wheel, released apps only
-python manage.py test               # install the newest wheel and run every command
-```
-
-An app ships only when `workers.yaml` marks it released, so the manifest is the release switch;
-a `v*` tag on this repository publishes the `version` it names, which matches the top entry of
-`NEWS.md`.
-The package installs every shipped app's `requirements.txt`, and `leave_out` drops deploy
-and evaluation files, which works only for files nothing in the app imports.
-
-`check` holds every app against the release gate: an MIT licence, no copyleft dependency, writable
-paths under a data root, no sibling path built from the code folder, `--no-input` everywhere, and
-a clean tree. A released app that fails the gate fails the build.
