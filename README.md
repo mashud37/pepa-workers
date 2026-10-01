@@ -1,10 +1,12 @@
 # pepa-workers <img src="docs/logo.png" align="right" height="120" alt="" />
 
-An academic writing pipeline of seven apps, one per stage, each of which can be run, tested,
-and replaced on its own. Papers enter as PDFs and leave as a first draft: preparation,
-summarisation, search, literature review, planning, and drafting, with a console on top that
-drives all of them. Everything runs on one machine and single-user; only the language-model and
-embedding calls leave it, and those can point at a self-hosted endpoint.
+An ensemble of standalone tools that augment academic work where it helps: reading and condensing
+literature, searching what has been read, mapping a field and finding its gaps, outlining an
+argument, and drafting quickly enough to test an idea before committing to it. Each worker is its
+own app with its own commands, so a researcher takes only the parts they need; the judgement and
+the writing stay with them, and the workers add capacity for reading, ideation, and drafting.
+Everything runs on one machine for one person; only language-model and embedding calls leave it,
+and those can point at a self-hosted endpoint.
 
 ## Layout
 
@@ -15,7 +17,7 @@ workers/
   pepa-read/     SQLite/BM25 full-text index over prep and sum output, local web UI, literature lists
   pepa-review/   embedding index over the sum corpus; literature review, gap, and synthesis workstreams
   pepa-plan/     rhetorical-move labelling and learned skeletons to a paragraph-by-paragraph outline
-  pepa-draft/    plan plus review to a first draft, section by section, retrieval plus a model call
+  pepa-draft/    rough section drafts from a plan and the review, to test an idea in prose
   pepa-console/  the console that drives all of the above
 workers.yaml     which apps the package ships, what stays out, and each app's extra
 bundle/          exports each app's committed files and writes the packaging files around them
@@ -24,9 +26,12 @@ docs/            the logo, and the documentation site
 manage.py        entrypoint: no arguments opens the menu
 ```
 
-Each app keeps its own `manage.py`, requirements and README, and runs on its own from its folder.
+Each app keeps its own `manage.py`, requirements and README.
 
-## Pipeline
+## How the workers share files
+
+Where one worker can build on another's output, it reads those files from disk; the arrows show
+which outputs each can use.
 
 ```mermaid
 flowchart LR
@@ -38,7 +43,6 @@ flowchart LR
     READ --> REVIEW
     REVIEW --> DRAFT[pepa-draft]
     PLAN --> DRAFT
-    DRAFT --> MS[/"draft manuscript"/]
     CONSOLE[pepa-console] -.drives each app as a subprocess.-> PREP
 ```
 
