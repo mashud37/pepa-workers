@@ -1,4 +1,4 @@
-# pepa-workers <img src="https://raw.githubusercontent.com/mashud37/pepa-workers/master/docs/logo.png" align="right" height="120" alt="" />
+# pepa-workers <img src="docs/logo.png" align="right" height="120" alt="" />
 
 An academic writing pipeline, split into one repository per stage so each stage can be run,
 tested, and replaced on its own. Papers enter as PDFs and leave as a first draft: preparation,

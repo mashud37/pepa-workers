@@ -7,6 +7,8 @@ from bundle import manifest
 
 PACKAGE_NAME = "pepa_workers"
 ENTRY_POINT = "pepa_workers.launch:main"
+LOGO_PATH = 'src="docs/logo.png"'
+LOGO_URL = 'src="https://raw.githubusercontent.com/mashud37/pepa-workers/master/docs/logo.png"'
 CARRIED_FILES = [
     "LICENSE",
     "README.md",
@@ -90,7 +92,8 @@ def write_pyproject(build_folder, names, version):
 
 
 def prepare(build_folder):
-    """Empty the build folder and put the launcher and the carried files in it.
+    """Empty the build folder, put the launcher and the carried files in it, and point the
+    README's logo at its public address, since PyPI cannot follow a path inside the repository.
 
     Returns:
         the folder the exported apps go into.
@@ -104,6 +107,9 @@ def prepare(build_folder):
     shutil.copy(manifest.ROOT / "bundle" / "launch.py", package_folder / "launch.py")
     for name in CARRIED_FILES:
         shutil.copy(manifest.ROOT / name, build_folder / name)
+    readme = build_folder / "README.md"
+    text = readme.read_text(encoding="utf-8")
+    readme.write_text(text.replace(LOGO_PATH, LOGO_URL), encoding="utf-8")
     return apps_folder
 
 
