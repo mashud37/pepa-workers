@@ -1,0 +1,14 @@
+secrets.yaml
+env.yaml
+data/*
+!data/.gitkeep
+input/*
+!input/.gitkeep
+output/*
+!output/.gitkeep
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.claude/
