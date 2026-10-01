@@ -1,0 +1,99 @@
+name: publish
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    permissions:
+      id-token: write
+    steps:
+      - name: Check out the bundle
+        uses: actions/checkout@v4
+        with:
+          path: pepa-workers
+
+      - name: Check out pepa-prep
+        uses: actions/checkout@v4
+        with:
+          repository: mashud37/pepa-prep
+          path: pepa-prep
+          fetch-depth: 0
+          token: ${{ secrets.APPS_TOKEN }}
+
+      - name: Check out pepa-sum
+        uses: actions/checkout@v4
+        with:
+          repository: mashud37/pepa-sum
+          path: pepa-sum
+          fetch-depth: 0
+          token: ${{ secrets.APPS_TOKEN }}
+
+      - name: Check out pepa-read
+        uses: actions/checkout@v4
+        with:
+          repository: mashud37/pepa-reader
+          path: pepa-read
+          fetch-depth: 0
+          token: ${{ secrets.APPS_TOKEN }}
+
+      - name: Check out pepa-review
+        uses: actions/checkout@v4
+        with:
+          repository: mashud37/pepa-review
+          path: pepa-review
+          fetch-depth: 0
+          token: ${{ secrets.APPS_TOKEN }}
+
+      - name: Check out pepa-plan
+        uses: actions/checkout@v4
+        with:
+          repository: mashud37/pepa-plan
+          path: pepa-plan
+          fetch-depth: 0
+          token: ${{ secrets.APPS_TOKEN }}
+
+      - name: Check out pepa-draft
+        uses: actions/checkout@v4
+        with:
+          repository: mashud37/pepa-draft
+          path: pepa-draft
+          fetch-depth: 0
+          token: ${{ secrets.APPS_TOKEN }}
+
+      - name: Check out pepa-console
+        uses: actions/checkout@v4
+        with:
+          repository: mashud37/pepa-console
+          path: pepa-console
+          fetch-depth: 0
+          token: ${{ secrets.APPS_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install the bundle's dependencies
+        working-directory: pepa-workers
+        run: python -m pip install -r requirements.txt
+
+      - name: Release gate
+        working-directory: pepa-workers
+        run: python manage.py check
+
+      - name: Build the wheel
+        working-directory: pepa-workers
+        run: python manage.py bundle
+
+      - name: Smoke test the wheel
+        working-directory: pepa-workers
+        run: python manage.py test --extras all
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: pepa-workers/dist

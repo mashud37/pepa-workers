@@ -1,0 +1,56 @@
+package: pepa-workers
+version: "0.1.0"
+summary: "An academic writing pipeline: prepare papers, summarise them, search, review, plan, and draft."
+license: "MIT"
+python: ">=3.10"
+
+base:
+  - pyyaml
+  - flask
+
+apps:
+  pepa-prep:
+    released: false
+    ref: HEAD
+    extra: prep
+    leave_out:
+      - data/eval
+  pepa-sum:
+    released: false
+    ref: HEAD
+    extra: sum
+    leave_out:
+      - Dockerfile
+      - deploy.ps1
+      - deploy.sh
+      - gcloud_app.yaml
+      - requirements-serve.txt
+      - serve
+  pepa-read:
+    released: false
+    ref: HEAD
+    extra: read
+    leave_out: []
+  pepa-review:
+    released: false
+    ref: HEAD
+    extra: review
+    leave_out:
+      - BRIEFING.md
+  pepa-plan:
+    released: false
+    ref: HEAD
+    extra: plan
+    leave_out:
+      - BRIEFING.md
+      - benchmark
+  pepa-draft:
+    released: false
+    ref: HEAD
+    extra: draft
+    leave_out: []
+  pepa-console:
+    released: false
+    ref: HEAD
+    extra: console
+    leave_out: []
