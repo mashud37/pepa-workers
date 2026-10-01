@@ -24,6 +24,7 @@ bundle/          exports each app's committed files and writes the packaging fil
 cli/             the family's own commands: build, gate, smoke test
 docs/            the logo, and the documentation site
 manage.py        entrypoint: no arguments opens the menu
+NEWS.md          what changed in each version
 ```
 
 Each app keeps its own `manage.py`, requirements and README.
