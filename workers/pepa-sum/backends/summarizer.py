@@ -1,0 +1,40 @@
+"""Post {system, prompt} to the Cloud Run summariser service and return its
+Markdown, using stdlib HTTP.
+"""
+import json
+import urllib.error
+import urllib.request
+
+import config
+
+# CPU generation on a cold instance is slow; give it room before giving up.
+_TIMEOUT = 900
+
+
+def summarize(system, prompt):
+    base = config.load('BASE_URL')
+    token = config.load('JOB_TOKEN')
+    if not base:
+        raise SystemExit(
+            "No summariser endpoint configured. Deploy the service "
+            "(python manage.py deploy) or set BASE_URL in env.yaml."
+        )
+
+    url = f"{base.rstrip('/')}/summarize?token={token}"
+    payload = json.dumps({"system": system, "prompt": prompt}).encode()
+    req = urllib.request.Request(
+        url, data=payload, headers={"Content-Type": "application/json"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
+            data = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        raise SystemExit(f"Summariser returned HTTP {e.code}: {e.reason}. "
+                         "Check the token and that the service is deployed.")
+    except urllib.error.URLError as e:
+        raise SystemExit(f"Could not reach the summariser at {base}: {e.reason}.")
+
+    summary = (data.get("summary") or "").strip()
+    if not summary:
+        raise SystemExit("Summariser returned an empty response.")
+    return summary
