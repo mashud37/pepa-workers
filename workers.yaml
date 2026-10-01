@@ -1,6 +1,6 @@
 package: pepa-workers
 version: "0.1.0"
-summary: "An academic writing pipeline: prepare papers, summarise them, search, review, plan, and draft."
+summary: "Standalone tools that augment academic work: read and condense literature, map a field, find gaps, outline, and draft to test ideas."
 license: "MIT"
 python: ">=3.10"
 
