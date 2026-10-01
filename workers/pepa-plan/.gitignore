@@ -1,0 +1,32 @@
+# Secrets
+secrets.yaml
+config.local.yaml
+.env
+
+# Runtime data (kept in tree via .gitkeep)
+data/*
+!data/.gitkeep
+input/*
+!input/.gitkeep
+output/*
+!output/.gitkeep
+
+# Local deterministic-clustering benchmark — kept locally for documentation, not shipped
+benchmark/
+
+# Plan templates: ship the example; user copies are personal
+templates/*
+!templates/example.plan.md
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# OS
+.DS_Store
+Thumbs.db
+.claude/
