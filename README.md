@@ -19,7 +19,7 @@ workers/
   pepa-plan/     rhetorical-move labelling and learned skeletons to a paragraph-by-paragraph outline
   pepa-draft/    rough section drafts from a plan and the review, to test an idea in prose
   pepa-console/  the console that drives all of the above
-workers.yaml     which apps the package ships, what stays out, and each app's extra
+workers.yaml     which apps the package ships and what each leaves out
 bundle/          exports each app's committed files and writes the packaging files around them
 cli/             the family's own commands: build, gate, smoke test
 docs/            the logo, and the documentation site
@@ -54,13 +54,13 @@ flowchart LR
 2. Open PowerShell (a terminal on macOS or Linux) and run:
 
 ```powershell
-pip install "pepa-workers[all]"
+pip install pepa-workers
 pepa-console web
 ```
 
 The console opens in the browser at `http://127.0.0.1:5190`. Its pages take the API keys and the
 folders each worker reads and writes. Closing the PowerShell window stops it; `pepa-console web`
-starts it again, and `pip install --upgrade "pepa-workers[all]"` updates every worker.
+starts it again, and `pip install --upgrade pepa-workers` updates every worker.
 
 > Scanned PDFs also need [Tesseract](https://tesseract-ocr.github.io/), which pip cannot install.
 > `pepa-prep install` says whether it is found.
@@ -97,13 +97,13 @@ python manage.py install            # the build's own dependencies
 python manage.py check              # what still blocks a release
 python manage.py bundle --dev       # a wheel from every app
 python manage.py bundle             # the release wheel, released apps only
-python manage.py test --extras all  # install the newest wheel and run every command
+python manage.py test               # install the newest wheel and run every command
 ```
 
 An app ships only when `workers.yaml` marks it released, so the manifest is the release switch;
 a `v*` tag on this repository publishes the `version` it names, which matches the top entry of
 `NEWS.md`.
-Each app's `requirements.txt` becomes the extra named beside it, and `leave_out` drops deploy
+The package installs every shipped app's `requirements.txt`, and `leave_out` drops deploy
 and evaluation files, which works only for files nothing in the app imports.
 
 `check` holds every app against the release gate: an MIT licence, no copyleft dependency, writable

@@ -29,7 +29,7 @@ _ACTIONS = [
     },
     {
         "label": "Check dependencies and apps",
-        "hint": "what this repository needs and which app repositories it finds",
+        "hint": "what this repository needs and which apps it finds in workers/",
         "run": install.run,
     },
 ]
@@ -50,9 +50,8 @@ def _parser():
     bundle = sub.add_parser("bundle", help="Build the wheel from the apps workers.yaml releases")
     bundle.add_argument("--dev", action="store_true", help="include every app at HEAD and mark the version")
     sub.add_parser("check", help="Hold every app against the release gate")
-    test = sub.add_parser("test", help="Install the newest wheel in a fresh environment and run each command")
-    test.add_argument("--extras", default="", help="extra to install with the wheel, for example all")
-    sub.add_parser("install", help="Check dependencies and the app repositories beside this one")
+    sub.add_parser("test", help="Install the newest wheel in a fresh environment and run each command")
+    sub.add_parser("install", help="Check dependencies and the apps in workers/")
     return parser
 
 
@@ -68,7 +67,7 @@ def main():
     if args.command == "check":
         return check_cmd.run()
     if args.command == "test":
-        return smoke_cmd.run(args.extras)
+        return smoke_cmd.run()
     return install.run()
 
 

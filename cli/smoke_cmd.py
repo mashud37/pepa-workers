@@ -3,12 +3,14 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
+from pathlib import Path
 
 from bundle import manifest
 
 from . import ui
 
-TEST_ENVIRONMENT = manifest.BUILD_FOLDER / "testenv"
+TEST_ENVIRONMENT = Path(tempfile.gettempdir()) / "pepa-workers-testenv"
 HELP_SECONDS = 180
 
 
@@ -34,18 +36,15 @@ def fresh_environment():
     return TEST_ENVIRONMENT / "bin" / "python"
 
 
-def install_wheel(python_path, wheel, extras):
-    """Install the wheel into the test environment, with an extra when one is asked for.
+def install_wheel(python_path, wheel):
+    """Install the wheel and every dependency it names into the test environment.
 
     Raises:
         SystemExit: the install failed.
     """
-    target = str(wheel)
-    if extras:
-        target = f"{wheel}[{extras}]"
-    asked = [str(python_path), "-m", "pip", "install", "--quiet", target]
+    asked = [str(python_path), "-m", "pip", "install", "--quiet", str(wheel)]
     if subprocess.run(asked).returncode != 0:
-        raise SystemExit(f"Could not install {target}.")
+        raise SystemExit(f"Could not install {wheel.name}.")
 
 
 def command_path(name):
@@ -73,7 +72,7 @@ def help_row(name):
     }
 
 
-def run(extras=""):
+def run():
     """Install the newest wheel in a fresh environment and run every app's --help once."""
     settings = manifest.load()
     wheel = newest_wheel()
@@ -86,7 +85,7 @@ def run(extras=""):
     ui.step("Step 1/2: Install")
     ui.info(wheel.name)
     python_path = fresh_environment()
-    install_wheel(python_path, wheel, extras)
+    install_wheel(python_path, wheel)
     ui.ok(f"installed into {TEST_ENVIRONMENT}")
 
     ui.step(f"Step 2/2: Commands  [{len(names)} app(s)]")

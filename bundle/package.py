@@ -28,17 +28,12 @@ def requirements_of(name):
     return wanted
 
 
-def extras_for(names):
-    """Each app's own dependencies under its extra, plus "all", which is every one of them."""
-    settings = manifest.load()
-    extras = {}
-    everything = []
+def dependencies_for(names, base):
+    """Every dependency the package installs: the base list plus every shipped app's requirements."""
+    everything = list(base)
     for name in names:
-        wanted = requirements_of(name)
-        extras[settings["apps"][name]["extra"]] = sorted(set(wanted))
-        everything.extend(wanted)
-    extras["all"] = sorted(set(everything))
-    return extras
+        everything.extend(requirements_of(name))
+    return sorted(set(everything))
 
 
 def toml_list(values):
@@ -49,7 +44,7 @@ def toml_list(values):
     return "[\n" + "\n".join(lines) + "\n]"
 
 
-def metadata_lines(settings, version):
+def metadata_lines(settings, version, dependencies):
     """The pyproject header: how the wheel is built and what the package says about itself."""
     return [
         "[build-system]",
@@ -64,18 +59,15 @@ def metadata_lines(settings, version):
         f'requires-python = "{settings["python"]}"',
         f'license = "{settings["license"]}"',
         'license-files = ["LICENSE"]',
-        f"dependencies = {toml_list(settings['base'])}",
+        f"dependencies = {toml_list(dependencies)}",
     ]
 
 
 def write_pyproject(build_folder, names, version):
-    """Write the wheel's pyproject.toml: metadata, one extra per app, one command per app."""
+    """Write the wheel's pyproject.toml: metadata, every app's dependencies, one command per app."""
     settings = manifest.load()
-    lines = metadata_lines(settings, version)
-    lines.extend(["", "[project.optional-dependencies]"])
-    extras = extras_for(names)
-    for extra in sorted(extras):
-        lines.append(f"{extra} = {toml_list(extras[extra])}")
+    dependencies = dependencies_for(names, settings["base"])
+    lines = metadata_lines(settings, version, dependencies)
     lines.extend(["", "[project.scripts]"])
     for name in names:
         lines.append(f'{name} = "{ENTRY_POINT}"')

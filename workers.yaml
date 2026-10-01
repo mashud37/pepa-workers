@@ -11,12 +11,10 @@ base:
 apps:
   pepa-prep:
     released: false
-    extra: prep
     leave_out:
       - data/eval
   pepa-sum:
     released: false
-    extra: sum
     leave_out:
       - Dockerfile
       - deploy.ps1
@@ -26,24 +24,19 @@ apps:
       - serve
   pepa-read:
     released: false
-    extra: read
     leave_out: []
   pepa-review:
     released: false
-    extra: review
     leave_out:
       - BRIEFING.md
   pepa-plan:
     released: false
-    extra: plan
     leave_out:
       - BRIEFING.md
       - benchmark
   pepa-draft:
     released: false
-    extra: draft
     leave_out: []
   pepa-console:
     released: false
-    extra: console
     leave_out: []

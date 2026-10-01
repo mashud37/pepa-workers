@@ -1,4 +1,4 @@
-"""Read workers.yaml and say which apps ship and under which extra."""
+"""Read workers.yaml and say which apps ship and what each leaves out."""
 from pathlib import Path
 
 import yaml
@@ -10,7 +10,6 @@ DIST_FOLDER = ROOT / "dist"
 
 REQUIRED_APP_KEYS = [
     "released",
-    "extra",
     "leave_out",
 ]
 
