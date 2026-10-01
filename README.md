@@ -1,4 +1,4 @@
-# pepa-workers
+# pepa-workers <img src="https://raw.githubusercontent.com/mashud37/pepa-workers/master/docs/logo.png" align="right" height="120" alt="" />
 
 An academic writing pipeline, split into one repository per stage so each stage can be run,
 tested, and replaced on its own. Papers enter as PDFs and leave as a first draft: preparation,
@@ -20,6 +20,7 @@ workers/
 workers.yaml     which apps the package ships, what stays out, and each app's extra
 bundle/          exports each app's committed files and writes the packaging files around them
 cli/             the family's own commands: build, gate, smoke test
+docs/            the logo, and the documentation site
 manage.py        entrypoint: no arguments opens the menu
 ```
 
