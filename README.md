@@ -47,51 +47,62 @@ flowchart LR
     CONSOLE[pepa-console] -.drives each app as a subprocess.-> PREP
 ```
 
-## Setup
+## Get started
 
-Each app installs on its own. Enter the one you need and follow its README; there is no
-family-level install step.
+1. Install Python 3.10 or newer from [python.org](https://www.python.org/downloads/). On Windows,
+   tick **Add python.exe to PATH** on the installer's first screen.
+2. Open PowerShell (a terminal on macOS or Linux) and run:
 
 ```powershell
-cd workers/pepa-prep
-pip install -r requirements.txt
-python manage.py install
+pip install "pepa-workers[all]"
+pepa-console web
 ```
+
+The console opens in the browser at `http://127.0.0.1:5190`. Its pages take the API keys and the
+folders each worker reads and writes. Closing the PowerShell window stops it; `pepa-console web`
+starts it again, and `pip install --upgrade "pepa-workers[all]"` updates every worker.
+
+> Scanned PDFs also need [Tesseract](https://tesseract-ocr.github.io/), which pip cannot install.
+> `pepa-prep install` says whether it is found.
 
 ## Commands
 
-Every app follows the same contract: `python manage.py` with no arguments opens its interactive
-menu, and every menu action has a scriptable subcommand.
+Every worker is also a command of its own: without arguments it opens its menu, and every menu
+action has a subcommand.
 
 | Action | Command |
 |---|---|
-| Open the orchestration console | `cd workers/pepa-console; python manage.py` |
-| Run one app's menu | `cd workers/<app>; python manage.py` |
-| See one app's subcommands | `cd workers/<app>; python manage.py -h` |
-| See what still blocks a release | `python manage.py check` |
-| Build a wheel from every app at HEAD | `python manage.py bundle --dev` |
-| Build the release wheel | `python manage.py bundle` |
-| Install the newest wheel and run every command | `python manage.py test --extras all` |
-| Check this repository's dependencies and the apps in `workers/` | `python manage.py install` |
+| Open the web console | `pepa-console web` |
+| Run one worker through its menu | `pepa-prep`, `pepa-sum`, `pepa-read`, `pepa-review`, `pepa-plan`, `pepa-draft` |
+| See a worker's subcommands | `pepa-sum -h` |
+| Check what a worker still needs | `pepa-prep install` |
 
-## Package
+## Working from the repository
 
-`bundle` exports each app's committed files at HEAD, puts them side by side inside one wheel, and
-installs one command per app.
-A command puts only its own app's folder on the import path and runs that app's `manage.py`, so
-every app runs in its own process exactly as it does from its folder, and two apps can both
-have a `cli` and a `config` without colliding.
+Each worker also runs from its own folder without the package:
 
 ```powershell
-pip install pepa-workers            # every released app, light dependencies
-pip install "pepa-workers[sum]"     # plus what pepa-sum needs
-pip install "pepa-workers[all]"     # plus everything
-pepa-sum                            # one app, through its own menu
-pepa-console                        # all of them, through the console
+cd workers/pepa-sum
+pip install -r requirements.txt
+python manage.py
+```
+
+The repository's own `manage.py` builds the package. `bundle` exports each app's committed files
+at HEAD into one wheel with one command per app; a command puts only its own app's folder on the
+import path and runs that app's `manage.py`, so two apps can both have a `cli` and a `config`
+without colliding.
+
+```powershell
+python manage.py install            # the build's own dependencies
+python manage.py check              # what still blocks a release
+python manage.py bundle --dev       # a wheel from every app
+python manage.py bundle             # the release wheel, released apps only
+python manage.py test --extras all  # install the newest wheel and run every command
 ```
 
 An app ships only when `workers.yaml` marks it released, so the manifest is the release switch;
-a `v*` tag on this repository publishes.
+a `v*` tag on this repository publishes the `version` it names, which matches the top entry of
+`NEWS.md`.
 Each app's `requirements.txt` becomes the extra named beside it, and `leave_out` drops deploy
 and evaluation files, which works only for files nothing in the app imports.
 
