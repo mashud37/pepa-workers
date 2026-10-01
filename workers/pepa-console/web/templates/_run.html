@@ -1,0 +1,21 @@
+<div class="run" data-log="{{ log_url }}" data-poll="{{ poll_ms }}">
+  <div class="run-head">
+    <span class="status status-{{ run.status }}" data-status>{{ run.label }}</span>
+    {% if run.steps %}
+    <ol class="steps" data-steps>
+      {% for step in run.steps %}<li><span class="dot dot-{{ step.status }}"></span>{{ step.label }}</li>{% endfor %}
+    </ol>
+    {% endif %}
+    <span class="meta elapsed" data-elapsed>{{ run.elapsed }}</span>
+    <form method="post" data-fetch="stop" data-confirm="Stop this run?" data-confirm-detail="The item in progress is lost. Finished work is skipped next time." data-confirm-button="Stop" hidden>
+      <input type="hidden" name="token" value="{{ token }}">
+      <button class="text danger">Stop</button>
+    </form>
+  </div>
+  <pre class="log" data-lines><span class="pending" data-pending></span></pre>
+  <form class="answer" method="post" data-fetch="answer" hidden>
+    <input type="hidden" name="token" value="{{ token }}">
+    <input type="text" name="text" autocomplete="off" aria-label="Answer" placeholder="Answer, then press Enter">
+    <button class="tonal">Send</button>
+  </form>
+</div>

@@ -1,0 +1,107 @@
+"""Draw the pepa and kopi mascots as pixel-art SVG from small character grids.
+The page header shows one, and the stylesheet animates its eyes, its ink, and kopi's copy.
+"""
+from markupsafe import Markup
+
+PEPA = [
+    "..oooooooo......",
+    "..owwwwwwoo.....",
+    "..owbbbbwofo....",
+    "..owwwwwwoffo...",
+    "..owwwwwwooooo..",
+    "..owwwwwwwwwso..",
+    "..owbbbbbbwwso..",
+    "..owwwwwwwwwso..",
+    "..owwEwwwwEwso..",
+    "..owwewwwwewso..",
+    "..owpwwwwwwpso..",
+    "..owwwwoowwwso..",
+    "..owwwwwwwwwso..",
+    "..oooooooooooo..",
+    "....o......o....",
+    "...oo......oo...",
+]
+
+KOPI = [
+    ".....gggggggg...",
+    ".....gvvvvvvgg..",
+    ".....gvllllvghg.",
+    ".oooooooooovggg.",
+    ".owwwwwwwsovvvg.",
+    ".owrrrrwwsollvg.",
+    ".owwwwwwwsovvvg.",
+    ".owbbbbbwsollvg.",
+    ".owwEwwEwsovvvg.",
+    ".owwewwewsovvvg.",
+    ".owpwwwwpsogggg.",
+    ".owwwoowwso.....",
+    ".owwwwwwwso.....",
+    ".oooooooooo.....",
+    "...o....o.......",
+    "..oo....oo......",
+]
+
+COLOURS = {
+    "o": "#1f1f1f",
+    "w": "#ffffff",
+    "s": "#e3eaf5",
+    "f": "#c9d6ea",
+    "b": "#0b57d0",
+    "r": "#d93025",
+    "p": "#f6b8b3",
+    "e": "#1f1f1f",
+    "E": "#1f1f1f",
+    "g": "#80868b",
+    "v": "#f8f9fa",
+    "l": "#bdc1c6",
+    "h": "#dadce0",
+}
+
+PARTS = {
+    "b": "ink",
+    "r": "ink",
+    "e": "eye",
+    "E": "eye",
+    "g": "twin",
+    "v": "twin",
+    "l": "twin",
+    "h": "twin",
+}
+
+MASCOTS = {
+    "pepa": PEPA,
+    "kopi": KOPI,
+}
+
+
+def pixel(column, row, colour):
+    """One square of the drawing; its column lets the stylesheet stagger an animation."""
+    return f'<rect x="{column}" y="{row}" width="1" height="1" fill="{colour}" style="--i:{column}"/>'
+
+
+def svg(name, scale):
+    """The named mascot as inline SVG, with each part grouped so the stylesheet can animate it.
+
+    An upper eye pixel ("E") also gets a white lid on top, which the blink animation shows.
+
+    Args:
+        scale: screen pixels per drawing pixel.
+    """
+    grid = MASCOTS[name]
+    groups = {"twin": [], "body": [], "ink": [], "eye": [], "lid": []}
+    for row, line in enumerate(grid):
+        for column, character in enumerate(line):
+            if character == ".":
+                continue
+            part = PARTS.get(character, "body")
+            groups[part].append(pixel(column, row, COLOURS[character]))
+            if character == "E":
+                groups["lid"].append(pixel(column, row, COLOURS["w"]))
+
+    drawing = []
+    for part, rects in groups.items():
+        drawing.append(f'<g class="{part}">{"".join(rects)}</g>')
+    cells = len(grid)
+    size = cells * scale
+    opening = f'<svg class="mascot mascot-{name}" viewBox="0 0 {cells} {cells}" width="{size}" height="{size}" shape-rendering="crispEdges" role="img" aria-label="{name}">'
+    return Markup(opening + '<g class="figure">' + "".join(drawing) + "</g></svg>")

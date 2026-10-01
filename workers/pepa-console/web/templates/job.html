@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icon %}
+{% block title %}{{ job.app }} {{ job.command }} · pepa{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div class="heading-row">
+    <a class="button icon" href="{{ url_for('console.jobs_page') }}" aria-label="Back to jobs">{{ icon.back() }}</a>
+    <div class="heading">
+      <h1>{{ job.app }} {{ job.command }}</h1>
+      <p class="meta mono">python manage.py {{ job.shown }}</p>
+    </div>
+  </div>
+</div>
+<div class="run-page">
+  {% with run = job, log_url = url_for('console.job_log', job_id=job.id) %}{% include "_run.html" %}{% endwith %}
+</div>
+{% endblock %}

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{% block head %}{% endblock %}
+<title>{% block title %}pepa{% endblock %}</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="{{ url_for('static', filename='console.css') }}">
+</head>
+<body{% if running %} class="busy"{% endif %}>
+{% set section = request.path.split("/")[1] %}
+<header class="top">
+  <a class="brand" href="{{ url_for('console.pipeline') }}">{{ draw_mascot("pepa", 2) }}<span>pepa</span></a>
+  <nav class="tabs">
+    <a href="{{ url_for('console.pipeline') }}"{% if section in ["", "pipeline"] %} aria-current="page"{% endif %}>Pipeline</a>
+    <a href="{{ url_for('console.apps_page') }}"{% if section == "apps" %} aria-current="page"{% endif %}>Apps</a>
+    <a href="{{ url_for('console.folders_page') }}"{% if section == "folders" %} aria-current="page"{% endif %}>Folders</a>
+    <a href="{{ url_for('console.read_page') }}"{% if section == "read" %} aria-current="page"{% endif %}>Read</a>
+    <a href="{{ url_for('console.jobs_page') }}"{% if section == "jobs" %} aria-current="page"{% endif %}>Jobs<span class="badge" data-running{% if not running %} hidden{% endif %}>{{ running }}</span></a>
+    <a href="{{ url_for('console.keys_page') }}"{% if section == "keys" %} aria-current="page"{% endif %}>Keys</a>
+  </nav>
+</header>
+
+<main>
+{% block content %}{% endblock %}
+</main>
+
+{% with messages = get_flashed_messages() %}{% if messages %}<div class="snackbar" role="status">{{ messages | join(" ") }}</div>{% endif %}{% endwith %}
+
+<dialog id="confirm" class="dialog">
+  <form method="dialog">
+    <h2 id="confirm-text"></h2>
+    <p id="confirm-detail" class="supporting"></p>
+    <div class="actions">
+      <button value="cancel" class="text">Cancel</button>
+      <button value="ok" id="confirm-button" class="filled">Run</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="{{ url_for('static', filename='console.js') }}"></script>
+</body>
+</html>

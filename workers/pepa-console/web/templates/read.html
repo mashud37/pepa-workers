@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icon %}
+{% block head %}{% if job_id and not answering %}<meta http-equiv="refresh" content="2">{% endif %}{% endblock %}
+{% block title %}Read · pepa{% endblock %}
+{% block content %}
+{% if answering %}
+<div class="page-head">
+  <h1>Read</h1>
+  <div class="actions">
+    <a class="button text" href="{{ url }}" target="_blank">{{ icon.open_new() }}New tab</a>
+    {% if job_id %}
+    <form method="post" action="{{ url_for('console.read_stop') }}"><input type="hidden" name="token" value="{{ token }}"><button class="text">Stop</button></form>
+    {% endif %}
+  </div>
+</div>
+<iframe class="read" src="{{ url }}" title="pepa-read"></iframe>
+{% else %}
+<div class="empty">
+  {{ draw_mascot("pepa", 6) }}
+  {% if job_id %}
+  <h2>Starting pepa-read</h2>
+  <p class="supporting">This page opens it as soon as it answers.</p>
+  {% else %}
+  <h2>Search the corpus</h2>
+  <p class="supporting">pepa-read opens here once it is running.</p>
+  <form method="post" action="{{ url_for('console.read_start') }}"><input type="hidden" name="token" value="{{ token }}"><button class="filled">Start</button></form>
+  {% if last and last.status == "failed" %}<p class="meta">The last start failed. <a href="{{ url_for('console.job_page', job_id=last.id) }}">See the log</a></p>{% endif %}
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}
