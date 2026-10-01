@@ -1,0 +1,7 @@
+# Core
+PyMuPDF>=1.24.0
+PyYAML>=6.0
+
+# OCR route (optional, install if you have scanned PDFs)
+# pytesseract>=0.3.10
+# Pillow>=10.0.0
