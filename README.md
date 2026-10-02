@@ -21,7 +21,7 @@ workers/
   pepa-console/  the console that drives all of the above
 workers.yaml     which apps the package ships and what each leaves out
 bundle/          exports each app's committed files and writes the packaging files around them
-cli/             the family's own commands: build, gate, smoke test
+cli/             the family's own commands: build, gate, smoke test, documentation pages
 docs/            the logo, and the documentation site
 manage.py        entrypoint: no arguments opens the menu
 NEWS.md          what changed in each version
@@ -55,9 +55,9 @@ flowchart LR
 
 ```powershell
 pip install pepa-workers
-pepa-console web
+pepa-console
 ```
 
 The console opens in the browser at `http://127.0.0.1:5190`. Its pages take the API keys and the
-folders each worker reads and writes. Closing the PowerShell window stops it; `pepa-console web`
+folders each worker reads and writes. Closing the PowerShell window stops it; `pepa-console`
 starts it again, and `pip install --upgrade pepa-workers` updates every worker.

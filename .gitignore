@@ -18,3 +18,9 @@ __pycache__/
 .ruff_cache/
 .pytest_cache/
 .venv/
+
+# Documentation pages written by python manage.py docs, and Quarto's output
+/docs/*.md
+/docs/commands/
+/docs/_site/
+/docs/.quarto/

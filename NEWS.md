@@ -12,5 +12,8 @@ The first release: seven standalone workers in one package.
 * `pip install pepa-workers` installs every worker with everything it needs.
 * Workers run on their own. Where one can build on another's output, it reads those files from
   disk; none imports another.
-* `pepa-console web` drives every worker from one local web page.
+* `pepa-console` opens one local web page that drives every worker.
+* Every worker keeps its files in one project folder, `pepa-workers` in the home folder unless
+  `PEPA_PROJECT` names another. The console's Folders page changes it.
+* Every worker takes `--no-input`, so a scripted run never stops to ask a question.
 * Developed and tested on Windows; macOS and Linux are untested.

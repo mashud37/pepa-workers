@@ -4,7 +4,7 @@ import argparse
 import sys
 from functools import partial
 
-from cli import bundle_cmd, check_cmd, install, smoke_cmd, ui
+from cli import bundle_cmd, check_cmd, docs_cmd, install, smoke_cmd, ui
 
 _ACTIONS = [
     {
@@ -28,6 +28,11 @@ _ACTIONS = [
         "run": smoke_cmd.run,
     },
     {
+        "label": "Documentation pages",
+        "hint": "copy the guides and write each app's commands page into docs/",
+        "run": docs_cmd.run,
+    },
+    {
         "label": "Check dependencies and apps",
         "hint": "what this repository needs and which apps it finds in workers/",
         "run": install.run,
@@ -48,9 +53,10 @@ def _parser():
     parser = argparse.ArgumentParser(prog="manage.py", description="Build the pepa-workers package")
     sub = parser.add_subparsers(dest="command")
     bundle = sub.add_parser("bundle", help="Build the wheel from the apps workers.yaml releases")
-    bundle.add_argument("--dev", action="store_true", help="include every app at HEAD and mark the version")
+    bundle.add_argument("--dev", action="store_true", help="include every app as it is in the working tree and mark the version")
     sub.add_parser("check", help="Hold every app against the release gate")
     sub.add_parser("test", help="Install the newest wheel in a fresh environment and run each command")
+    sub.add_parser("docs", help="Copy the guides and write each app's commands page into docs/")
     sub.add_parser("install", help="Check dependencies and the apps in workers/")
     return parser
 
@@ -68,6 +74,8 @@ def main():
         return check_cmd.run()
     if args.command == "test":
         return smoke_cmd.run()
+    if args.command == "docs":
+        return docs_cmd.run()
     return install.run()
 
 

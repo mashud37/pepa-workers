@@ -1,0 +1,42 @@
+project:
+  type: website
+  output-dir: _site
+
+website:
+  title: pepa-workers
+  description: Standalone tools that augment academic work.
+  site-url: https://mashud37.github.io/pepa-workers/
+  repo-url: https://github.com/mashud37/pepa-workers
+  favicon: logo.png
+  navbar:
+    logo: logo.png
+    left:
+      - href: index.md
+        text: Get started
+      - text: Workers
+        menu:
+          - pepa-prep.md
+          - pepa-sum.md
+          - pepa-read.md
+          - pepa-review.md
+          - pepa-plan.md
+          - pepa-draft.md
+      - text: Commands
+        menu:
+          - commands/pepa-console.md
+          - commands/pepa-prep.md
+          - commands/pepa-sum.md
+          - commands/pepa-read.md
+          - commands/pepa-review.md
+          - commands/pepa-plan.md
+          - commands/pepa-draft.md
+      - href: news.md
+        text: News
+    right:
+      - icon: github
+        href: https://github.com/mashud37/pepa-workers
+
+format:
+  html:
+    theme: cosmo
+    toc: true
