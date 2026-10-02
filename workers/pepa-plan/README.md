@@ -28,7 +28,8 @@ pip install -r requirements.txt
 python manage.py install
 ```
 
-Add the Anthropic key to `secrets.yaml` and put an idea file into `input/`.
+Add the Anthropic key to `secrets.yaml`, or set `backend`, `llm_base_url` and `llm_model` for
+another provider, and put an idea file into `input/`.
 
 ## Commands
 

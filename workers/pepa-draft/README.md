@@ -2,7 +2,7 @@
 
 Turns a pepa-review literature review and a pepa-plan outline into rough section drafts, so an idea
 for a paper can be read in prose before committing to it. Only the model call leaves the machine,
-and it can point at a self-hosted vLLM endpoint.
+and it goes to Claude, any server that accepts OpenAI's chat format, or a self-hosted vLLM endpoint.
 
 ## How it works
 
@@ -27,8 +27,9 @@ pip install -r requirements.txt
 python manage.py install
 ```
 
-`install` creates `secrets.yaml`; fill in the Anthropic key and a Gemini key for embeddings. Put a
-review and an outline into `input/`.
+`install` creates `secrets.yaml`; fill in the Anthropic key, or `backend`, `llm_base_url` and
+`llm_model` for another provider, and a Gemini key for embeddings. Put a review and an outline into
+`input/`.
 
 ## Commands
 

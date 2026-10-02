@@ -28,6 +28,11 @@ Summaries, reviews, outlines and drafts call a language model and need an API ke
 PDFs and searching do not. Add a key once on the **Keys** page and every worker that needs it gets
 it. Steps marked **Paid** are billed to that key.
 
+## Models
+
+Every worker writes with Anthropic's Claude unless the **Models** page names another model:
+DeepSeek, Kimi, Qwen, or one running on this computer. [Models](models.md) explains the choices.
+
 ## A first run
 
 1. On **Library**, press **Copy PDFs in** and choose some papers.

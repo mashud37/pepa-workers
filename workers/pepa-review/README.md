@@ -26,7 +26,8 @@ python manage.py install
 python manage.py index
 ```
 
-Add the Anthropic and Gemini keys to `secrets.yaml` before building the index.
+Add the Anthropic and Gemini keys to `secrets.yaml` before building the index, or name other
+providers there with `backend` and `embed_provider`.
 
 ## Commands
 

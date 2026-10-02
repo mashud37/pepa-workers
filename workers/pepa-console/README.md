@@ -21,6 +21,7 @@ flowchart TD
 | Search | The pepa-read search page |
 | Jobs | Every run since the console started |
 | Folders | The project folder, and where each worker reads and writes |
+| Models | Which model and server each worker writes and embeds with |
 | Keys | Store a key once and choose which workers get it |
 | Guide | How to start, and what each worker does |
 

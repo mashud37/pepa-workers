@@ -13,6 +13,8 @@ website:
     left:
       - href: index.md
         text: Get started
+      - href: models.md
+        text: Models
       - text: Workers
         menu:
           - pepa-prep.md

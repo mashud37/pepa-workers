@@ -16,4 +16,10 @@ The first release: seven standalone workers in one package.
 * Every worker keeps its files in one project folder, `pepa-workers` in the home folder unless
   `PEPA_PROJECT` names another. The console's Folders page changes it.
 * Every worker takes `--no-input`, so a scripted run never stops to ask a question.
+* pepa-sum, pepa-review, pepa-plan and pepa-draft write with Claude or with any service that
+  accepts OpenAI's chat format, such as DeepSeek, Kimi, Qwen, or Ollama on the same machine. The
+  console's Models page chooses one per worker.
+* pepa-review and pepa-draft name their embedding provider in `embed_provider`: Gemini, Ollama, or
+  any service that accepts OpenAI's embeddings format. An index or style profile built with one
+  model refuses queries from another.
 * Developed and tested on Windows; macOS and Linux are untested.

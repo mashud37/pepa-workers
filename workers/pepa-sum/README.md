@@ -30,7 +30,8 @@ python -m spacy download en_core_web_sm
 python manage.py install
 ```
 
-`install` stores the Anthropic key. Put the papers into `input/`.
+`install` stores the Anthropic key; for another provider, set `BACKEND: "openai-compatible"`,
+`LLM_BASE_URL` and `LLM_MODEL` in `env.yaml`. Put the papers into `input/`.
 
 ## Commands
 
