@@ -18,7 +18,7 @@ from flask import (
 )
 
 from registry import get_app
-from web import documents, folders, jobs, keys, mascot, paths
+from web import documents, folders, jobs, keys, mascot, models, paths
 from web.settings import SETTINGS
 
 PIPELINE_STEPS = [
@@ -434,6 +434,23 @@ def folders_open():
 @bp.route("/folders/browse")
 def folders_browse():
     return jsonify(paths.browse(request.args.get("path", "")))
+
+
+# ---- Models ----
+
+@bp.route("/models")
+def models_page():
+    return render_template("models.html", page=models.page_view())
+
+
+@bp.route("/models/save", methods=["POST"])
+def models_save():
+    try:
+        models.save_choices(request.form)
+        flash("Saved. The next run of each app uses these models.")
+    except ValueError as error:
+        flash(str(error))
+    return redirect(url_for("console.models_page"))
 
 
 # ---- Keys ----

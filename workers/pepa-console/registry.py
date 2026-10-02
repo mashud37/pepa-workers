@@ -78,7 +78,7 @@ APPS: list[App] = [
         Command("deploy", "heavy", "Build and deploy the self-hosted fallback service"),
         Command("settings", "interactive", "Choose backend and rundown method"),
         Command("install", "safe", "Create env.yaml, store the key, check dependencies"),
-    ], keys=("ANTHROPIC_API_KEY", "PEPA_JOB_TOKEN")),
+    ], keys=("ANTHROPIC_API_KEY", "PEPA_LLM_API_KEY", "PEPA_JOB_TOKEN")),
     App("pepa-read", "Full-text search over prep and sum output, local web UI, literature lists", [
         Command("index", "safe", "Build or refresh the search index", fields=(
             {"name": "--force", "type": "bool", "help": "Reindex every file, ignoring modification times"},
@@ -135,7 +135,7 @@ APPS: list[App] = [
         )),
         Command("explore", "interactive", "Interactive discovery over the corpus"),
         Command("install", "safe", "Set up files and check dependencies"),
-    ], keys=("ANTHROPIC_API_KEY", "GEMINI_API_KEY")),
+    ], keys=("ANTHROPIC_API_KEY", "PEPA_LLM_API_KEY", "GEMINI_API_KEY", "PEPA_EMBED_API_KEY")),
     App("pepa-plan", "Rhetorical-move labelling and learned skeletons to a paragraph outline", [
         Command("config", "safe", "Show effective configuration"),
         Command("template", "safe", "List plan templates", default_flags=("--list",)),
@@ -156,7 +156,7 @@ APPS: list[App] = [
             {"name": "--input", "type": "file", "help": "Idea or draft file"},
         )),
         Command("install", "safe", "Set up files and check dependencies"),
-    ], keys=("ANTHROPIC_API_KEY",)),
+    ], keys=("ANTHROPIC_API_KEY", "PEPA_LLM_API_KEY")),
     App("pepa-draft", "Plan plus review to a first draft, section by section", [
         Command("config", "safe", "Show effective configuration"),
         Command("style", "safe", "List author writing samples", default_flags=("list",)),
@@ -168,14 +168,14 @@ APPS: list[App] = [
             {"name": "--review", "type": "file", "help": "Literature review file"},
             {"name": "--plan", "type": "file", "help": "Plan file"},
             {"name": "--sections", "type": "file", "help": "Section assignment file"},
-            {"name": "--backend", "type": "choice", "choices": ("anthropic", "vllm"), "help": "Model backend"},
+            {"name": "--backend", "type": "choice", "choices": ("anthropic", "openai-compatible", "vllm"), "help": "Model backend"},
             {"name": "--no-retrieval", "type": "bool", "help": "Skip corpus retrieval"},
             {"name": "--no-style", "type": "bool", "help": "Skip style matching"},
             {"name": "--style-profile", "type": "text", "help": "Style profile name"},
         )),
         Command("setup", "terminal", "Configure API keys and paths; keys typed here belong on the Keys page"),
         Command("install", "safe", "Set up files and check dependencies"),
-    ], keys=("ANTHROPIC_API_KEY", "GEMINI_API_KEY", "PEPADRAFT_VLLM_TOKEN")),
+    ], keys=("ANTHROPIC_API_KEY", "PEPA_LLM_API_KEY", "GEMINI_API_KEY", "PEPA_EMBED_API_KEY", "PEPADRAFT_VLLM_TOKEN")),
 ]
 
 

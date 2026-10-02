@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Models · pepa{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div class="heading">
+    <h1>Models</h1>
+    <p class="supporting">Which model each app writes with. Claude is the default. An OpenAI-compatible server is any service that accepts OpenAI's chat format, such as DeepSeek, Kimi, Qwen or GLM, or Ollama, LM Studio and vLLM running on this computer. Its key goes on the Keys page as PEPA_LLM_API_KEY; a server on this computer needs none.</p>
+  </div>
+</div>
+
+<form method="post" action="{{ url_for('console.models_save') }}">
+  <input type="hidden" name="token" value="{{ token }}">
+  {% for app in page.apps %}
+  <h2 class="section-title">{{ app.name }}</h2>
+  <div class="card model-card">
+    <div class="fields">
+      <label class="field"><span>Backend</span>
+        <select name="{{ app.name }}|backend">
+          <option value="">Own file</option>
+          {% for option in app.options %}<option value="{{ option.value }}"{% if option.value == app.chosen.backend %} selected{% endif %}>{{ option.label }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="field"><span>Server address</span><input type="text" name="{{ app.name }}|base_url" list="addresses" value="{{ app.chosen.base_url }}" placeholder="OpenAI-compatible only"></label>
+      <label class="field"><span>Model</span><input type="text" name="{{ app.name }}|model" value="{{ app.chosen.model }}" placeholder="For example qwen3:8b"></label>
+      {% if app.has_quality %}
+      <label class="field"><span>Quality model</span><input type="text" name="{{ app.name }}|quality_model" value="{{ app.chosen.quality_model }}" placeholder="Same as the model"></label>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+
+  <h2 class="section-title">Embeddings for pepa-review and pepa-draft</h2>
+  <div class="card model-card">
+    <p class="supporting">pepa-draft searches the index pepa-review builds, so both use this one choice. After a change, rebuild that index: run pepa-review's index command with Rebuild from scratch ticked. DeepSeek and Kimi offer no embeddings; Qwen does, and Ollama runs them on this computer. Its key goes on the Keys page as PEPA_EMBED_API_KEY.</p>
+    <div class="fields">
+      <label class="field"><span>Provider</span>
+        <select name="embedding|provider">
+          <option value="">Own file</option>
+          {% for value, label in page.embed_providers.items() %}<option value="{{ value }}"{% if value == page.embedding.provider %} selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="field"><span>Server address</span><input type="text" name="embedding|base_url" list="addresses" value="{{ page.embedding.base_url }}" placeholder="OpenAI-compatible only"></label>
+      <label class="field"><span>Model</span><input type="text" name="embedding|model" value="{{ page.embedding.model }}" placeholder="For example bge-m3"></label>
+    </div>
+  </div>
+
+  <div class="form-actions"><button class="filled">Save</button></div>
+</form>
+
+<datalist id="addresses">
+  {% for address in page.addresses %}<option value="{{ address.url }}" label="{{ address.name }}"></option>{% endfor %}
+</datalist>
+<p class="meta footnote">{{ page.file }}</p>
+{% endblock %}

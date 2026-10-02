@@ -10,7 +10,7 @@ from datetime import datetime
 
 from registry import get_app, get_command
 from runner import build_argv
-from web import keys, paths
+from web import keys, models, paths
 
 STATUS_LABEL = {
     "running": "Running",
@@ -89,6 +89,7 @@ def start_job(app_name, command_name, values):
     argv = build_argv(command, form_flags(command, values))
     environment = dict(os.environ)
     environment.update(paths.environment_for(app_name))
+    environment.update(models.environment_for(app_name))
     environment.update(keys.environment_for(app_name))
     environment.update(CHILD_ENVIRONMENT)
     try:

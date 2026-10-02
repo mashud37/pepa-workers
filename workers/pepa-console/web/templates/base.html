@@ -19,6 +19,7 @@
     <a href="{{ url_for('console.read_page') }}"{% if section == "read" %} aria-current="page"{% endif %}>Search</a>
     <a href="{{ url_for('console.jobs_page') }}"{% if section == "jobs" %} aria-current="page"{% endif %}>Jobs<span class="badge" data-running{% if not running %} hidden{% endif %}><span class="visually-hidden">running: </span>{{ running }}</span></a>
     <a href="{{ url_for('console.folders_page') }}"{% if section == "folders" %} aria-current="page"{% endif %}>Folders</a>
+    <a href="{{ url_for('console.models_page') }}"{% if section == "models" %} aria-current="page"{% endif %}>Models</a>
     <a href="{{ url_for('console.keys_page') }}"{% if section == "keys" %} aria-current="page"{% endif %}>Keys</a>
     <a href="{{ url_for('console.guide_page', name='index') }}"{% if section == "guide" %} aria-current="page"{% endif %}>Guide</a>
   </nav>

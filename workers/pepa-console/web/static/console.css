@@ -158,6 +158,9 @@ input[type=checkbox] { flex: none; width: 18px; height: 18px; margin: 0; accent-
 .app-cell { width: 160px; font-weight: 500; }
 .select-cell { width: 220px; padding-right: 0; }
 .footnote { margin: 32px 0 0; text-align: center; }
+.model-card { padding: 20px 24px 12px; }
+.model-card > .supporting { margin: 0 0 16px; }
+.model-card .fields { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
 
 
 /* ---- Folders ---- */
