@@ -6,6 +6,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
+# The package installs every app into a folder named apps; the repository keeps them in workers.
+INSTALLED = ROOT.name == "apps"
+
 KIND_SYMBOL = {
     "safe": "·",
     "heavy": "▶",
@@ -58,16 +61,6 @@ APPS: list[App] = [
             {"name": "--cite", "type": "bool", "help": "Also fetch citation networks from OpenCitations"},
             {"name": "--force", "type": "bool", "help": "Overwrite existing biblio files"},
         )),
-        Command("label", "heavy", "Create segmentation tag files from PDFs", fields=(
-            {"name": "--input", "type": "folder", "help": "Folder of PDFs (default: input/)"},
-        )),
-        Command("score", "safe", "Score segmentation against corrected tag files"),
-        Command("label-chapters", "heavy", "Create chapter-boundary gold files for books", fields=(
-            {"name": "--input", "type": "folder", "help": "Folder of PDFs (default: the chapter selection)"},
-        )),
-        Command("score-chapters", "safe", "Score chapter detection against gold files"),
-        Command("label-refine", "heavy", "Create unit gold files from current chapter files"),
-        Command("score-refine", "safe", "Score markdown refinement against gold files"),
         Command("split", "interactive", "Mark chapter boundaries by hand"),
         Command("install", "safe", "Check dependencies"),
     ], keys=("OPENALEX_API_KEY",)),

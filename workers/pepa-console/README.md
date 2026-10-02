@@ -16,12 +16,13 @@ flowchart TD
 
 | Page | What it does |
 |---|---|
-| Pipeline | Counts PDFs, prepared texts and summaries, and runs the ticked workers in order |
-| Apps | One page per worker, each command as a form with its live log |
-| Folders | Where each worker reads and writes |
-| Read | The pepa-read search page |
+| Library | Counts PDFs, prepared texts and summaries, and runs the ticked workers in order |
+| Apps | One page per worker, each command as a form with its live log, and every file it reads or writes |
+| Search | The pepa-read search page |
 | Jobs | Every run since the console started |
+| Folders | The project folder, and where each worker reads and writes |
 | Keys | Store a key once and choose which workers get it |
+| Guide | How to start, and what each worker does |
 
 ## Setup
 
@@ -34,7 +35,7 @@ python manage.py install
 
 | Action | Command |
 |---|---|
-| Open the web console | `python manage.py web` |
+| Open the web console | `python manage.py` |
 | List every worker and its commands | `python manage.py status` |
 | Run one worker command | `python manage.py run <app> <command>` |
 | Check dependencies | `python manage.py install` |

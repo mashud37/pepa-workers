@@ -35,10 +35,10 @@ def _to_stderr(line: str) -> None:  # lint-style: ignore FN004
 
 
 def build_argv(command: Command, extra_flags: Sequence[str] = ()) -> list[str]:
-    argv = [sys.executable, "manage.py", command.name, *command.default_flags]
+    argv = [sys.executable, "manage.py"]
     if command.no_input:
         argv.append("--no-input")
-    argv.extend(extra_flags)
+    argv.extend([command.name, *command.default_flags, *extra_flags])
     return argv
 
 
