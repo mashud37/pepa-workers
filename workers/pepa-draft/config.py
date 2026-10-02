@@ -24,8 +24,8 @@ STYLE_INDEX_FILE = DATA_DIR / "style_index.json"  # legacy; use style_index_file
 STYLE_ACTIVE_FILE = DATA_DIR / "style_active.txt"
 REVIEW_INDEX_DEFAULT = DATA_ROOT.parent / "pepa-review" / "data" / "index.json"
 
-DRAFT_MODEL_DEFAULT = "claude-opus-4-8"
-DRAFT_MODEL_BULK = "claude-sonnet-4-6"
+DRAFT_MODEL_DEFAULT = "claude-opus-5-5"
+DRAFT_MODEL_BULK = "claude-sonnet-5-5"
 EMBED_MODEL_GEMINI = "gemini-embedding-001"
 EMBED_MODEL_OLLAMA = "nomic-embed-text"
 RETRIEVAL_K = 6

@@ -1,4 +1,5 @@
 """Hold every app against the release gate and print one row each, so what blocks a release is visible."""
+import os
 import subprocess
 
 from bundle import manifest
@@ -22,6 +23,7 @@ GATE_CHECKS = [
     "siblings",
     "no-input",
     "clean",
+    "models",
 ]
 
 GATE_COLUMNS = [
@@ -33,6 +35,13 @@ GATE_COLUMNS = [
     "siblings",
     "no-input",
     "clean",
+    "models",
+]
+
+MODEL_FAMILIES = [
+    "haiku",
+    "sonnet",
+    "opus",
 ]
 
 
@@ -60,7 +69,8 @@ def app_text(folder):
 def finds_siblings_by_code_folder(text):
     """True when the app still finds a sibling's files next to its own code rather than its data."""
     without_data_root = text.replace("DATA_ROOT.parent", "")
-    return "ROOT.parent" in without_data_root
+    without_folder_name = without_data_root.replace("ROOT.parent.name", "")
+    return "ROOT.parent" in without_folder_name
 
 
 def has_clean_tree(folder):
@@ -86,7 +96,30 @@ def copyleft_in(folder):
     return found
 
 
-def gate_row(name, entry):
+def newest_models():
+    """The newest Claude model in each family, from Anthropic's models list; empty without ANTHROPIC_API_KEY."""
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        return {}
+    import anthropic
+    newest = {}
+    for model in anthropic.Anthropic().models.list(limit=100):
+        for family in MODEL_FAMILIES:
+            if model.id.startswith(f"claude-{family}-") and family not in newest:
+                newest[family] = model.id
+    return newest
+
+
+def models_mark(text, newest):
+    """yes when the app names the newest model of every Claude family it uses; unchecked without the list."""
+    if not newest:
+        return "unchecked"
+    for family, model_id in newest.items():
+        if f"claude-{family}-" in text and model_id not in text:
+            return "no"
+    return "yes"
+
+
+def gate_row(name, entry, newest):
     """Where one app stands against the release gate, as the fields the table shows."""
     folder = manifest.app_folder(name)
     text = app_text(folder)
@@ -99,6 +132,7 @@ def gate_row(name, entry):
         "siblings": mark(not finds_siblings_by_code_folder(text)),
         "no-input": mark("--no-input" in text),
         "clean": mark(has_clean_tree(folder)),
+        "models": models_mark(text, newest),
     }
 
 
@@ -107,10 +141,15 @@ def run():
     settings = manifest.load()
     names = sorted(settings["apps"])
     ui.step(f"Release gate  [{len(names)} app(s)]")
+    newest = newest_models()
+    if newest:
+        ui.info(f"newest models: {', '.join(newest.values())}")
+    else:
+        ui.warn("models not checked: set ANTHROPIC_API_KEY to compare against Anthropic's models list")
     rows = []
     for number, name in enumerate(names, 1):
         ui.info(f"[{number}/{len(names)}] {name}")
-        rows.append(gate_row(name, settings["apps"][name]))
+        rows.append(gate_row(name, settings["apps"][name], newest))
     ui.table(rows, GATE_COLUMNS)
 
     ready = [row for row in rows if clears_gate(row)]
