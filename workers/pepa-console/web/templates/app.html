@@ -133,6 +133,28 @@
   {% endfor %}
 </div>
 
+{% if settings %}
+<h2 class="section-title">Settings</h2>
+<form class="card model-card" method="post" action="{{ url_for('console.app_settings', name=app.name) }}">
+  <input type="hidden" name="token" value="{{ token }}">
+  <div class="fields">
+    {% for field in settings %}
+    <label class="field"><span>{{ field.label }}</span>
+      {% if field.choices %}
+      <select name="{{ field.variable }}">
+        <option value="">Own file</option>
+        {% for choice in field.choices %}<option{% if choice == field.value %} selected{% endif %}>{{ choice }}</option>{% endfor %}
+      </select>
+      {% else %}
+      <input type="number" name="{{ field.variable }}" min="{{ field.low }}" max="{{ field.high }}" value="{{ field.value }}" placeholder="Own file">
+      {% endif %}
+    </label>
+    {% endfor %}
+  </div>
+  <div class="form-actions"><button class="filled">Save</button></div>
+</form>
+{% endif %}
+
 <div class="section-head">
   <h2 class="section-title">Files</h2>
   <a class="button text" href="{{ url_for('console.folders_page') }}">{{ icon.folder() }}Change folders</a>

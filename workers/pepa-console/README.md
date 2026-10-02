@@ -17,7 +17,7 @@ flowchart TD
 | Page | What it does |
 |---|---|
 | Library | Counts PDFs, prepared texts and summaries, and runs the ticked workers in order |
-| Apps | One page per worker, each command as a form with its live log, and every file it reads or writes |
+| Apps | One page per worker, each command as a form with its live log, its run settings, and every file it reads or writes |
 | Search | The pepa-read search page |
 | Jobs | Every run since the console started |
 | Folders | The project folder, and where each worker reads and writes |

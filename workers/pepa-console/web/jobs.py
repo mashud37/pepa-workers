@@ -2,15 +2,13 @@
 The web pages read these records; a chain runs several jobs one after another.
 """
 import codecs
-import os
 import subprocess
 import threading
 import time
 from datetime import datetime
 
 from registry import get_app, get_command
-from runner import build_argv
-from web import keys, models, paths
+from runner import build_argv, job_environment
 
 STATUS_LABEL = {
     "running": "Running",
@@ -19,11 +17,6 @@ STATUS_LABEL = {
     "cancelled": "Stopped",
     "waiting": "Waiting",
     "skipped": "Skipped",
-}
-
-CHILD_ENVIRONMENT = {
-    "PYTHONUNBUFFERED": "1",
-    "PYTHONIOENCODING": "utf-8",
 }
 
 STOP_WAIT_SECONDS = 5
@@ -87,11 +80,7 @@ def start_job(app_name, command_name, values):
         raise ValueError(f"{app_name} {command_name} runs only in a terminal.")
 
     argv = build_argv(command, form_flags(command, values))
-    environment = dict(os.environ)
-    environment.update(paths.environment_for(app_name))
-    environment.update(models.environment_for(app_name))
-    environment.update(keys.environment_for(app_name))
-    environment.update(CHILD_ENVIRONMENT)
+    environment = job_environment(app_name)
     try:
         process = subprocess.Popen(argv, cwd=str(app.path), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=environment)
     except OSError as error:

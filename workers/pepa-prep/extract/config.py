@@ -48,6 +48,14 @@ _FOLDER_ENV = {
 # Whether the input folder's own sub-folders are searched too, as an environment
 # variable, so a launcher can turn it on without editing config.yaml.
 _SUBFOLDERS_ENV = "PEPAPREP_SUBFOLDERS"
+
+# Run settings an environment variable may override, each a whole number.
+_NUMBER_ENV = {
+    "workers": "PEPAPREP_WORKERS",
+    "ocr_dpi": "PEPAPREP_OCR_DPI",
+    "book_page_threshold": "PEPAPREP_BOOK_PAGES",
+    "max_chapters": "PEPAPREP_MAX_CHAPTERS",
+}
 _YES_WORDS = ("1", "true", "yes", "on")
 
 # Folder settings written as relative paths are read from the data root, not from
@@ -72,6 +80,9 @@ def load() -> dict:
     wanted = os.environ.get(_SUBFOLDERS_ENV, "")
     if wanted:
         cfg["scan_subfolders"] = wanted.lower() in _YES_WORDS
+    for key, env_var in _NUMBER_ENV.items():
+        if os.environ.get(env_var, "").isdigit():
+            cfg[key] = int(os.environ[env_var])
     for key in _FOLDER_KEYS:
         folder = Path(cfg[key])
         if not folder.is_absolute():

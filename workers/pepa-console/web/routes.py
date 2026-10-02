@@ -18,7 +18,7 @@ from flask import (
 )
 
 from registry import get_app
-from web import documents, folders, jobs, keys, mascot, models, paths
+from web import documents, folders, jobs, keys, mascot, models, options, paths
 from web.settings import SETTINGS
 
 PIPELINE_STEPS = [
@@ -201,7 +201,19 @@ def app_page(name):
         key_sources=keys.sources_for(name),
         paths=folders.path_choices(places),
         places=places,
+        settings=options.card_view(name),
     )
+
+
+@bp.route("/apps/<name>/settings", methods=["POST"])
+def app_settings(name):
+    find_app(name)
+    try:
+        options.save_choices(name, request.form)
+        flash("Saved. The next run uses these settings.")
+    except ValueError as error:
+        flash(str(error))
+    return redirect(url_for("console.app_page", name=name))
 
 
 @bp.route("/apps/<name>/run/<command_name>", methods=["POST"])

@@ -3,11 +3,18 @@
 line by line as it arrives.
 """
 import asyncio
+import os
 import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from registry import Command, get_app, get_command
+from web import keys, models, options, paths
+
+CHILD_ENVIRONMENT = {
+    "PYTHONUNBUFFERED": "1",
+    "PYTHONIOENCODING": "utf-8",
+}
 
 
 @dataclass
@@ -32,6 +39,18 @@ async def _read_all(stream) -> str:
 
 def _to_stderr(line: str) -> None:  # lint-style: ignore FN004
     print(line, file=sys.stderr)
+
+
+def job_environment(app_name):
+    """What a child of this app runs with: the console's own environment plus the folders, models,
+    settings and keys chosen in the console."""
+    environment = dict(os.environ)
+    environment.update(paths.environment_for(app_name))
+    environment.update(models.environment_for(app_name))
+    environment.update(options.environment_for(app_name))
+    environment.update(keys.environment_for(app_name))
+    environment.update(CHILD_ENVIRONMENT)
+    return environment
 
 
 def build_argv(command: Command, extra_flags: Sequence[str] = ()) -> list[str]:
@@ -72,6 +91,7 @@ async def run_command(
     proc = await asyncio.create_subprocess_exec(
         *build_argv(command, extra_flags),
         cwd=str(app.path),
+        env=job_environment(app_name),
         stdin=asyncio.subprocess.DEVNULL,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -97,7 +117,12 @@ async def run_command(
 
 
 def run_blocking(app_name: str, command_name: str, extra_flags: Sequence[str] = ()) -> int:
-    """Headless face: stream stderr to our stderr, stdout to our stdout, return code."""
+    """Headless face: stream stderr to our stderr, stdout to our stdout, return code.
+
+    The child prints UTF-8; a character our own output cannot show becomes a question mark.
+    """
+    sys.stdout.reconfigure(errors="replace")
+    sys.stderr.reconfigure(errors="replace")
     result = asyncio.run(
         run_command(app_name, command_name, on_stderr=_to_stderr, extra_flags=extra_flags)
     )
