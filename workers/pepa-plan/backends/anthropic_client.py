@@ -86,7 +86,7 @@ def _client():
     if not key:
         raise SystemExit(
             "No ANTHROPIC_API_KEY. Set it in secrets.yaml or the ANTHROPIC_API_KEY env "
-            "var. Run: python manage.py install"
+            f"var. Run: {config.COMMAND} install"
         )
 
     with _lock:

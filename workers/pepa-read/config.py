@@ -8,6 +8,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 PROJECT = os.environ.get("PEPA_PROJECT")
 DATA_ROOT = Path(PROJECT) / "pepa-read" if PROJECT else ROOT
+INSTALLED = ROOT.parent.name == "apps"
+COMMAND = "pepa-read" if INSTALLED else "python manage.py"
 
 TEXT_DIR = Path(os.environ.get(
     "PEPA_READER_TEXT_DIR", str(DATA_ROOT.parent / "pepa-prep" / "output" / "text")

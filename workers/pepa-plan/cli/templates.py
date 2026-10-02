@@ -43,7 +43,7 @@ def run(new=None, show=False):
         dest = create(new)
         ui.ok(f"created {dest.name}")
         ui.info(f"edit it: {dest}")
-        ui.info("then run: python manage.py outline --template " + str(dest))
+        ui.info(f"then run: {config.COMMAND} outline --template " + str(dest))
         return 0
 
     existing = list_templates()
@@ -74,7 +74,7 @@ def run(new=None, show=False):
 
 def _show_list(existing):
     if not existing:
-        ui.warn("no templates yet, create one with: python manage.py template --new <name>")
+        ui.warn(f"no templates yet, create one with: {config.COMMAND} template --new <name>")
         return
     ui.step("Templates")
     for p in existing:

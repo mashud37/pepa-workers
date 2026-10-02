@@ -30,11 +30,11 @@ def run():
     ui.step("Next")
     backend = config.load('BACKEND')
     if backend == "cloudrun":
-        ui.info("Deploy the self-hosted service:  python manage.py deploy")
+        ui.info(f"Deploy the self-hosted service:  {config.COMMAND} deploy")
     elif backend == "openai-compatible" and not (config.load('LLM_BASE_URL') and config.load('LLM_MODEL')):
-        ui.info("Set LLM_BASE_URL and LLM_MODEL in env.yaml, then run:  python manage.py summarize")
+        ui.info(f"Set LLM_BASE_URL and LLM_MODEL in env.yaml, then run:  {config.COMMAND} summarize")
     else:
-        ui.info("Drop PDFs in input/ and run:  python manage.py summarize")
+        ui.info(f"Drop PDFs in input/ and run:  {config.COMMAND} summarize")
     return 0
 
 

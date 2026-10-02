@@ -84,7 +84,7 @@ def _dispatch(args, cfg) -> None:
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="manage.py",
+        prog=cfg_mod.COMMAND,
         description="Local PDF-to-markdown extraction pipeline",
     )
     parser.add_argument("--no-input", action="store_true", help="Never ask a question: each one takes its default answer")

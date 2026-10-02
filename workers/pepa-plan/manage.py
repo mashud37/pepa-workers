@@ -3,11 +3,12 @@ import argparse
 import io
 import sys
 
+import config
 from cli import install, menu, ui
 
 
 def _build_parser():
-    parser = argparse.ArgumentParser(prog="manage.py", description="pepa-plan")
+    parser = argparse.ArgumentParser(prog=config.COMMAND, description="pepa-plan")
     parser.add_argument("--no-input", action="store_true", help="Never ask a question: each one takes its default answer")
     sub = parser.add_subparsers(dest="command")
 

@@ -15,7 +15,7 @@ def run(query=None):
     ui.header("Explore the literature")
     maps = sorted(config.OUTPUT_DIR.glob("corpus_map_*.md"))
     if maps:
-        ui.info(f"corpus map available: {maps[-1].name}  (run 'python manage.py map' to refresh)")
+        ui.info(f"corpus map available: {maps[-1].name}  (run '{config.COMMAND} map' to refresh)")
 
     history = []
     active = _start_conversation(query, history)
@@ -265,4 +265,4 @@ def _format_hits(hits):
 def _show_cluster_hint():
     maps = sorted(config.OUTPUT_DIR.glob("corpus_map_*.md"))
     if maps:
-        ui.info(f"corpus map available: {maps[-1].name}  (run 'python manage.py map' to refresh)")
+        ui.info(f"corpus map available: {maps[-1].name}  (run '{config.COMMAND} map' to refresh)")

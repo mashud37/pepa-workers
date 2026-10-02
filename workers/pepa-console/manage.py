@@ -4,9 +4,13 @@ subcommands are the scriptable twin of what the console does.
 """
 import argparse
 import sys
+from pathlib import Path
 
 from cli import ui
 from registry import APPS, KIND_SYMBOL, get_command
+
+INSTALLED = Path(__file__).resolve().parent.parent.name == "apps"
+COMMAND = "pepa-console" if INSTALLED else "python manage.py"
 
 
 def cmd_status() -> int:
@@ -67,13 +71,13 @@ def cmd_tui() -> int:
 
 def cmd_run(app: str, command: str, extra: list[str]) -> int:
     if get_command(app, command) is None:
-        raise SystemExit(f"unknown command: {app} {command}, see: python manage.py status")
+        raise SystemExit(f"unknown command: {app} {command}, see: {COMMAND} status")
     from runner import run_blocking
     return run_blocking(app, command, extra)
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(prog="manage.py", description="Orchestrate the pepa-* child apps.")
+    parser = argparse.ArgumentParser(prog=COMMAND, description="Orchestrate the pepa-* child apps.")
     sub = parser.add_subparsers(dest="command")
 
     r = sub.add_parser("run", help="Run a child command headlessly and stream its output")

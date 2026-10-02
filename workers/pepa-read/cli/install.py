@@ -16,8 +16,8 @@ def run():
     _check_deps()
     _check_sources()
     ui.step("Next steps")
-    ui.info("1) python manage.py index   : build the search index")
-    ui.info("2) python manage.py         : open the web UI")
+    ui.info(f"1) {config.COMMAND} index   : build the search index")
+    ui.info(f"2) {config.COMMAND}         : open the web UI")
     return 0
 
 

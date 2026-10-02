@@ -40,6 +40,6 @@ def run():
 
     ui.info("review index: " + str(config.review_index_file()))
     if not config.review_index_file().exists():
-        ui.warn("review index not found, build it in pepa-review: python manage.py index")
+        ui.warn(f"review index not found, build it in pepa-review: {config.REVIEW_COMMAND} index")
 
     ui.ok("install complete")

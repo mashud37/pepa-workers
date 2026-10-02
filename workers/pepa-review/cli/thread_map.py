@@ -56,7 +56,7 @@ def _resolve_map(map_file):
     else:
         maps = sorted(config.OUTPUT_DIR.glob("corpus_map_*.md"), reverse=True)
         if not maps:
-            raise SystemExit("No corpus map found. Run: python manage.py map")
+            raise SystemExit(f"No corpus map found. Run: {config.COMMAND} map")
         choice = ui.menu("Select a corpus map", [(m.name, "") for m in maps])
         if choice is None:
             return None
@@ -98,7 +98,7 @@ def _index_by_base():
         and "model" (the index's provider/model string).
     """
     if not config.INDEX_FILE.exists():
-        raise SystemExit("No index found. Run: python manage.py index")
+        raise SystemExit(f"No index found. Run: {config.COMMAND} index")
     idx = json.loads(config.INDEX_FILE.read_text(encoding="utf-8"))
     by_base = {r["base"]: (r, v) for r, v in zip(idx["records"], idx["vectors"])}
     return {"by_base": by_base, "model": idx.get("model", "")}

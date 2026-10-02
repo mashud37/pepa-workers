@@ -89,7 +89,7 @@ def _check_model(idx: dict, model: str) -> None:
     if built_with and built_with != model:
         raise SystemExit(
             f"This style profile was built with {built_with} embeddings but the active setting is "
-            f"{model}. Rebuild it: python manage.py style build"
+            f"{model}. Rebuild it: {config.COMMAND} style build"
         )
 
 

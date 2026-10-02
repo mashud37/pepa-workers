@@ -4,11 +4,11 @@ import io
 import json
 import sys
 
+import config
 from cli import ui
 
 
 def _cmd_search(args):
-    import config
     from index import files
     from search.query import count, search
     try:
@@ -39,7 +39,6 @@ def _cmd_search(args):
 def _list_conn():
     import sqlite3
 
-    import config
     from index.schema import ensure_schema
     conn = sqlite3.connect(config.DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -119,11 +118,10 @@ def _bare(args):
     if not sys.stdout.isatty():
         print(
             "pepa-read: not an interactive terminal. Use "
-            '`python manage.py serve --no-browser` or `python manage.py search "..."`.',
+            f'`{config.COMMAND} serve --no-browser` or `{config.COMMAND} search "..."`.',
             file=sys.stderr,
         )
         return 0
-    import config
     from index.build import index_exists
     from index.build import run as build_index
     if not index_exists():
@@ -135,7 +133,7 @@ def _bare(args):
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="manage.py",
+        prog=config.COMMAND,
         description="Read-only keyword search over pepa-prep and pepa-sum markdown output",
     )
     parser.add_argument("--no-input", action="store_true", help="Never ask a question: each one takes its default answer")
@@ -194,7 +192,6 @@ def main():
     elif args.command == "search":
         _cmd_search(args)
     elif args.command == "serve":
-        import config
         from web.app import run
         run(port=args.port or config.PORT, open_browser=not args.no_browser)
     elif args.command == "open":

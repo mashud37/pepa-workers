@@ -17,7 +17,7 @@ def complete(system, prompt, max_tokens=DEFAULT_MAX_TOKENS, model=None):
     if not key:
         raise SystemExit(
             "No ANTHROPIC_API_KEY. Set it in secrets.yaml or the ANTHROPIC_API_KEY env "
-            "var. Run: python manage.py install"
+            f"var. Run: {config.COMMAND} install"
         )
 
     _model = model or config.setting("anthropic_model")

@@ -10,6 +10,8 @@ import yaml
 ROOT = Path(__file__).resolve().parent
 PROJECT = os.environ.get("PEPA_PROJECT")
 DATA_ROOT = Path(PROJECT) / "pepa-sum" if PROJECT else ROOT
+INSTALLED = ROOT.parent.name == "apps"
+COMMAND = "pepa-sum" if INSTALLED else "python manage.py"
 INPUT_DIR = Path(os.environ.get("PEPA_INPUT_DIR", str(DATA_ROOT / "input")))
 OUTPUT_DIR = Path(os.environ.get("PEPA_OUTPUT_DIR", str(DATA_ROOT / "output")))
 DATA_DIR = DATA_ROOT / "data"

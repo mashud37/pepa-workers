@@ -25,7 +25,7 @@ def run(limit=None, sample=None, mode=None):
     if count == 0:
         raise SystemExit(
             "No para_*.md files found in corpus.\n"
-            "Check corpus_dir in secrets.yaml or run python manage.py config."
+            f"Check corpus_dir in secrets.yaml or run {config.COMMAND} config."
         )
     ui.info(f"corpus: {count} para files in {config.load()['corpus_dir'].name}/")
     if limit:

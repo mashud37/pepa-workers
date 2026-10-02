@@ -23,8 +23,11 @@ def help_text(app_name, words):
     ran = subprocess.run(asked, cwd=manifest.app_folder(app_name), capture_output=True, text=True, encoding="utf-8", timeout=HELP_SECONDS)
     if ran.returncode != 0:
         raise SystemExit(f"{app_name} {' '.join(words)} --help failed:\n{ran.stderr}")
-    text = ran.stdout.replace("python manage.py ", f"{app_name} ")
-    return text.replace("manage.py", app_name).rstrip()
+    shift = len("python manage.py") - len(app_name)
+    usage, gap, rest = ran.stdout.partition("\n\n")
+    usage = usage.replace("\n" + " " * shift, "\n")
+    text = usage + gap + rest
+    return text.replace("python manage.py", app_name).rstrip()
 
 
 def subcommands(top_help):

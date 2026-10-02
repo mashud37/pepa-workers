@@ -7,12 +7,13 @@ import io
 import sys
 from pathlib import Path
 
+import config
 from cli import cleanup, deploy, install, menu, settings, show_config, summarize, ui
 
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="manage.py",
+        prog=config.COMMAND,
         description="Summarise PDFs in input/ into structured Markdown in output/.",
     )
     parser.add_argument("--no-input", action="store_true", help="Never ask a question: each one takes its default answer")

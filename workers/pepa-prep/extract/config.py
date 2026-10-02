@@ -7,6 +7,8 @@ import yaml
 _ROOT = Path(__file__).parent.parent
 _PROJECT = os.environ.get("PEPA_PROJECT")
 DATA_ROOT = Path(_PROJECT) / "pepa-prep" if _PROJECT else _ROOT
+INSTALLED = _ROOT.parent.name == "apps"
+COMMAND = "pepa-prep" if INSTALLED else "python manage.py"
 _CONFIG_PATH = DATA_ROOT / "config.yaml"
 _SECRETS_PATH = DATA_ROOT / "secrets.yaml"
 

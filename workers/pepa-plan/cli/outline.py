@@ -172,13 +172,13 @@ def _resolve_skeleton(skeleton_id, no_input):
     if library is None:
         raise SystemExit(
             "No skeleton library found.\n"
-            "Run: python manage.py abstract"
+            f"Run: {config.COMMAND} abstract"
         )
     skeletons = library.get("skeletons", [])
     if not skeletons:
         raise SystemExit(
             "Skeleton library is empty.\n"
-            "Run: python manage.py abstract"
+            f"Run: {config.COMMAND} abstract"
         )
 
     if skeleton_id:

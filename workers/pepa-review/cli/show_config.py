@@ -67,7 +67,7 @@ def _show_index():
             f"provider={idx.get('provider','?')}, model={idx.get('model','?')}"
         )
     else:
-        ui.warn("no index yet, run: python manage.py index")
+        ui.warn(f"no index yet, run: {config.COMMAND} index")
 
 
 def _show_biblio():
@@ -84,7 +84,7 @@ def _show_biblio():
         else:
             ui.info("biblio.db present but empty")
     else:
-        ui.info("biblio.db absent, run: python manage.py biblio ingest")
+        ui.info(f"biblio.db absent, run: {config.COMMAND} biblio ingest")
 
 
 def _show_paths():

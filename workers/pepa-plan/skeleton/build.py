@@ -300,7 +300,7 @@ def _parse_skeletons(raw):
     except json.JSONDecodeError as e:
         raise SystemExit(
             f"Could not parse skeleton JSON from model: {e}\n"
-            "Try running python manage.py abstract again."
+            f"Try running {config.COMMAND} abstract again."
         )
 
 

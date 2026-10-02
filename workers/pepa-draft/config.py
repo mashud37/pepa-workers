@@ -11,6 +11,9 @@ except ImportError:
 ROOT = Path(__file__).resolve().parent
 PROJECT = os.environ.get("PEPA_PROJECT")
 DATA_ROOT = Path(PROJECT) / "pepa-draft" if PROJECT else ROOT
+INSTALLED = ROOT.parent.name == "apps"
+COMMAND = "pepa-draft" if INSTALLED else "python manage.py"
+REVIEW_COMMAND = "pepa-review" if INSTALLED else "python manage.py"
 DATA_DIR = DATA_ROOT / "data"
 INPUT_DIR = Path(os.environ.get("PEPADRAFT_INPUT_DIR", str(DATA_ROOT / "input")))
 OUTPUT_DIR = Path(os.environ.get("PEPADRAFT_OUTPUT_DIR", str(DATA_ROOT / "output")))

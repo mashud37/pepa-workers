@@ -3,6 +3,7 @@ import argparse
 import io
 import sys
 
+import config
 from cli import install, menu, ui
 
 
@@ -48,7 +49,7 @@ _HANDLERS = {
 
 
 def main():
-    parser = argparse.ArgumentParser(prog="manage.py", description="pepa-draft: academic manuscript drafting")
+    parser = argparse.ArgumentParser(prog=config.COMMAND, description="pepa-draft: academic manuscript drafting")
     parser.add_argument("--no-input", action="store_true", help="Never ask a question: each one takes its default answer")
     sub = parser.add_subparsers(dest="command")
 

@@ -103,7 +103,7 @@ def _stats():
     from biblio.store import stats
     s = stats()
     if not s:
-        ui.warn("biblio.db is empty. Run: python manage.py biblio ingest")
+        ui.warn(f"biblio.db is empty. Run: {config.COMMAND} biblio ingest")
         return
 
     ui.step("Works")
@@ -151,7 +151,7 @@ def _network(graph_type, fmt, output_dir):
 def _require_db():
     if not config.BIBLIO_DB.exists():
         raise SystemExit(
-            "biblio.db not found. Run: python manage.py biblio ingest <works-file>"
+            f"biblio.db not found. Run: {config.COMMAND} biblio ingest <works-file>"
         )
 
 

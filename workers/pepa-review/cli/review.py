@@ -520,7 +520,7 @@ def _load_index():
     global _INDEX_CACHE
     if _INDEX_CACHE is None:
         if not config.INDEX_FILE.exists():
-            raise SystemExit("No index found. Run: python manage.py index")
+            raise SystemExit(f"No index found. Run: {config.COMMAND} index")
         _INDEX_CACHE = json.loads(config.INDEX_FILE.read_text(encoding="utf-8"))
     return _INDEX_CACHE
 

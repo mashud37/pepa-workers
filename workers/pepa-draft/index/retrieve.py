@@ -12,7 +12,7 @@ def _load(index_path: Path = None) -> dict:
     if not p.exists():
         raise SystemExit(
             f"Review index not found at {p}.\n"
-            "Build it in pepa-review with: python manage.py index\n"
+            f"Build it in pepa-review with: {config.REVIEW_COMMAND} index\n"
             "Or set review_index in secrets.yaml."
         )
     return json.loads(p.read_text(encoding="utf-8"))
@@ -56,7 +56,7 @@ def _embed_one(text: str, index: dict) -> list[float]:
     model = index.get("model", "").split("/", 1)[-1]
     if provider not in config.EMBED_NEEDS:
         raise SystemExit(
-            "The review index does not name its embedding model. Rebuild it in pepa-review: python manage.py index --force"
+            f"The review index does not name its embedding model. Rebuild it in pepa-review: {config.REVIEW_COMMAND} index --force"
         )
     needed = config.EMBED_NEEDS[provider]
     if not config.get(needed):

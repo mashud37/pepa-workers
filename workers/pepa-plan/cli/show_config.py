@@ -35,7 +35,7 @@ def run():
         ui.ok(f"{len(tmpls)} in {config.TEMPLATES_DIR.name}/: " + ", ".join(p.name for p in tmpls))
     else:
         ui.warn(f"none in {config.TEMPLATES_DIR.name}/, "
-                "create one: python manage.py template --new <name>")
+                f"create one: {config.COMMAND} template --new <name>")
 
     ui.step("Skeleton library")
     if config.SKELETONS_FILE.exists():
@@ -45,7 +45,7 @@ def run():
         ui.ok(f"present: {n} skeletons from {lib.get('n_papers', '?')} papers "
               f"({lib.get('generated', '?')[:10]})")
     else:
-        ui.warn("none yet, run: python manage.py abstract")
+        ui.warn(f"none yet, run: {config.COMMAND} abstract")
 
     ui.step("API keys")
     ui.info(f"anthropic_api_key: {'present' if settings['anthropic_api_key'] else 'absent'}")

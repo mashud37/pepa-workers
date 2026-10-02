@@ -15,8 +15,8 @@ def run():
     _check_deps()
     _check_corpus()
     ui.step("Next steps")
-    ui.info("1) python manage.py abstract: build the skeleton library")
-    ui.info("2) python manage.py: open the menu")
+    ui.info(f"1) {config.COMMAND} abstract: build the skeleton library")
+    ui.info(f"2) {config.COMMAND}: open the menu")
     return 0
 
 

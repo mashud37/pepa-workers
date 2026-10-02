@@ -1,7 +1,7 @@
 """CLI layer for markdown refinement: dry-run diagnosis and apply."""
 from pathlib import Path
 
-from extract.config import DATA_ROOT
+from extract.config import COMMAND, DATA_ROOT
 from extract.validate import book_groups
 from refine import engine
 
@@ -69,4 +69,4 @@ def run(cfg: dict, apply: bool = False, book: str | None = None) -> None:
           + (f" · {errors} error(s)" if errors else ""))
     ui.ok(f"Report → {REPORT}")
     if not apply and changed:
-        ui.info("Nothing was changed. Apply with: python manage.py refine --apply")
+        ui.info(f"Nothing was changed. Apply with: {COMMAND} refine --apply")

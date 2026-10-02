@@ -17,7 +17,7 @@ def summarize(system, prompt):
     if not base:
         raise SystemExit(
             "No summariser endpoint configured. Deploy the service "
-            "(python manage.py deploy) or set BASE_URL in env.yaml."
+            f"({config.COMMAND} deploy) or set BASE_URL in env.yaml."
         )
 
     url = f"{base.rstrip('/')}/summarize?token={token}"

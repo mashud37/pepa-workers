@@ -52,7 +52,7 @@ def build_index(force=False, progress_cb=None, status_cb=None):
         if built_with and built_with != model:
             raise SystemExit(
                 f"Index was built with {built_with} embeddings but the active "
-                f"setting is {model}. Re-run: python manage.py index --force"
+                f"setting is {model}. Re-run: {config.COMMAND} index --force"
             )
         records = base_records + new_records
         vectors = base_vectors + new_vectors
@@ -213,7 +213,7 @@ def _load_raw():
 def _require_index():
     idx = _load_raw()
     if not idx:
-        raise SystemExit("No index found. Run: python manage.py index")
+        raise SystemExit(f"No index found. Run: {config.COMMAND} index")
     return idx
 
 
@@ -225,5 +225,5 @@ def _check_provider(idx):
     if built_with and embed_cfg["provider"] and built_with != active:
         raise SystemExit(
             f"Index was built with {built_with} embeddings but the active "
-            f"setting is {active}. Re-run: python manage.py index --force"
+            f"setting is {active}. Re-run: {config.COMMAND} index --force"
         )

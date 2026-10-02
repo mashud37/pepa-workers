@@ -49,7 +49,7 @@ def run():
             f"· up to {config.local_batch()} read ahead")
 
     if backend == "anthropic" and not config.load('ANTHROPIC_API_KEY'):
-        ui.warn("ANTHROPIC_API_KEY not set, run: python manage.py install")
+        ui.warn(f"ANTHROPIC_API_KEY not set, run: {config.COMMAND} install")
     if backend == "openai-compatible" and not (config.load('LLM_BASE_URL') and config.load('LLM_MODEL')):
         ui.warn("LLM_BASE_URL and LLM_MODEL not set, add them to env.yaml")
     return 0

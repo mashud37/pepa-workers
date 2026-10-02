@@ -13,7 +13,7 @@ from cli import ui
 def run():
     ui.header("Deploy summariser service")
     if not shutil.which("gcloud"):
-        raise SystemExit("gcloud CLI not found, install it first (run: python manage.py install).")
+        raise SystemExit(f"gcloud CLI not found, install it first (run: {config.COMMAND} install).")
 
     project = _select_project()
     ui.ok(f"deploying to project: {project}  (region europe-west1)")
