@@ -1,6 +1,5 @@
-"""Define the SQLite schema: one row per (stem, chapter) document, FTS5
-for BM25 search, each pepa-sum section its own column so queries can
-target one field.
+"""Define the SQLite schema: one row per (stem, chapter) document, FTS5 for BM25 search over
+each pepa-sum section and, in a second index, over the prepared full text.
 """
 from index.scan import SECTION_FIELDS
 
@@ -19,6 +18,7 @@ CREATE TABLE IF NOT EXISTS documents (
     text_mtime REAL,
     sum_mtime REAL,
     indexed_at REAL,
+    body_rowid INTEGER,
     UNIQUE(stem, chapter)
 )
 """
@@ -28,6 +28,10 @@ CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
     title, authors_raw, {", ".join(SECTION_FIELDS)},
     content='documents', content_rowid='id'
 )
+"""
+
+CREATE_BODIES_FTS = """
+CREATE VIRTUAL TABLE IF NOT EXISTS bodies_fts USING fts5(body, content='')
 """
 
 # User-curated literature lists, kept out of the SCHEMA_VERSION migration
@@ -63,10 +67,16 @@ def ensure_schema(conn) -> bool:
     migrated = 0 < version < SCHEMA_VERSION
     if version < SCHEMA_VERSION:
         conn.execute("DROP TABLE IF EXISTS documents_fts")
+        conn.execute("DROP TABLE IF EXISTS bodies_fts")
         conn.execute("DROP TABLE IF EXISTS documents")
         conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
     conn.execute(CREATE_DOCUMENTS)
     conn.execute(CREATE_FTS)
+    conn.execute(CREATE_BODIES_FTS)
+    columns = [row[1] for row in conn.execute("PRAGMA table_info(documents)")]
+    if "body_rowid" not in columns:
+        conn.execute("ALTER TABLE documents ADD COLUMN body_rowid INTEGER")
+    conn.execute("CREATE INDEX IF NOT EXISTS documents_body ON documents(body_rowid)")
     conn.execute(CREATE_LISTS)
     conn.execute(CREATE_LIST_ITEMS)
     conn.commit()

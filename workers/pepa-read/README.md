@@ -8,7 +8,9 @@ pepa-review. Nothing leaves the machine.
 
 pepa-read builds a full-text index of the markdown files and ranks matches by relevance. Each
 summary section (question, methods, arguments, conclusions and so on) is searchable on its own, so
-`methods:interviews author:smith` finds just those papers. A result opens in its default app.
+`methods:interviews author:smith` finds just those papers. Plain words also search each paper's
+prepared text; papers that match only there follow those whose summary matches. A result opens in
+its default app.
 
 ```mermaid
 flowchart LR

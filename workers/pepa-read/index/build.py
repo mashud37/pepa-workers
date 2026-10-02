@@ -38,7 +38,7 @@ def _connect() -> sqlite3.Connection:
 
 def _existing_row(conn, stem, chapter):
     return conn.execute(
-        "SELECT id, text_mtime, sum_mtime FROM documents WHERE stem = ? AND chapter IS ?",
+        "SELECT id, text_mtime, sum_mtime, body_rowid FROM documents WHERE stem = ? AND chapter IS ?",
         (stem, chapter),
     ).fetchone()
 
@@ -96,6 +96,18 @@ def _upsert(conn, doc):
     return doc_id
 
 
+def _index_body(conn, doc_id, text_path):
+    """Add a paper's prepared full text to the full-text index under a fresh row number.
+
+    That index keeps no copy of the text, so an entry cannot be removed: a changed text gets a
+    new number, and the old entry no longer matches any document.
+    """
+    body = text_path.read_text(encoding="utf-8", errors="replace")
+    body_rowid = conn.execute("SELECT COALESCE(MAX(rowid), 0) + 1 FROM bodies_fts").fetchone()[0]
+    conn.execute("INSERT INTO bodies_fts (rowid, body) VALUES (?, ?)", (body_rowid, body))
+    conn.execute("UPDATE documents SET body_rowid = ? WHERE id = ?", (body_rowid, doc_id))
+
+
 def _scan_text_dir(text_dir):
     docs = {}
     if not text_dir.exists():
@@ -130,6 +142,44 @@ def _scan_sum_dir(sum_dir, docs):
     ui.ok(f"{total} sum file(s) found")
 
 
+def _what_changed(conn, book_stem, chapter, found, force):
+    """Which parts of one document need writing: its row (title, sections) and its full text."""
+    has_text = bool(found.get("text_path"))
+    existing = _existing_row(conn, book_stem, chapter)
+    if force or not existing:
+        return {"doc_id": None, "row": True, "body": has_text}
+    doc_id, old_text_mtime, old_sum_mtime, body_rowid = existing
+    text_changed = old_text_mtime != found.get("text_mtime")
+    sum_changed = old_sum_mtime != found.get("sum_mtime")
+    return {
+        "doc_id": doc_id,
+        "row": text_changed or sum_changed,
+        "body": has_text and (text_changed or body_rowid is None),
+    }
+
+
+def _index_row(conn, book_stem, chapter, found):
+    """Write one document's title, authors and summary sections, returning its row id."""
+    text_path = found.get("text_path")
+    sum_path = found.get("sum_path")
+    title = scan.title_from_sum(sum_path) if sum_path else None
+    if not title and text_path:
+        title = scan.title_from_text(text_path)
+    if not title:
+        title = book_stem
+    return _upsert(conn, {
+        "stem": book_stem,
+        "chapter": chapter,
+        "title": title,
+        "authors": scan.authors_raw(book_stem),
+        "sections": scan.parse_sum_sections(sum_path) if sum_path else {},
+        "text_path": text_path.name if text_path else None,
+        "sum_path": sum_path.name if sum_path else None,
+        "text_mtime": found.get("text_mtime"),
+        "sum_mtime": found.get("sum_mtime"),
+    })
+
+
 def run(force: bool = False):
     ui.header("pepa-reader index")
     print("  1) scan pepa-prep  2) scan pepa-sum  3) build search index")
@@ -142,44 +192,24 @@ def run(force: bool = False):
 
     ui.step("3/3 build search index")
     conn = _connect()
+    if force:
+        conn.execute("INSERT INTO bodies_fts (bodies_fts) VALUES ('delete-all')")
     items = sorted(docs.items(), key=lambda kv: (kv[0][0], kv[0][1] or ""))
     n_docs = len(items)
     indexed = skipped = 0
-    for i, ((book_stem, chapter), d) in enumerate(items, 1):
+    for i, ((book_stem, chapter), found) in enumerate(items, 1):
         if i % _BATCH == 0 or i == n_docs:
             ui.info(f"[{i}/{n_docs}] {book_stem}")
 
-        text_path = d.get("text_path")
-        sum_path = d.get("sum_path")
-        text_mtime = d.get("text_mtime")
-        sum_mtime = d.get("sum_mtime")
-
-        existing = _existing_row(conn, book_stem, chapter)
-        if not force and existing:
-            _, old_text_mtime, old_sum_mtime = existing
-            if old_text_mtime == text_mtime and old_sum_mtime == sum_mtime:
-                skipped += 1
-                continue
-
-        title = scan.title_from_sum(sum_path) if sum_path else None
-        if not title and text_path:
-            title = scan.title_from_text(text_path)
-        if not title:
-            title = book_stem
-        sections = scan.parse_sum_sections(sum_path) if sum_path else {}
-        authors = scan.authors_raw(book_stem)
-
-        _upsert(conn, {
-            "stem": book_stem,
-            "chapter": chapter,
-            "title": title,
-            "authors": authors,
-            "sections": sections,
-            "text_path": text_path.name if text_path else None,
-            "sum_path": sum_path.name if sum_path else None,
-            "text_mtime": text_mtime,
-            "sum_mtime": sum_mtime,
-        })
+        needs = _what_changed(conn, book_stem, chapter, found, force)
+        if not needs["row"] and not needs["body"]:
+            skipped += 1
+            continue
+        doc_id = needs["doc_id"]
+        if needs["row"]:
+            doc_id = _index_row(conn, book_stem, chapter, found)
+        if needs["body"]:
+            _index_body(conn, doc_id, found["text_path"])
         indexed += 1
 
         if i % _BATCH == 0:

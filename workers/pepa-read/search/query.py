@@ -1,4 +1,4 @@
-"""BM25 keyword search over documents_fts, shared by manage.py and the Flask API."""
+"""BM25 keyword search over the summaries and the prepared full text, shared by manage.py and the Flask API."""
 import re
 import sqlite3
 
@@ -25,6 +25,41 @@ _FIELD_TOKEN_RE = re.compile(r"\b(" + "|".join(_FIELD_ALIASES) + r"):(\S+)")
 _BM25_WEIGHTS = "5.0, 2.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0"
 DEFAULT_LIMIT = 20
 
+SUMMARY_THEN_FULL_TEXT = f"""
+WITH summary AS (
+    SELECT rowid AS id,
+           bm25(documents_fts, {_BM25_WEIGHTS}) AS score,
+           snippet(documents_fts, -1, '[', ']', ' ... ', 12) AS snippet
+    FROM documents_fts
+    WHERE documents_fts MATCH ?
+),
+full_text AS (
+    SELECT d.id, bm25(bodies_fts) AS score
+    FROM bodies_fts
+    JOIN documents d ON d.body_rowid = bodies_fts.rowid
+    WHERE bodies_fts MATCH ?
+)
+SELECT d.id, d.stem, d.title, d.authors_raw, d.text_path, d.sum_path, found.score, found.snippet
+FROM (
+    SELECT id, score, snippet, 0 AS tier FROM summary
+    UNION ALL
+    SELECT id, score, '' AS snippet, 1 AS tier FROM full_text WHERE id NOT IN (SELECT id FROM summary)
+) AS found
+JOIN documents d ON d.id = found.id
+ORDER BY found.tier, found.score
+LIMIT ? OFFSET ?
+"""
+
+COUNT_SUMMARY_OR_FULL_TEXT = """
+SELECT COUNT(*) FROM (
+    SELECT rowid AS id FROM documents_fts WHERE documents_fts MATCH ?
+    UNION
+    SELECT d.id FROM bodies_fts
+    JOIN documents d ON d.body_rowid = bodies_fts.rowid
+    WHERE bodies_fts MATCH ?
+)
+"""
+
 
 def _real_column(match) -> str:  # lint-style: ignore FN004
     """Rewrite one `alias:term` token into the FTS column name the index uses."""
@@ -39,6 +74,17 @@ def _match_expr(text: str, author: str | None) -> str:
     if author:
         parts.append(f'authors_raw:"{author}"')
     return " AND ".join(p for p in parts if p)
+
+
+def _plain_words(text: str, author: str | None) -> bool:
+    """True when a query is free text only: the full-text index has no fields to filter on."""
+    return bool(text.strip()) and not author and not _FIELD_TOKEN_RE.search(text)
+
+
+def _has_full_text(conn) -> bool:
+    """True when the index holds the full-text table; an index not yet rebuilt has the summaries only."""
+    found = conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'bodies_fts'").fetchone()
+    return found is not None
 
 
 def _result(row, score=None, snippet=""):
@@ -61,7 +107,9 @@ def count(db_path, query: str = "", author: str | None = None) -> int:
     conn = sqlite3.connect(db_path)
     try:
         match_expr = _match_expr(query or "", author)
-        if match_expr:
+        if _plain_words(query or "", author) and _has_full_text(conn):
+            row = conn.execute(COUNT_SUMMARY_OR_FULL_TEXT, (match_expr, match_expr)).fetchone()
+        elif match_expr:
             row = conn.execute(
                 "SELECT COUNT(*) FROM documents_fts WHERE documents_fts MATCH ?",
                 (match_expr,),
@@ -89,7 +137,8 @@ def search(db_path, query: str = "", author: str | None = None,
         offset: Rows to skip, for paging past `limit` (see `count()` for the total).
 
     Returns:
-        Result dicts ordered most-relevant first. `score` is the raw FTS5
+        Result dicts ordered most-relevant first; for a free-text query, papers that match
+        only in their prepared full text follow every summary match. `score` is the raw FTS5
         bm25() value (lower = more relevant), not a 0-1 similarity: it is
         None for the no-query browse path, which instead sorts by title.
 
@@ -101,6 +150,9 @@ def search(db_path, query: str = "", author: str | None = None,
     conn.row_factory = sqlite3.Row
     try:
         match_expr = _match_expr(query or "", author)
+        if _plain_words(query or "", author) and _has_full_text(conn):
+            rows = conn.execute(SUMMARY_THEN_FULL_TEXT, (match_expr, match_expr, limit, offset)).fetchall()
+            return [_result(r, r["score"], r["snippet"]) for r in rows]
         if match_expr:
             rows = conn.execute(
                 f"""
