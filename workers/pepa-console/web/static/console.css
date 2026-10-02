@@ -1,5 +1,10 @@
 :root {
   color-scheme: light;
+  --top-bar: rgba(248, 250, 253, 0.92);
+  --on-primary: #ffffff;
+  --inverse-surface: #303030;
+  --on-inverse-surface: #f2f2f2;
+  --inverse-primary: #a8c7fa;
   --background: #f8fafd;
   --surface: #ffffff;
   --surface-variant: #f0f4f9;
@@ -30,6 +35,42 @@
   --mono: "Roboto Mono", "Cascadia Mono", Consolas, monospace;
 }
 
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --top-bar: rgba(19, 19, 20, 0.92);
+    --on-primary: #062e6f;
+    --inverse-surface: #e3e3e3;
+    --on-inverse-surface: #303030;
+    --inverse-primary: #0b57d0;
+    --background: #131314;
+    --surface: #1e1f20;
+    --surface-variant: #282a2c;
+    --surface-hover: #333537;
+    --text: #e3e3e3;
+    --text-secondary: #c4c7c5;
+    --text-tertiary: #8e918f;
+    --outline: #3c4043;
+    --outline-strong: #8e918f;
+    --primary: #a8c7fa;
+    --primary-hover: #d3e3fd;
+    --primary-container: #0842a0;
+    --on-primary-container: #d3e3fd;
+    --success: #6dd58c;
+    --success-container: #0f5223;
+    --on-success-container: #c4eed0;
+    --error: #f2b8b5;
+    --error-container: #8c1d18;
+    --on-error-container: #f9dedc;
+    --warning-container: #594300;
+    --on-warning-container: #feefc3;
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.6), 0 1px 3px 1px rgba(0, 0, 0, 0.3);
+    --shadow-3: 0 4px 8px 3px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.6);
+    --chevron-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23c4c7c5' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+    --chevron-right: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%238e918f' d='M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6z'/%3E%3C/svg%3E");
+  }
+}
+
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 body { margin: 0; background: var(--background); color: var(--text); font: 14px/20px var(--font); -webkit-font-smoothing: antialiased; }
@@ -39,7 +80,7 @@ h2 { margin: 0; font: 400 22px/28px var(--font-display); }
 code, .mono { font-family: var(--mono); font-size: 13px; }
 .supporting { margin: 0; color: var(--text-secondary); }
 .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-.skip { position: absolute; top: -48px; left: 16px; z-index: 30; padding: 10px 16px; border-radius: 8px; background: var(--primary); color: #fff; }
+.skip { position: absolute; top: -48px; left: 16px; z-index: 30; padding: 10px 16px; border-radius: 8px; background: var(--primary); color: var(--on-primary); }
 .skip:focus { top: 12px; }
 main:focus { outline: none; }
 .meta { color: var(--text-tertiary); font-size: 12px; white-space: nowrap; }
@@ -47,13 +88,13 @@ main:focus { outline: none; }
 
 /* ---- Top bar ---- */
 
-.top { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 40px; height: 64px; padding: 0 24px; background: rgba(248, 250, 253, 0.92); backdrop-filter: blur(12px); }
+.top { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 40px; height: 64px; padding: 0 24px; background: var(--top-bar); backdrop-filter: blur(12px); }
 .brand { display: flex; align-items: center; gap: 10px; color: var(--text); font: 500 22px/1 var(--font-display); letter-spacing: -0.2px; }
 .tabs { display: flex; gap: 4px; min-width: 0; overflow-x: auto; }
 .tabs a { display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 16px; border-radius: 20px; color: var(--text-secondary); font-weight: 500; white-space: nowrap; transition: background 0.15s; }
 .tabs a:hover { background: var(--surface-hover); }
 .tabs a[aria-current="page"] { background: var(--primary-container); color: var(--on-primary-container); }
-.badge { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--primary); color: #fff; font-size: 11px; line-height: 18px; text-align: center; }
+.badge { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--primary); color: var(--on-primary); font-size: 11px; line-height: 18px; text-align: center; }
 
 main { max-width: 1040px; margin: 0 auto; padding: 16px 24px 96px; }
 .page-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin: 16px 0 28px; }
@@ -70,7 +111,7 @@ main { max-width: 1040px; margin: 0 auto; padding: 16px 24px 96px; }
 
 button, .button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 24px; border: 0; border-radius: 20px; background: transparent; color: var(--primary); font: 500 14px/20px var(--font); cursor: pointer; white-space: nowrap; transition: background 0.15s, box-shadow 0.15s; }
 .button .icon-svg, button .icon-svg { margin-left: -6px; }
-.filled { background: var(--primary); color: #fff; }
+.filled { background: var(--primary); color: var(--on-primary); }
 .filled:hover { background: var(--primary-hover); box-shadow: var(--shadow-1); }
 .tonal { background: var(--primary-container); color: var(--on-primary-container); }
 .tonal:hover { box-shadow: var(--shadow-1); }
@@ -232,9 +273,9 @@ dialog.dialog .supporting:empty { display: none; }
 dialog.dialog .actions { justify-content: flex-end; margin-top: 8px; }
 .checklist { display: flex; flex-direction: column; }
 
-.snackbar { position: fixed; bottom: 24px; left: 50%; z-index: 20; display: flex; align-items: center; gap: 16px; max-width: calc(100vw - 32px); padding: 6px 8px 6px 20px; border-radius: 8px; background: #303030; color: #f2f2f2; box-shadow: var(--shadow-3); transform: translateX(-50%); animation: snackbar 0.2s ease; }
-.snackbar .text { color: #a8c7fa; }
-.snackbar .text:hover { background: rgba(255, 255, 255, 0.08); }
+.snackbar { position: fixed; bottom: 24px; left: 50%; z-index: 20; display: flex; align-items: center; gap: 16px; max-width: calc(100vw - 32px); padding: 6px 8px 6px 20px; border-radius: 8px; background: var(--inverse-surface); color: var(--on-inverse-surface); box-shadow: var(--shadow-3); transform: translateX(-50%); animation: snackbar 0.2s ease; }
+.snackbar .text { color: var(--inverse-primary); }
+.snackbar .text:hover { background: rgba(128, 128, 128, 0.16); }
 @keyframes snackbar { from { opacity: 0; transform: translate(-50%, 12px); } }
 
 
