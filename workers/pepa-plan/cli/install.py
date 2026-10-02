@@ -5,7 +5,7 @@ import sys
 import config
 from cli import ui
 
-_CORE_DEPS = ["anthropic", "yaml"]
+_CORE_DEPS = ["anthropic", "openai", "yaml"]
 
 
 def run():
@@ -33,7 +33,10 @@ def _ensure_secrets():
         ui.ok("created secrets.yaml from template")
     else:
         ui.info("secrets.yaml already exists")
-    api_key = config.load()["anthropic_api_key"]
+    settings = config.load()
+    if settings["backend"] != "anthropic":
+        return
+    api_key = settings["anthropic_api_key"]
     _prompt_key("anthropic_api_key", api_key,
                 "ANTHROPIC_API_KEY", "  Anthropic API key (blank to skip): ")
 

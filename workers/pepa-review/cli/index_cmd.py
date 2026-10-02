@@ -20,11 +20,7 @@ def run(force=False):
     provider = embed["provider"]
     model = embed["model"]
     if not provider:
-        raise SystemExit(
-            "No embedding provider configured.\n"
-            "Add gemini_api_key to secrets.yaml or set the GEMINI_API_KEY env var.\n"
-            "Run: python manage.py install"
-        )
+        raise SystemExit(config.EMBED_MISSING)
 
     scan = progress.StepSpinner("scanning corpus")
     scan.start()

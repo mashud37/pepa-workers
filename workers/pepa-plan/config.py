@@ -22,8 +22,16 @@ GENERATION_MODEL_DEFAULT = "claude-haiku-4-5-20251001"
 GENERATION_MODEL_QUALITY = "claude-sonnet-4-6"
 CONCURRENCY_DEFAULT = 8
 
+# `anthropic` calls Claude; `openai-compatible` calls any server that accepts OpenAI's
+# chat format (DeepSeek, Kimi, Qwen, Ollama, vLLM) at llm_base_url.
+BACKENDS = (
+    "anthropic",
+    "openai-compatible",
+)
+
 # How move-labelling is executed. `auto` picks serial/parallel/batch by estimated
-# wall-clock; `batch` uses the Anthropic Message Batches API (50% cheaper, async).
+# wall-clock; `batch` uses the Anthropic Message Batches API (50% cheaper, async), so
+# it needs the anthropic backend.
 MODES = ("auto", "serial", "parallel", "batch")
 
 # Coarse planning constants that only steer the auto mode choice, never the work.
@@ -48,6 +56,11 @@ _ENV_OVERRIDE = {
     "anthropic_api_key": "ANTHROPIC_API_KEY",
     "anthropic_model":   "PEPAPLAN_ANTHROPIC_MODEL",
     "review_model":      "PEPAPLAN_REVIEW_MODEL",
+    "backend":           "PEPAPLAN_BACKEND",
+    "llm_base_url":      "PEPAPLAN_LLM_BASE_URL",
+    "llm_model":         "PEPAPLAN_LLM_MODEL",
+    "llm_quality_model": "PEPAPLAN_LLM_QUALITY_MODEL",
+    "llm_api_key":       "PEPA_LLM_API_KEY",
     "concurrency":       "PEPAPLAN_CONCURRENCY",
     "mode":              "PEPAPLAN_MODE",
     "batch_poll":        "PEPAPLAN_BATCH_POLL",
@@ -84,17 +97,49 @@ def load():
     """The current settings, re-read every call so an edited secrets.yaml or a
     changed env var takes effect on the next call without a restart.
 
-    Returns a dict with keys: corpus_dir, anthropic_api_key, anthropic_model,
+    Returns a dict with keys: corpus_dir, backend, anthropic_api_key, anthropic_model,
     review_model, concurrency, mode, batch_poll_seconds.
     """
+    backend = get("backend", "anthropic")
+    if backend not in BACKENDS:
+        raise SystemExit(f"Unknown backend '{backend}'. Use one of: {', '.join(BACKENDS)}.")
     return {
         "corpus_dir": Path(get("corpus_dir", CORPUS_DIR_DEFAULT)),
+        "backend": backend,
         "anthropic_api_key": get("anthropic_api_key"),
         "anthropic_model": get("anthropic_model", GENERATION_MODEL_DEFAULT),
         "review_model": get("review_model", GENERATION_MODEL_QUALITY),
         "concurrency": _clamped_int("concurrency", CONCURRENCY_DEFAULT, 1, 32),
         "mode": get("mode", "auto"),
         "batch_poll_seconds": _clamped_int("batch_poll", 30, 5, 300),
+    }
+
+
+def llm_connection():
+    """The server address, key and models the openai-compatible backend uses."""
+    base_url = get("llm_base_url")
+    model = get("llm_model")
+    if not base_url or not model:
+        raise SystemExit(
+            "The openai-compatible backend needs llm_base_url and llm_model in secrets.yaml, "
+            "or the PEPAPLAN_LLM_BASE_URL and PEPAPLAN_LLM_MODEL variables."
+        )
+    return {
+        "base_url": base_url,
+        "api_key": get("llm_api_key"),
+        "model": model,
+        "quality_model": get("llm_quality_model", model),
+    }
+
+
+def model_names():
+    """The fast and the quality model the configured backend generates with."""
+    if get("backend", "anthropic") == "openai-compatible":
+        model = get("llm_model")
+        return {"fast": model, "quality": get("llm_quality_model", model)}
+    return {
+        "fast": get("anthropic_model", GENERATION_MODEL_DEFAULT),
+        "quality": get("review_model", GENERATION_MODEL_QUALITY),
     }
 
 

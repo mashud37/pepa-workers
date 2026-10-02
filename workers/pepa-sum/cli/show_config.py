@@ -12,11 +12,15 @@ def run():
     ui.info(f"para method  {config.load('PARA_METHOD')}")
     ui.info(f"on existing  {config.load('ON_EXISTING')}")
 
-    if config.load('BACKEND') == "anthropic":
-        ui.info(f"model        {config.load('ANTHROPIC_MODEL')}")
+    backend = config.load('BACKEND')
+    ui.info(f"model        {config.model_name() or 'MISSING'}")
+    if backend == "anthropic":
         ui.info(f"API key      {'set' if config.load('ANTHROPIC_API_KEY') else 'MISSING'}")
+    elif backend == "openai-compatible":
+        ui.info(f"server       {config.load('LLM_BASE_URL') or 'MISSING'}")
+        ui.info(f"API key      {'set' if config.load('LLM_API_KEY') else 'none'}")
+        ui.info(f"context      {config.context_tokens():,} tokens")
     else:
-        ui.info(f"model        {config.load('MODEL')}")
         ui.info(f"endpoint     {config.load('BASE_URL') or '(not deployed)'}")
         ui.info(f"token        {'set' if config.load('JOB_TOKEN') else 'missing'}")
 
@@ -31,9 +35,11 @@ def run():
         ui.info(f"batch poll   every {config.batch_poll_seconds()}s (batch mode)")
 
     ui.step("Cost")
-    if config.load('BACKEND') == "anthropic":
+    if backend == "anthropic":
         ui.info("Claude Haiku is pay-per-use (~$0.03–0.05 per paper for all three")
         ui.info("documents); batch mode bills the same tokens at ~50%; idle is free.")
+    elif backend == "openai-compatible":
+        ui.info("Billed by the provider per token, or free on a server you run yourself.")
     else:
         ui.info("Self-hosted Cloud Run scales to zero: you pay only while a paper")
         ui.info("is being processed (CPU seconds), plus image storage.")

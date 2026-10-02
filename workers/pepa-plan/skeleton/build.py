@@ -68,6 +68,8 @@ def build(limit=None, sample=None, mode=None):
 
 def _select_mode(n, override=None):
     wanted = (override or config.load()["mode"] or "auto").lower()
+    if wanted == "batch" and config.load()["backend"] != "anthropic":
+        raise SystemExit("Batch mode requires the anthropic backend.")
     if wanted in ("serial", "parallel", "batch"):
         return wanted
     if wanted != "auto":
@@ -81,18 +83,20 @@ def _select_mode(n, override=None):
 def _estimate(n):
     """Rough wall-clock seconds for each mode at this volume. Batch carries a
     latency floor but very high throughput once running, so it overtakes parallel
-    on large volumes (and is also billed at ~50%)."""
+    on large volumes (and is also billed at ~50%). Batch needs the anthropic backend."""
     serial = n * config.EST_LABEL_SECONDS
     concurrency = config.load()["concurrency"]
     parallel = max(serial / concurrency, n / config.EST_PARALLEL_PPH * 3600)
-    batch = max(config.EST_BATCH_FLOOR_MINUTES * 60, n / config.EST_BATCH_PPH * 3600)
-    return {"serial": serial, "parallel": parallel, "batch": batch}
+    estimates = {"serial": serial, "parallel": parallel}
+    if config.load()["backend"] == "anthropic":
+        estimates["batch"] = max(config.EST_BATCH_FLOOR_MINUTES * 60, n / config.EST_BATCH_PPH * 3600)
+    return estimates
 
 
 def _show_plan(n, chosen, override):
     ui.step(f"Labelling moves for {n} paper(s)")
     est = _estimate(n)
-    for m in ("serial", "parallel", "batch"):
+    for m in est:
         mark = "  <- chosen" if m == chosen else ""
         ui.info(f"{m:<9} ~{_fmt(est[m])}{mark}")
     forced = (override or config.load()["mode"] or "auto").lower() != "auto"
@@ -105,7 +109,7 @@ def _show_plan(n, chosen, override):
 
 
 def _preflight_cost_check(parsed, chosen, threshold=COST_WARNING_THRESHOLD):
-    if not parsed:
+    if not parsed or config.load()["backend"] != "anthropic":
         return
     model = config.load()["anthropic_model"]
     price = config.price_per_mtok(model)

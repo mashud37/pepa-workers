@@ -45,16 +45,14 @@ def build_index(force=False, progress_cb=None, status_cb=None):
     new_vectors = embedded["vectors"]
     model = embedded["model"]
 
-    provider = model.split("/", 1)[0]
-
     if force or not existing:
         records, vectors = new_records, new_vectors
     else:
-        cur_provider = existing.get("provider", "")
-        if cur_provider and cur_provider != provider:
+        built_with = existing.get("model", "")
+        if built_with and built_with != model:
             raise SystemExit(
-                f"Index was built with '{cur_provider}' embeddings but the active "
-                f"provider is now '{provider}'. Re-run: python manage.py index --force"
+                f"Index was built with {built_with} embeddings but the active "
+                f"setting is {model}. Re-run: python manage.py index --force"
             )
         records = base_records + new_records
         vectors = base_vectors + new_vectors
@@ -220,10 +218,12 @@ def _require_index():
 
 
 def _check_provider(idx):
-    provider = config.embed_config()["provider"]
-    cur = idx.get("provider", "")
-    if cur and provider and cur != provider:
+    """Refuse a query embedded by another provider or model than the one that built the index."""
+    embed_cfg = config.embed_config()
+    active = f"{embed_cfg['provider']}/{embed_cfg['model']}"
+    built_with = idx.get("model", "")
+    if built_with and embed_cfg["provider"] and built_with != active:
         raise SystemExit(
-            f"Index was built with '{cur}' embeddings but the active "
-            f"provider is now '{provider}'. Re-run: python manage.py index --force"
+            f"Index was built with {built_with} embeddings but the active "
+            f"setting is {active}. Re-run: python manage.py index --force"
         )

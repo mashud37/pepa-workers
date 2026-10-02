@@ -4,7 +4,9 @@ import config
 from cli import ui
 
 _KEYS = [
-    ("anthropic_api_key", "Anthropic API key", True),
+    ("anthropic_api_key", "Anthropic API key (skip if using another backend)", False),
+    ("llm_base_url", "OpenAI-compatible server address (skip if using Anthropic)", False),
+    ("llm_model", "OpenAI-compatible model name (skip if using Anthropic)", False),
     ("gemini_api_key", "Gemini API key (embeddings; skip if using Ollama)", False),
     ("ollama_base_url", "Ollama base URL (embeddings; skip if using Gemini)", False),
     ("vllm_base_url", "vLLM Cloud Run URL (skip if using Anthropic only)", False),

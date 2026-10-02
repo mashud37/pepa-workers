@@ -33,22 +33,29 @@ def _show_corpus():
 
 def _show_models():
     ui.step("Models")
-    ui.info(f"generation (fast):    {config.setting('anthropic_model')}")
-    ui.info(f"generation (quality): {config.setting('review_model')}")
+    models = config.model_names()
+    ui.info(f"backend:              {config.backend()}")
+    if config.backend() == "openai-compatible":
+        ui.info(f"server:               {config.setting('llm_base_url') or 'missing'}")
+    ui.info(f"generation (fast):    {models['fast'] or 'missing'}")
+    ui.info(f"generation (quality): {models['quality'] or 'missing'}")
     embed = config.embed_config()
     if embed["provider"]:
         ui.info(f"embeddings:           {embed['provider']}/{embed['model']}")
     else:
-        ui.warn("embeddings:           not configured (add gemini_api_key or ollama_base_url)")
+        ui.warn(f"embeddings:           {config.setting('embed_provider')}, not configured")
 
 
 def _show_api_keys():
-    ui.step("API keys")
+    ui.step("API keys and servers")
     ui.info(f"anthropic_api_key: {'set' if config.setting('anthropic_api_key') else 'unset'}")
+    ui.info(f"llm_api_key:       {'set' if config.setting('llm_api_key') else 'unset'}")
     ui.info(f"gemini_api_key:    {'set' if config.setting('gemini_api_key') else 'unset'}")
-    ollama_url = config.setting("ollama_base_url")
-    if ollama_url:
-        ui.info(f"ollama_base_url:   {ollama_url}")
+    ui.info(f"embed_api_key:     {'set' if config.setting('embed_api_key') else 'unset'}")
+    if config.setting("embed_provider") == "ollama":
+        ui.info(f"ollama_base_url:   {config.setting('ollama_base_url')}")
+    if config.setting("embed_provider") == "openai-compatible":
+        ui.info(f"embed_base_url:    {config.setting('embed_base_url') or 'missing'}")
 
 
 def _show_index():

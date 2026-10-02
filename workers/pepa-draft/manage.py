@@ -56,7 +56,7 @@ def main():
     dr.add_argument("--review", default=None, metavar="FILE")
     dr.add_argument("--plan", default=None, metavar="FILE")
     dr.add_argument("--sections", default=None, metavar="FILE")
-    dr.add_argument("--backend", default=None, choices=("anthropic", "vllm"))
+    dr.add_argument("--backend", default=None, choices=("anthropic", "openai-compatible", "vllm"))
     dr.add_argument("--no-retrieval", action="store_true")
     dr.add_argument("--no-style", action="store_true")
     dr.add_argument("--style-profile", default=None, metavar="PROFILE")

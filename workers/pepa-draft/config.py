@@ -48,6 +48,13 @@ _ENV_OVERRIDE = {
     "vllm_base_url": "PEPADRAFT_VLLM_URL",
     "vllm_token": "PEPADRAFT_VLLM_TOKEN",
     "review_index": "PEPADRAFT_REVIEW_INDEX",
+    "backend": "PEPADRAFT_BACKEND",
+    "llm_base_url": "PEPADRAFT_LLM_BASE_URL",
+    "llm_model": "PEPADRAFT_LLM_MODEL",
+    "llm_api_key": "PEPA_LLM_API_KEY",
+    "embed_provider": "PEPADRAFT_EMBED_PROVIDER",
+    "embed_base_url": "PEPADRAFT_EMBED_BASE_URL",
+    "embed_api_key": "PEPA_EMBED_API_KEY",
 }
 
 DEFAULTS = {
@@ -56,6 +63,29 @@ DEFAULTS = {
     "ollama_base_url": "http://localhost:11434",
     "vllm_base_url": "",
     "vllm_token": "",
+    "backend": "anthropic",
+    "embed_provider": "gemini",
+}
+
+# `anthropic` calls Claude; `openai-compatible` calls any server that accepts OpenAI's
+# chat format (DeepSeek, Kimi, Qwen, Ollama, vLLM) at llm_base_url; `vllm` calls the
+# Cloud Run service.
+BACKENDS = (
+    "anthropic",
+    "openai-compatible",
+    "vllm",
+)
+
+# Each embedding provider's default model, and the setting it cannot run without.
+EMBED_DEFAULT_MODELS = {
+    "gemini": EMBED_MODEL_GEMINI,
+    "ollama": EMBED_MODEL_OLLAMA,
+    "openai-compatible": None,
+}
+EMBED_NEEDS = {
+    "gemini": "gemini_api_key",
+    "ollama": "ollama_base_url",
+    "openai-compatible": "embed_base_url",
 }
 
 @lru_cache(maxsize=1)
@@ -93,18 +123,39 @@ def bulk_model() -> str:
 
 
 def embed_config() -> dict:
-    """Return the active embedding backend settings.
+    """Return the embedding provider and model the style index uses.
 
     Returns:
-        Dict with keys provider and model, both None if unconfigured.
+        Dict with keys provider and model, both None when the chosen provider's
+        key, address or model is not set.
     """
-    model_override = get("embed_model")
-    if get("gemini_api_key"):
-        return {"provider": "gemini", "model": model_override or EMBED_MODEL_GEMINI}
-    base = get("ollama_base_url")
-    if base:
-        return {"provider": "ollama", "model": model_override or EMBED_MODEL_OLLAMA}
-    return {"provider": None, "model": None}
+    provider = get("embed_provider")
+    if provider not in EMBED_DEFAULT_MODELS:
+        raise SystemExit(f"Unknown embed_provider '{provider}'. Use one of: {', '.join(EMBED_DEFAULT_MODELS)}.")
+    model = get("embed_model") or EMBED_DEFAULT_MODELS[provider]
+    if not get(EMBED_NEEDS[provider]) or not model:
+        return {"provider": None, "model": None}
+    return {"provider": provider, "model": model}
+
+
+def backend() -> str:
+    """The generation backend, checked against BACKENDS."""
+    chosen = get("backend")
+    if chosen not in BACKENDS:
+        raise SystemExit(f"Unknown backend '{chosen}'. Use one of: {', '.join(BACKENDS)}.")
+    return chosen
+
+
+def llm_connection() -> dict:
+    """The server address, key and model the openai-compatible backend uses."""
+    base_url = get("llm_base_url")
+    model = get("llm_model")
+    if not base_url or not model:
+        raise SystemExit(
+            "The openai-compatible backend needs llm_base_url and llm_model in secrets.yaml, "
+            "or the PEPADRAFT_LLM_BASE_URL and PEPADRAFT_LLM_MODEL variables."
+        )
+    return {"base_url": base_url, "api_key": get("llm_api_key"), "model": model}
 
 
 def active_style_profile() -> str:

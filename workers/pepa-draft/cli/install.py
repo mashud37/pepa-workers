@@ -5,7 +5,7 @@ from cli import ui
 
 def _check_packages():
     missing = []
-    for pkg in ("anthropic", "yaml", "numpy"):
+    for pkg in ("anthropic", "openai", "yaml", "numpy"):
         try:
             __import__(pkg)
         except ImportError:

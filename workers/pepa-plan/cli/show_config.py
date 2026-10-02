@@ -16,8 +16,12 @@ def run():
         ui.warn(f"could not count para files: {e}")
 
     ui.step("Models")
-    ui.info(f"generation (fast):    {settings['anthropic_model']}")
-    ui.info(f"generation (quality): {settings['review_model']}")
+    models = config.model_names()
+    ui.info(f"backend:              {settings['backend']}")
+    if settings["backend"] == "openai-compatible":
+        ui.info(f"server:               {config.get('llm_base_url') or 'missing'}")
+    ui.info(f"generation (fast):    {models['fast'] or 'missing'}")
+    ui.info(f"generation (quality): {models['quality'] or 'missing'}")
 
     ui.step("Labelling")
     ui.info(f"mode:        {settings['mode']}  (auto|serial|parallel|batch)")
@@ -45,6 +49,7 @@ def run():
 
     ui.step("API keys")
     ui.info(f"anthropic_api_key: {'present' if settings['anthropic_api_key'] else 'absent'}")
+    ui.info(f"llm_api_key:       {'present' if config.get('llm_api_key') else 'absent'}")
 
     ui.step("Paths")
     ui.info(f"data/:   {config.DATA_DIR}")

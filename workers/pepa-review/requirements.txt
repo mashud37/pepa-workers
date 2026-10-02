@@ -1,6 +1,7 @@
 pyyaml
 numpy
 anthropic
+openai
 scikit-learn
 umap-learn
 hdbscan

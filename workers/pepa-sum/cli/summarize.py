@@ -73,7 +73,8 @@ def run(input_dir=None, output_dir=None, force=False, mode=None):
     if config.scan_subfolders():
         where += " (including sub-folders)"
     ui.info(f"{len(sources)} paper(s) in {where}")
-    ui.info(f"backend: {config.load('BACKEND')}  ·  paragraph rundown: {config.load('PARA_METHOD')}")
+    ui.info(f"backend: {config.load('BACKEND')}  ·  model: {config.model_name()}  ·  "
+            f"paragraph rundown: {config.load('PARA_METHOD')}")
 
     planned = _plan_work(sources, out_dir, force, on_existing)
     work, skipped = planned["work"], planned["skipped"]
@@ -152,9 +153,10 @@ def _select_mode(n, override=None):
     """Resolve the execution mode. cloudrun is always serial; an explicit mode
     (flag or config) is honoured; otherwise `auto` picks the fastest estimate."""
     wanted = (override or config.load('MODE') or "auto").lower()
-    if config.load('BACKEND') == "cloudrun":
-        if wanted == "batch":
-            raise SystemExit("Batch mode requires the anthropic backend.")
+    backend = config.load('BACKEND')
+    if wanted == "batch" and backend != "anthropic":
+        raise SystemExit("Batch mode requires the anthropic backend.")
+    if backend == "cloudrun":
         return "serial"
     if wanted in ("serial", "parallel", "batch"):
         return wanted
@@ -178,8 +180,10 @@ def _estimate(n):
     serial = local_serial + llm_serial
     parallel = max(local_serial / cores + llm_serial / conc,
                    n / config.est_parallel_pph() * 3600)
-    batch = max(config.EST_BATCH_FLOOR_MINUTES * 60, n / config.EST_BATCH_PPH * 3600)
-    return {"serial": serial, "parallel": parallel, "batch": batch}
+    estimates = {"serial": serial, "parallel": parallel}
+    if config.load('BACKEND') == "anthropic":
+        estimates["batch"] = max(config.EST_BATCH_FLOOR_MINUTES * 60, n / config.EST_BATCH_PPH * 3600)
+    return estimates
 
 
 def _show_plan(n, chosen, override):
@@ -188,7 +192,7 @@ def _show_plan(n, chosen, override):
         ui.info("cloudrun backend: serial (single scale-to-zero instance)")
         return
     est = _estimate(n)
-    for m in ("serial", "parallel", "batch"):
+    for m in est:
         mark = "  <- chosen" if m == chosen else ""
         ui.info(f"{m:<9} ~{_fmt(est[m])}{mark}")
     forced = (override or config.load('MODE') or "auto").lower() != "auto"

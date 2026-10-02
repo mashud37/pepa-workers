@@ -16,7 +16,11 @@ def build(sample_paths: list[Path], force: bool = False, profile: str = None) ->
     Returns:
         Total number of paragraphs indexed.
     """
-    existing = _load(profile) or {"records": [], "vectors": []}
+    model = active_model()
+    existing = _load(profile)
+    if force or not existing:
+        existing = {"records": [], "vectors": []}
+    _check_model(existing, model)
     existing_paths = {r["path"] for r in existing["records"]}
 
     records, vectors = list(existing["records"]), list(existing["vectors"])
@@ -31,7 +35,10 @@ def build(sample_paths: list[Path], force: bool = False, profile: str = None) ->
             records.append({"path": str(path), "text": para})
             vectors.append(vec)
 
-    _save(records, vectors, profile)
+    data = {"model": model, "records": records, "vectors": vectors}
+    path = config.style_index_file(profile)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data), encoding="utf-8")
     return len(records)
 
 
@@ -51,6 +58,7 @@ def retrieve(query: str, k: int = None, profile: str = None) -> list[str]:
     idx = _load(profile)
     if not idx or not idx["records"]:
         return []
+    _check_model(idx, active_model())
     q = np.array(_embed_one(query), dtype=float)
     mat = np.array(idx["vectors"], dtype=float)
     sims = mat @ q / (np.linalg.norm(mat, axis=1) * np.linalg.norm(q) + 1e-9)
@@ -65,15 +73,30 @@ def list_samples(profile: str = None) -> list[str]:
     return sorted({r["path"] for r in idx["records"]})
 
 
-def _embed_one(text: str) -> list[float]:
+def active_model() -> str:
+    """The provider and model the style index embeds with now, as "provider/model"."""
     embed = config.embed_config()
-    if embed["provider"] == "gemini":
-        from index.retrieve import _gemini_embed
-        return _gemini_embed(text, embed["model"])
-    if embed["provider"] == "ollama":
-        from index.retrieve import _ollama_embed
-        return _ollama_embed(text, embed["model"])
-    raise SystemExit("No embedding provider configured. Add gemini_api_key or ollama_base_url to secrets.yaml.")
+    if embed["provider"] is None:
+        raise SystemExit(
+            "No embedding provider configured. Set embed_provider in secrets.yaml (gemini, ollama, "
+            "or openai-compatible) and its key or address."
+        )
+    return f"{embed['provider']}/{embed['model']}"
+
+
+def _check_model(idx: dict, model: str) -> None:
+    built_with = idx.get("model")
+    if built_with and built_with != model:
+        raise SystemExit(
+            f"This style profile was built with {built_with} embeddings but the active setting is "
+            f"{model}. Rebuild it: python manage.py style build"
+        )
+
+
+def _embed_one(text: str) -> list[float]:
+    from index.retrieve import embed_text
+    provider, model = active_model().split("/", 1)
+    return embed_text(text, provider, model)
 
 
 def _load(profile: str = None) -> dict | None:
@@ -85,9 +108,3 @@ def _load(profile: str = None) -> dict | None:
         return None
     return json.loads(p.read_text(encoding="utf-8"))
 
-
-def _save(records: list, vectors: list, profile: str = None) -> None:
-    data = {"records": records, "vectors": vectors}
-    p = config.style_index_file(profile)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(data), encoding="utf-8")

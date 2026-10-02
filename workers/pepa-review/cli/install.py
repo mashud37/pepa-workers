@@ -6,7 +6,7 @@ import sys
 import config
 from cli import ui
 
-_CORE_DEPS = ["anthropic", "numpy", "yaml"]
+_CORE_DEPS = ["anthropic", "openai", "numpy", "yaml"]
 
 
 def run():

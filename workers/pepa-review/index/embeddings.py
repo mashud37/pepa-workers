@@ -1,10 +1,13 @@
-"""Embed texts via Gemini or Ollama over stdlib HTTP, using Ollama when
-ollama_base_url is set and Gemini by default.
+"""Embed texts with the provider named in embed_provider: Gemini, Ollama, or any server that
+accepts OpenAI's embeddings format.
 """
 import json
 import urllib.request
 
 import config
+
+TEXTS_PER_REQUEST = 10
+NO_KEY = "no-key"
 
 
 def _gemini(model, texts):
@@ -55,6 +58,26 @@ def _ollama(base_url, model, texts):
     return out
 
 
+def _compatible(model, texts):
+    import openai
+    client = openai.OpenAI(
+        base_url=config.setting("embed_base_url"),
+        api_key=config.setting("embed_api_key") or NO_KEY,
+        timeout=300,
+        max_retries=4,
+    )
+    out = []
+    for start in range(0, len(texts), TEXTS_PER_REQUEST):
+        chunk = texts[start:start + TEXTS_PER_REQUEST]
+        try:
+            reply = client.embeddings.create(model=model, input=chunk)
+        except openai.APIError as error:
+            raise RuntimeError(f"Embedding server error: {error}")
+        for item in reply.data:
+            out.append(item.embedding)
+    return out
+
+
 def embed(texts):
     """Embed a list of texts.
 
@@ -66,12 +89,11 @@ def embed(texts):
     provider = embed_cfg["provider"]
     model = embed_cfg["model"]
     if provider is None:
-        raise SystemExit(
-            "No embedding provider configured.\n"
-            "Add gemini_api_key to secrets.yaml or set the GEMINI_API_KEY env var.\n"
-            "Run: python manage.py install"
-        )
+        raise SystemExit(config.EMBED_MISSING)
     if provider == "gemini":
-        return {"vectors": _gemini(model, texts), "model": f"gemini/{model}"}
-    vectors = _ollama(config.setting("ollama_base_url"), model, texts)
-    return {"vectors": vectors, "model": f"ollama/{model}"}
+        vectors = _gemini(model, texts)
+    elif provider == "ollama":
+        vectors = _ollama(config.setting("ollama_base_url"), model, texts)
+    else:
+        vectors = _compatible(model, texts)
+    return {"vectors": vectors, "model": f"{provider}/{model}"}

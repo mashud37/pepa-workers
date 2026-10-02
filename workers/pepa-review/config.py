@@ -71,6 +71,14 @@ _ENV_OVERRIDE = {
     "ollama_base_url":  "PEPAREVIEW_OLLAMA_URL",
     "embed_model":      "PEPAREVIEW_EMBED_MODEL",
     "use_biblio":       "PEPAREVIEW_USE_BIBLIO",
+    "backend":          "PEPAREVIEW_BACKEND",
+    "llm_base_url":     "PEPAREVIEW_LLM_BASE_URL",
+    "llm_model":        "PEPAREVIEW_LLM_MODEL",
+    "llm_quality_model": "PEPAREVIEW_LLM_QUALITY_MODEL",
+    "llm_api_key":      "PEPA_LLM_API_KEY",
+    "embed_provider":   "PEPAREVIEW_EMBED_PROVIDER",
+    "embed_base_url":   "PEPAREVIEW_EMBED_BASE_URL",
+    "embed_api_key":    "PEPA_EMBED_API_KEY",
 }
 
 _PLACEHOLDERS = {"", "REPLACE_ME", "changeme"}
@@ -81,7 +89,33 @@ DEFAULTS = {
     "anthropic_model": GENERATION_MODEL_DEFAULT,
     "review_model": GENERATION_MODEL_QUALITY,
     "gemini_api_key": None,
-    "ollama_base_url": None,
+    "ollama_base_url": "http://localhost:11434",
+    "backend": "anthropic",
+    "embed_provider": "gemini",
+}
+
+# `anthropic` calls Claude; `openai-compatible` calls any server that accepts OpenAI's
+# chat format (DeepSeek, Kimi, Qwen, Ollama, vLLM) at llm_base_url.
+BACKENDS = (
+    "anthropic",
+    "openai-compatible",
+)
+
+# Each embedding provider's default model, and the setting it cannot run without.
+EMBED_DEFAULT_MODELS = {
+    "gemini": EMBED_MODEL_GEMINI,
+    "ollama": EMBED_MODEL_OLLAMA,
+    "openai-compatible": None,
+}
+EMBED_MISSING = (
+    "No embedding provider configured. Set embed_provider in secrets.yaml (gemini, ollama, "
+    "or openai-compatible) and its key or address: gemini_api_key, ollama_base_url, or "
+    "embed_base_url with embed_model."
+)
+EMBED_NEEDS = {
+    "gemini": "gemini_api_key",
+    "ollama": "ollama_base_url",
+    "openai-compatible": "embed_base_url",
 }
 
 
@@ -112,14 +146,49 @@ def embed_config():
     """Return the embedding provider and model to use.
 
     Returns:
-        dict with keys "provider" and "model", both None if no embedding
-        backend is configured.
+        dict with keys "provider" and "model", both None when the chosen
+        provider's key, address or model is not set.
     """
-    if setting("ollama_base_url"):
-        return {"provider": "ollama", "model": get("embed_model", EMBED_MODEL_OLLAMA)}
-    if setting("gemini_api_key"):
-        return {"provider": "gemini", "model": get("embed_model", EMBED_MODEL_GEMINI)}
-    return {"provider": None, "model": None}
+    provider = setting("embed_provider")
+    if provider not in EMBED_DEFAULT_MODELS:
+        raise SystemExit(f"Unknown embed_provider '{provider}'. Use one of: {', '.join(EMBED_DEFAULT_MODELS)}.")
+    model = get("embed_model", EMBED_DEFAULT_MODELS[provider])
+    if not setting(EMBED_NEEDS[provider]) or not model:
+        return {"provider": None, "model": None}
+    return {"provider": provider, "model": model}
+
+
+def backend():
+    """The generation backend, checked against BACKENDS."""
+    chosen = setting("backend")
+    if chosen not in BACKENDS:
+        raise SystemExit(f"Unknown backend '{chosen}'. Use one of: {', '.join(BACKENDS)}.")
+    return chosen
+
+
+def llm_connection():
+    """The server address, key and models the openai-compatible backend uses."""
+    base_url = setting("llm_base_url")
+    model = setting("llm_model")
+    if not base_url or not model:
+        raise SystemExit(
+            "The openai-compatible backend needs llm_base_url and llm_model in secrets.yaml, "
+            "or the PEPAREVIEW_LLM_BASE_URL and PEPAREVIEW_LLM_MODEL variables."
+        )
+    return {
+        "base_url": base_url,
+        "api_key": setting("llm_api_key"),
+        "model": model,
+        "quality_model": get("llm_quality_model", model),
+    }
+
+
+def model_names():
+    """The fast and the quality model the configured backend generates with."""
+    if backend() == "openai-compatible":
+        model = setting("llm_model")
+        return {"fast": model, "quality": get("llm_quality_model", model)}
+    return {"fast": setting("anthropic_model"), "quality": setting("review_model")}
 
 
 def use_biblio():

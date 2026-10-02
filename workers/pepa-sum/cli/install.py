@@ -13,7 +13,7 @@ import config
 from cli import ui
 
 _PLACEHOLDERS = {"", "changeme", "REPLACE_ME"}
-_CORE_DEPS = ["anthropic", "pypdf", "spacy", "sklearn", "rank_bm25", "numpy", "yaml"]
+_CORE_DEPS = ["anthropic", "openai", "pypdf", "spacy", "sklearn", "rank_bm25", "numpy", "yaml"]
 _DEFAULTS = {"BACKEND": "anthropic", "PARA_METHOD": "llm", "ON_EXISTING": "ask"}
 
 
@@ -28,10 +28,13 @@ def run():
     _check_deps()
     _check_spacy_model()
     ui.step("Next")
-    if config.load('BACKEND') == "anthropic":
-        ui.info("Drop PDFs in input/ and run:  python manage.py summarize")
-    else:
+    backend = config.load('BACKEND')
+    if backend == "cloudrun":
         ui.info("Deploy the self-hosted service:  python manage.py deploy")
+    elif backend == "openai-compatible" and not (config.load('LLM_BASE_URL') and config.load('LLM_MODEL')):
+        ui.info("Set LLM_BASE_URL and LLM_MODEL in env.yaml, then run:  python manage.py summarize")
+    else:
+        ui.info("Drop PDFs in input/ and run:  python manage.py summarize")
     return 0
 
 

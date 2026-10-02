@@ -4,6 +4,8 @@ from pathlib import Path
 
 import config
 
+NO_KEY = "no-key"
+
 
 def _load(index_path: Path = None) -> dict:
     p = index_path or config.review_index_file()
@@ -52,15 +54,38 @@ def _embed_one(text: str, index: dict) -> list[float]:
     """Embed the query with the model that built the index, so both sides of the comparison match."""
     provider = index.get("provider", "")
     model = index.get("model", "").split("/", 1)[-1]
+    if provider not in config.EMBED_NEEDS:
+        raise SystemExit(
+            "The review index does not name its embedding model. Rebuild it in pepa-review: python manage.py index --force"
+        )
+    needed = config.EMBED_NEEDS[provider]
+    if not config.get(needed):
+        raise SystemExit(f"The review index was built with {provider} embeddings. Add {needed} to secrets.yaml.")
+    return embed_text(text, provider, model)
+
+
+def embed_text(text: str, provider: str, model: str) -> list[float]:
+    """Embed one text with the named provider and model."""
     if provider == "gemini":
-        if not config.get("gemini_api_key"):
-            raise SystemExit("The review index was built with Gemini embeddings. Add gemini_api_key to secrets.yaml.")
         return _gemini_embed(text, model)
     if provider == "ollama":
         return _ollama_embed(text, model)
-    raise SystemExit(
-        "The review index does not name its embedding model. Rebuild it in pepa-review: python manage.py index --force"
+    return _compatible_embed(text, model)
+
+
+def _compatible_embed(text: str, model: str) -> list[float]:
+    import openai
+    client = openai.OpenAI(
+        base_url=config.get("embed_base_url"),
+        api_key=config.get("embed_api_key") or NO_KEY,
+        timeout=60,
+        max_retries=4,
     )
+    try:
+        reply = client.embeddings.create(model=model, input=[text])
+    except openai.APIError as error:
+        raise SystemExit(f"Embedding server error: {error}")
+    return reply.data[0].embedding
 
 
 def _gemini_embed(text: str, model: str) -> list[float]:

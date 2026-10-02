@@ -27,6 +27,10 @@ _ENV_OVERRIDE = {
     "BASE_URL": "PEPA_BASE_URL",
     "JOB_TOKEN": "PEPA_JOB_TOKEN",
     "MODEL": "PEPA_MODEL",
+    "LLM_BASE_URL": "PEPA_LLM_BASE_URL",
+    "LLM_MODEL": "PEPA_LLM_MODEL",
+    "LLM_API_KEY": "PEPA_LLM_API_KEY",
+    "CONTEXT_TOKENS": "PEPA_CONTEXT_TOKENS",
     "MAX_WORKERS": "PEPA_MAX_WORKERS",
     "PAPER_WORKERS": "PEPA_PAPER_WORKERS",
     "MAX_CONCURRENCY": "PEPA_MAX_CONCURRENCY",
@@ -50,6 +54,9 @@ DEFAULTS = {
     "BASE_URL": None,
     "JOB_TOKEN": None,
     "MODEL": "qwen2.5-3b-instruct",
+    "LLM_BASE_URL": None,
+    "LLM_MODEL": None,
+    "LLM_API_KEY": None,
     "MODE": "auto",
 }
 
@@ -72,7 +79,11 @@ _PRICES_PER_MTOK = {
     "claude-opus-4-8": (5.0, 25.0),
 }
 
-BACKENDS = ("anthropic", "cloudrun")
+BACKENDS = (
+    "anthropic",
+    "openai-compatible",
+    "cloudrun",
+)
 PARA_METHODS = ("llm", "extractive")
 # OCR policy for scanned pages. `auto` only OCRs a document that is mostly image
 # (so a born-digital paper's odd figure page never triggers a slow tesseract
@@ -82,7 +93,7 @@ OCR_MODES = ("auto", "off", "force")
 # What to do with a paper whose three documents all already exist.
 ON_EXISTING_MODES = ("ask", "skip", "overwrite")
 # How the run is executed. `auto` picks serial/parallel/batch by estimated time;
-# `batch` uses the Anthropic Message Batches API (anthropic backend only).
+# `batch` uses the Anthropic Message Batches API, so it needs the anthropic backend.
 MODES = ("auto", "serial", "parallel", "batch")
 
 # Speed tiers for the parallel path: one dial that moves the API throughput
@@ -110,9 +121,48 @@ _SPEED = {
 _TEXT_BUDGET_CLOUDRUN = 70_000
 _TEXT_BUDGET_ANTHROPIC = 600_000
 
+# An openai-compatible model's context window varies by model and server, so the
+# budget follows CONTEXT_TOKENS, less room for the signals, system prompt and answer.
+CONTEXT_TOKENS_DEFAULT = 32_768
+CONTEXT_RESERVE_TOKENS = 8_000
+CHARS_PER_TOKEN = 3.5
+
 
 def text_budget():
-    return _TEXT_BUDGET_CLOUDRUN if load("BACKEND") == "cloudrun" else _TEXT_BUDGET_ANTHROPIC
+    backend = load("BACKEND")
+    if backend == "cloudrun":
+        return _TEXT_BUDGET_CLOUDRUN
+    if backend == "openai-compatible":
+        room = context_tokens() - CONTEXT_RESERVE_TOKENS
+        return int(room * CHARS_PER_TOKEN)
+    return _TEXT_BUDGET_ANTHROPIC
+
+
+def context_tokens():
+    """The openai-compatible model's context window in tokens, as set in CONTEXT_TOKENS."""
+    return _clamped_int("CONTEXT_TOKENS", CONTEXT_TOKENS_DEFAULT, 16_384, 2_000_000)
+
+
+def model_name():
+    """The model the configured backend generates with."""
+    backend = load("BACKEND")
+    if backend == "openai-compatible":
+        return load("LLM_MODEL")
+    if backend == "cloudrun":
+        return load("MODEL")
+    return load("ANTHROPIC_MODEL")
+
+
+def llm_connection():
+    """The server address, key and model the openai-compatible backend uses."""
+    base_url = load("LLM_BASE_URL")
+    model = load("LLM_MODEL")
+    if not base_url or not model:
+        raise SystemExit(
+            "The openai-compatible backend needs LLM_BASE_URL and LLM_MODEL in env.yaml, "
+            "or the PEPA_LLM_BASE_URL and PEPA_LLM_MODEL variables."
+        )
+    return {"base_url": base_url, "api_key": load("LLM_API_KEY"), "model": model}
 
 
 def _file_values():

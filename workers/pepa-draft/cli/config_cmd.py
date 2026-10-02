@@ -5,8 +5,13 @@ from cli import ui
 
 def run():
     ui.header("pepa-draft: configuration")
-    ui.info(f"anthropic_model : {config.draft_model()}")
-    ui.info(f"bulk_model      : {config.bulk_model()}")
+    ui.info(f"backend         : {config.backend()}")
+    if config.backend() == "openai-compatible":
+        ui.info(f"llm_base_url    : {config.get('llm_base_url') or '(none)'}")
+        ui.info(f"llm_model       : {config.get('llm_model') or '(none)'}")
+    else:
+        ui.info(f"anthropic_model : {config.draft_model()}")
+        ui.info(f"bulk_model      : {config.bulk_model()}")
     embed = config.embed_config()
     ui.info(f"embed_provider  : {embed['provider'] or '(none)'}")
     ui.info(f"embed_model     : {embed['model'] or '(none)'}")
