@@ -8,7 +8,7 @@ from functools import partial
 
 import config
 from cli import ui
-from cli.progress import StepSpinner, ProgressSpinner, _CHECK, _LABEL_W
+from cli.progress import _CHECK, _LABEL_W, ProgressSpinner, StepSpinner
 from render import paper_stem
 
 _DOCS = ("sum", "para", "quote")
@@ -50,9 +50,11 @@ def _pin_threads():
 def run(input_dir=None, output_dir=None, force=False, mode=None):
     _pin_threads()  # parent sets them so spawned workers inherit before numpy imports
     try:
-        from extract import read_document, extract_signals, select_passages  # noqa: F401
+        from extract import extract_signals, read_document, select_passages  # noqa: F401
     except ImportError as e:
         raise SystemExit(f"Missing dependency ({e.name}). Run: pip install -r requirements.txt")
+    from extract.signals import ensure_model
+    ensure_model()
 
     in_dir = (input_dir or config.INPUT_DIR)
     out_dir = (output_dir or config.OUTPUT_DIR)
@@ -216,7 +218,7 @@ def _extract_paper(pdf, todo):
         The `pdf` and its `todo` back, plus `artifacts` holding `text`,
         `signals` and `passages`, or None when the paper has no usable text.
     """
-    from extract import read_document, extract_signals, select_passages
+    from extract import extract_signals, read_document, select_passages
     text = read_document(pdf)
     if not text or len(text) < MIN_TEXT_CHARS:
         return {"pdf": pdf, "todo": todo, "artifacts": None}
@@ -240,7 +242,8 @@ def _extract_to_disk(pdf, todo, idx, spool):
         (text, signals, passages), or None when the paper has no usable text.
     """
     import pickle
-    from extract import read_document, extract_signals, select_passages
+
+    from extract import extract_signals, read_document, select_passages
     text = read_document(pdf)
     if not text or len(text) < MIN_TEXT_CHARS:
         return {"pdf": pdf, "todo": todo, "path": None}
@@ -317,6 +320,7 @@ def _write_one(out_dir, kind, name, build):
 def _write_together(out_dir, name, builders, kinds):
     """Build several documents at once, a thread each, then write them in order."""
     from concurrent.futures import ThreadPoolExecutor
+
     from render import write_doc
 
     with ThreadPoolExecutor(max_workers=len(kinds)) as ex:
@@ -401,7 +405,7 @@ class _Pipeline:
 
     def run(self, px, tx, sp):
         """Keep both pools fed until every paper has been read and built."""
-        from concurrent.futures import wait, FIRST_COMPLETED
+        from concurrent.futures import FIRST_COMPLETED, wait
 
         self.refill(px)
         while self.extract_futs or self.build_futs:
@@ -479,9 +483,8 @@ def _summary_request(idx, text, signals, passages):
         The `request` and the `cid` it will come back under, or `oversize` set
         when the prompt is too large for the model context.
     """
+    from backends import SUMMARY_SYSTEM, anthropic_client, build_summary_prompt
     from documents import summary
-    from backends import SUMMARY_SYSTEM, build_summary_prompt
-    from backends import anthropic_client
 
     prompt = build_summary_prompt(text, signals, passages)
     # A batch request too large for the context window would fail silently and

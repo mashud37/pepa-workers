@@ -1,13 +1,12 @@
 """Build citation, coupling, and cocitation graph views from biblio.db, export each as
 GraphML or HTML, and store PageRank and authority scores back to biblio.db.
 """
-import json
 from datetime import datetime
 from pathlib import Path
 
 import config
-from biblio.schema import connect
 from biblio import store
+from biblio.schema import connect
 
 _PALETTE = [
     "#e74c3c",

@@ -1,7 +1,3 @@
-# Runtime dependencies, one per line, pin only when behaviour-critical.
-# Dev tools (ruff) go in pyproject.toml [tool.*], not here.
 flask
 markupsafe
-
-# Optional, install for richer features:
-#   pip install markdown          # renders /view/<id> as HTML instead of plain text
+markdown

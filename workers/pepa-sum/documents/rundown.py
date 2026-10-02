@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import config
 from backends import RUNDOWN_SYSTEM, build_rundown_prompt, complete
-from extract.paragraphs import body_span, split_paragraphs, extractive_rundown
+from extract.paragraphs import body_span, extractive_rundown, split_paragraphs
 
 # Paragraphs per LLM call. One constant, shared by the live and batch paths, so
 # both chunk a paper identically.

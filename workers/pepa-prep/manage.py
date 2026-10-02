@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 import argparse
+import io
 import sys
 
-from cli import eval_cmd, extract_cmd, install, refine_cmd, split_cmd, ui, validate_cmd
+from cli import extract_cmd, install, refine_cmd, split_cmd, ui, validate_cmd
 from cli import menu as menu_mod
 from extract import config as cfg_mod
+
+if cfg_mod.EVALUATION_SHIPPED:
+    from cli import eval_cmd
 
 
 def _add_pipeline_parsers(sub) -> None:
@@ -83,11 +87,15 @@ def main():
         prog="manage.py",
         description="Local PDF-to-markdown extraction pipeline",
     )
+    parser.add_argument("--no-input", action="store_true", help="Never ask a question: each one takes its default answer")
     sub = parser.add_subparsers(dest="command")
     _add_pipeline_parsers(sub)
-    _add_eval_parsers(sub)
+    if cfg_mod.EVALUATION_SHIPPED:
+        _add_eval_parsers(sub)
     _add_biblio_parser(sub)
     args = parser.parse_args()
+    if args.no_input:
+        sys.stdin = io.StringIO()
     if args.command is None:
         return menu_mod.main()
     _dispatch(args, cfg_mod.load())

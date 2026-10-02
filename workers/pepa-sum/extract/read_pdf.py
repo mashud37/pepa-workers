@@ -2,17 +2,21 @@
 to pypdf, then to local tesseract OCR for image-only pages.
 """
 import logging
+import os
 import re
+import shutil
 from collections import Counter
 from pathlib import Path
 
 from pypdf import PdfReader
 
-logging.getLogger("pypdf").setLevel(logging.ERROR)
-
 import config
 from cli import ui
 
+logging.getLogger("pypdf").setLevel(logging.ERROR)
+
+# Where the Windows installer puts Tesseract, which it does not add to PATH.
+_WINDOWS_TESSERACT = Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Tesseract-OCR" / "tesseract.exe"
 # Below this many characters a page is assumed to be scanned, not born-digital.
 _OCR_THRESHOLD = 40
 # In `auto` mode, OCR only kicks in when at least this fraction of the pages are
@@ -151,6 +155,8 @@ def _ocr_pages(path, page_numbers):
         ui.warn(f"{path.name}: {len(page_numbers)} scanned page(s) skipped "
                 "(install PyMuPDF + pytesseract, plus tesseract)")
         return []
+    if not shutil.which("tesseract") and _WINDOWS_TESSERACT.exists():
+        pytesseract.pytesseract.tesseract_cmd = str(_WINDOWS_TESSERACT)
 
     dpi = config.ocr_dpi()
     scale = dpi / 72

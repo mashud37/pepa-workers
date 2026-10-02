@@ -4,8 +4,14 @@ Colour and unicode degrade when stdout is not a TTY or NO_COLOR is set.
 import os
 import sys
 
-RESET = "\033[0m"; BOLD = "\033[1m"; DIM = "\033[2m"
-RED = "\033[31m"; GREEN = "\033[32m"; YELLOW = "\033[33m"; BLUE = "\033[34m"
+RESET = "\033[0m"
+BOLD = "\033[1m"
+DIM = "\033[2m"
+RED = "\033[31m"
+GREEN = "\033[32m"
+YELLOW = "\033[33m"
+BLUE = "\033[34m"
+
 WIDTH = 64
 
 
@@ -15,7 +21,8 @@ def _supports_color():
     if not sys.stdout.isatty():
         return False
     if os.name == "nt":
-        try:  # enable ANSI (Virtual Terminal) processing on the Windows console
+        # Enable ANSI (Virtual Terminal) processing on the Windows console.
+        try:
             import ctypes
             k = ctypes.windll.kernel32
             k.SetConsoleMode(k.GetStdHandle(-11), 7)  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
@@ -24,7 +31,8 @@ def _supports_color():
     return True
 
 
-try:  # render unicode even on legacy Windows code pages
+# Try to render unicode symbols even on legacy Windows code pages.
+try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
@@ -45,25 +53,7 @@ _SYM = {
     "rule": "─" if _UNICODE else "-",
 }
 
-
-def _c(code, text):
-    return f"{code}{text}{RESET}" if _COLOR else text
-
-
-def header(text):
-    rule = _SYM["rule"] * WIDTH
-    print(); print(_c(BLUE, rule)); print(_c(BOLD + BLUE, f"  {text}")); print(_c(BLUE, rule))
-
-
-def rule():
-    print(_c(DIM, _SYM["rule"] * WIDTH))
-
-
-def step(text):
-    print(); print(_c(BOLD + BLUE, f"{_SYM['step']} {text}"))
-
-
-_LINE_STYLE = {
+LINE_STYLE = {
     "ok": (GREEN, "ok"),
     "warn": (YELLOW, "warn"),
     "info": (DIM, "info"),
@@ -71,22 +61,67 @@ _LINE_STYLE = {
 }
 
 
-def line(kind, text):
-    """Build a status line string (same style as ok/warn/info/error) without
-    printing it: for callers that must route output through a live progress
-    spinner instead of straight to stdout."""
-    color, sym = _LINE_STYLE[kind]
-    return f"  {_c(color, _SYM[sym])} {text}"
+def _c(code, text):
+    return f"{code}{text}{RESET}" if _COLOR else text
 
 
-def ok(text):    print(line("ok", text))
-def warn(text):  print(line("warn", text))
-def info(text):  print(line("info", text))
-def error(text): print(line("error", text))
+def header(text):
+    rule = _SYM["rule"] * WIDTH
+    print()
+    print(_c(BLUE, rule))
+    print(_c(BOLD + BLUE, f"  {text}"))
+    print(_c(BLUE, rule))
+
+
+def rule():
+    print(_c(DIM, _SYM["rule"] * WIDTH))
+
+
+def step(text):
+    print()
+    print(_c(BOLD + BLUE, f"{_SYM['step']} {text}"))
+
+
+def ok(text):
+    print(f"  {_c(GREEN, _SYM['ok'])} {text}")
+
+
+def warn(text):
+    print(f"  {_c(YELLOW, _SYM['warn'])} {text}")
+
+
+def info(text):
+    print(f"  {_c(DIM, _SYM['info'])} {text}")
+
+
+def error(text):
+    print(f"  {_c(RED, _SYM['err'])} {text}")
 
 
 def abort(text, code=1):
-    error(text); sys.exit(code)
+    error(text)
+    sys.exit(code)
+
+
+def table(rows, columns):
+    """Print a list of dictionaries as an aligned table, one row per unit of work.
+
+    Args:
+        rows: Dictionaries sharing the same keys, one per item processed.
+        columns: Keys to show, in the order they should appear.
+    """
+    widths = [len(name) for name in columns]
+    for row in rows:
+        for position, name in enumerate(columns):
+            widths[position] = max(widths[position], len(str(row.get(name, ""))))
+
+    heading = "  ".join(name.ljust(widths[position]) for position, name in enumerate(columns))
+    print(f"  {_c(BOLD, heading)}")
+    for row in rows:
+        cells = []
+        for position, name in enumerate(columns):
+            cells.append(str(row.get(name, "")).ljust(widths[position]))
+        print("  " + "  ".join(cells))
 
 
 def ask(prompt, default=None):
@@ -94,7 +129,8 @@ def ask(prompt, default=None):
     try:
         raw = input(_c(BOLD, f"  {prompt}{suffix}: ")).lstrip("﻿").strip()
     except (EOFError, KeyboardInterrupt):
-        print(); return default
+        print()
+        return default
     return raw or default
 
 
@@ -131,7 +167,9 @@ def menu(title, options):
     Returns:
         0-based index of the chosen option, or None to close the menu.
     """
-    print(); rule(); print(_c(BOLD, f"  {title}"))
+    print()
+    rule()
+    print(_c(BOLD, f"  {title}"))
     width = max((len(o[0]) if isinstance(o, tuple) else len(o)) for o in options)
     for i, o in enumerate(options, 1):
         if isinstance(o, tuple):
@@ -166,3 +204,9 @@ def run_action(action, *args, **kwargs):
     except KeyboardInterrupt:
         warn("interrupted")
     return None
+
+
+def line(kind, text):
+    """A status line as text rather than printed, for output that must pass through the progress spinner."""
+    color, symbol = LINE_STYLE[kind]
+    return f"  {_c(color, _SYM[symbol])} {text}"

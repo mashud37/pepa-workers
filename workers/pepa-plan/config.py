@@ -4,13 +4,15 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parent
-CORPUS_DIR_DEFAULT = ROOT.parent / "pepa-sum" / "output"
-DATA_DIR = ROOT / "data"
-INPUT_DIR = Path(os.environ.get("PEPAPLAN_INPUT_DIR", str(ROOT / "input")))
-OUTPUT_DIR = Path(os.environ.get("PEPAPLAN_OUTPUT_DIR", str(ROOT / "output")))
+PROJECT = os.environ.get("PEPA_PROJECT")
+DATA_ROOT = Path(PROJECT) / "pepa-plan" if PROJECT else ROOT
+CORPUS_DIR_DEFAULT = DATA_ROOT.parent / "pepa-sum" / "output"
+DATA_DIR = DATA_ROOT / "data"
+INPUT_DIR = Path(os.environ.get("PEPAPLAN_INPUT_DIR", str(DATA_ROOT / "input")))
+OUTPUT_DIR = Path(os.environ.get("PEPAPLAN_OUTPUT_DIR", str(DATA_ROOT / "output")))
 TEMPLATES_DIR = ROOT / "templates"
 EXAMPLE_TEMPLATE = TEMPLATES_DIR / "example.plan.md"
-SECRETS_FILE = ROOT / "secrets.yaml"
+SECRETS_FILE = DATA_ROOT / "secrets.yaml"
 SECRETS_EXAMPLE = ROOT / "secrets.example.yaml"
 SKELETONS_FILE = DATA_DIR / "skeletons.json"
 SEQUENCES_FILE = DATA_DIR / "sequences.json"

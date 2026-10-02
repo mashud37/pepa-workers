@@ -8,14 +8,15 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parent
-CORPUS_DIR_DEFAULT = ROOT.parent / "pepa-sum" / "output"
-DATA_DIR = ROOT / "data"
-INPUT_DIR = Path(os.environ.get("PEPAREVIEW_INPUT_DIR", str(ROOT / "input")))
-OUTPUT_DIR = Path(os.environ.get("PEPAREVIEW_OUTPUT_DIR", str(ROOT / "output")))
-SECRETS_FILE = ROOT / "secrets.yaml"
+PROJECT = os.environ.get("PEPA_PROJECT")
+DATA_ROOT = Path(PROJECT) / "pepa-review" if PROJECT else ROOT
+CORPUS_DIR_DEFAULT = DATA_ROOT.parent / "pepa-sum" / "output"
+DATA_DIR = DATA_ROOT / "data"
+INPUT_DIR = Path(os.environ.get("PEPAREVIEW_INPUT_DIR", str(DATA_ROOT / "input")))
+OUTPUT_DIR = Path(os.environ.get("PEPAREVIEW_OUTPUT_DIR", str(DATA_ROOT / "output")))
+SECRETS_FILE = DATA_ROOT / "secrets.yaml"
 SECRETS_EXAMPLE = ROOT / "secrets.example.yaml"
 INDEX_FILE = DATA_DIR / "index.json"
-GRAPH_FILE = DATA_DIR / "graph.json"
 BIBLIO_DB  = DATA_DIR / "biblio.db"
 
 # Minimum match_confidence to include a works row in authority/coupling signals

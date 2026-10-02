@@ -9,9 +9,10 @@ from pathlib import Path
 import numpy as np
 
 import config
-from cli import ui, progress
+from backends import llm
+from backends import prompt as prompts
+from cli import progress, ui
 from index import cluster
-from backends import llm, prompt as prompts
 
 
 def run(n_threads=None):

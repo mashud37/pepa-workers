@@ -1,5 +1,6 @@
 """Show effective configuration."""
 import json
+
 import config
 from cli import ui
 
@@ -10,7 +11,6 @@ def run():
     _show_models()
     _show_api_keys()
     _show_index()
-    _show_graph()
     _show_biblio()
     _show_paths()
 
@@ -61,19 +61,6 @@ def _show_index():
         )
     else:
         ui.warn("no index yet, run: python manage.py index")
-
-
-def _show_graph():
-    ui.step("Graph")
-    if config.GRAPH_FILE.exists():
-        g = json.loads(config.GRAPH_FILE.read_text(encoding="utf-8"))
-        n_clusters = len({nd.get("cluster", 0) for nd in g.get("nodes", [])})
-        ui.ok(
-            f"graph present: {len(g.get('nodes',[]))} nodes, "
-            f"{len(g.get('edges',[]))} edges, {n_clusters} clusters"
-        )
-    else:
-        ui.info("no graph yet, run: python manage.py graph")
 
 
 def _show_biblio():

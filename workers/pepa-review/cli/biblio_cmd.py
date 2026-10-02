@@ -6,7 +6,7 @@ from functools import partial
 from pathlib import Path
 
 import config
-from cli import ui, progress
+from cli import progress, ui
 
 
 def run(subcmd, options=None):

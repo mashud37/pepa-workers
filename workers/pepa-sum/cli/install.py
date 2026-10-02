@@ -102,15 +102,9 @@ def _importable(importlib, name):
 
 
 def _check_spacy_model():
-    from cli.progress import StepSpinner
     ui.step("spaCy model")
-    sp = StepSpinner("loading en_core_web_sm")
-    sp.start()
-    try:
-        import spacy
-        spacy.load("en_core_web_sm")
-        sp.done("present")
+    from extract.signals import ensure_model
+    if ensure_model():
         ui.ok("spaCy model en_core_web_sm present")
-    except Exception:
-        sp.done("missing")
-        ui.warn("spaCy model missing, python -m spacy download en_core_web_sm")
+    else:
+        ui.ok("spaCy model en_core_web_sm downloaded")

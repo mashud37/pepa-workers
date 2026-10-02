@@ -1,7 +1,7 @@
 """Show the interactive menu when manage.py runs with no arguments, looping
 until closed; every action returns here when it finishes or fails.
 """
-from cli import ui, summarize, cleanup, settings, install, show_config, deploy
+from cli import cleanup, deploy, install, settings, show_config, summarize, ui
 
 _ACTIONS = [
     ("Summarise papers", "read input/, write sum_/para_/quote_ to output/", summarize.run),

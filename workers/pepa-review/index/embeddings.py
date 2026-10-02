@@ -3,6 +3,7 @@ ollama_base_url is set and Gemini by default.
 """
 import json
 import urllib.request
+
 import config
 
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import io
 import sys
 
 from cli import install, menu, ui
@@ -7,6 +8,7 @@ from cli import install, menu, ui
 
 def _build_parser():
     parser = argparse.ArgumentParser(prog="manage.py", description="pepa-plan")
+    parser.add_argument("--no-input", action="store_true", help="Never ask a question: each one takes its default answer")
     sub = parser.add_subparsers(dest="command")
 
     ab = sub.add_parser("abstract", help="Build skeleton library from pepa-sum corpus")
@@ -30,8 +32,6 @@ def _build_parser():
                     help="Skeleton ID to use (default: pick interactively)")
     ol.add_argument("--feedback", default=None, metavar="TEXT",
                     help="One scripted feedback pass (no interactive loop)")
-    ol.add_argument("--no-input", action="store_true",
-                    help="First shot only; skip interactive feedback loop")
 
     rv = sub.add_parser("review", help="Argumentation-flow feedback on idea or draft")
     rv.add_argument("--input", default=None, metavar="FILE",
@@ -50,6 +50,8 @@ def _build_parser():
 def main():
     parser = _build_parser()
     args = parser.parse_args()
+    if args.no_input:
+        sys.stdin = io.StringIO()
 
     if args.command is None:
         return menu.main()

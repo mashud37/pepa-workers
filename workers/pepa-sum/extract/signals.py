@@ -3,8 +3,12 @@ from a single spaCy pass as hints that sharpen the model's extraction
 without replacing the full text.
 """
 import re
+import subprocess
+import sys
 import threading
 from collections import Counter
+
+SPACY_MODEL = "en_core_web_sm"
 
 # spaCy's pipeline is not safe to call from multiple threads at once, so each
 # worker thread loads and uses its own model.
@@ -43,11 +47,29 @@ _TOP_ENTITIES = 25
 _TOP_SVO_TRIPLETS = 30
 
 
+def ensure_model():
+    """Download the spaCy English model the first time it is needed, since pip cannot install it.
+
+    Returns:
+        True when the model was already there, False when it was downloaded now.
+
+    Raises:
+        SystemExit: the download failed.
+    """
+    import spacy.util
+    if spacy.util.is_package(SPACY_MODEL):
+        return True
+    asked = [sys.executable, "-m", "spacy", "download", SPACY_MODEL]
+    if subprocess.run(asked).returncode != 0:
+        raise SystemExit(f"Could not download the spaCy model. Run: {' '.join(asked)}")
+    return False
+
+
 def _load_nlp():
     nlp = getattr(_local, "nlp", None)
     if nlp is None:
         import spacy
-        nlp = spacy.load("en_core_web_sm")
+        nlp = spacy.load(SPACY_MODEL)
         _local.nlp = nlp
     return nlp
 

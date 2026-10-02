@@ -1,5 +1,7 @@
 """Animated step/progress spinners that collapse to a ✓ line; no-op off-TTY."""
-import sys, threading, time
+import sys
+import threading
+import time
 
 _FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 _CHECK = "✓"

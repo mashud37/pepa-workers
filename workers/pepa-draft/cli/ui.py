@@ -21,15 +21,17 @@ def _supports_color():
     if not sys.stdout.isatty():
         return False
     if os.name == "nt":
+        # Enable ANSI (Virtual Terminal) processing on the Windows console.
         try:
             import ctypes
             k = ctypes.windll.kernel32
-            k.SetConsoleMode(k.GetStdHandle(-11), 7)
+            k.SetConsoleMode(k.GetStdHandle(-11), 7)  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
         except Exception:
             return False
     return True
 
 
+# Try to render unicode symbols even on legacy Windows code pages.
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
@@ -94,6 +96,27 @@ def abort(text, code=1):
     sys.exit(code)
 
 
+def table(rows, columns):
+    """Print a list of dictionaries as an aligned table, one row per unit of work.
+
+    Args:
+        rows: Dictionaries sharing the same keys, one per item processed.
+        columns: Keys to show, in the order they should appear.
+    """
+    widths = [len(name) for name in columns]
+    for row in rows:
+        for position, name in enumerate(columns):
+            widths[position] = max(widths[position], len(str(row.get(name, ""))))
+
+    heading = "  ".join(name.ljust(widths[position]) for position, name in enumerate(columns))
+    print(f"  {_c(BOLD, heading)}")
+    for row in rows:
+        cells = []
+        for position, name in enumerate(columns):
+            cells.append(str(row.get(name, "")).ljust(widths[position]))
+        print("  " + "  ".join(cells))
+
+
 def ask(prompt, default=None):
     suffix = f" [{default}]" if default is not None else ""
     try:
@@ -124,7 +147,7 @@ def confirm(question, default_yes=True):
     return raw.strip().lower() in ("y", "yes")
 
 
-def menu(title, options, back_label="Back"):
+def menu(title, options):
     """Print a numbered menu and return a 0-based index, or None to close it.
 
     None means the user chose [0], typed q/quit/exit, submitted an empty line, or
@@ -147,7 +170,7 @@ def menu(title, options, back_label="Back"):
             print(f"  {_c(BLUE, f'[{i}]')} {label.ljust(width)}   {_c(DIM, desc)}")
         else:
             print(f"  {_c(BLUE, f'[{i}]')} {o}")
-    print(f"  {_c(BLUE, '[0]')} {back_label}")
+    print(f"  {_c(BLUE, '[0]')} Back")
     while True:
         raw = ask("Choose")
         if raw in (None, "0", "q", "quit", "exit"):

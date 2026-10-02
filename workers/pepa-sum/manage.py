@@ -2,11 +2,12 @@
 """Summarise academic PDFs into structured, comparable Markdown. No
 arguments launches the interactive menu; any subcommand runs directly.
 """
-import sys
 import argparse
+import io
+import sys
 from pathlib import Path
 
-from cli import menu, summarize, cleanup, settings, install, show_config, deploy, ui
+from cli import cleanup, deploy, install, menu, settings, show_config, summarize, ui
 
 
 def main():
@@ -14,6 +15,7 @@ def main():
         prog="manage.py",
         description="Summarise PDFs in input/ into structured Markdown in output/.",
     )
+    parser.add_argument("--no-input", action="store_true", help="Never ask a question: each one takes its default answer")
     sub = parser.add_subparsers(dest="command")
 
     s = sub.add_parser("summarize", help="Summarise every PDF in the input folder")
@@ -34,6 +36,8 @@ def main():
     sub.add_parser("deploy", help="Build and deploy the self-hosted fallback service")
 
     args = parser.parse_args()
+    if args.no_input:
+        sys.stdin = io.StringIO()
     if args.command is None:
         return menu.main()
     if args.command == "summarize":

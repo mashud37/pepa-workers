@@ -1,7 +1,17 @@
+from pathlib import Path
+
+from extract import config
+
 from . import ui
 
 
 def run() -> None:
+    ui.step("Setting up folders")
+    cfg = config.load()
+    for folder in (cfg["input_folder"], cfg["output_folder"], config.DATA_ROOT / "data"):
+        Path(folder).mkdir(parents=True, exist_ok=True)
+    ui.ok(f"Folders ready in {config.DATA_ROOT}")
+
     ui.step("Checking dependencies")
 
     ok = True
@@ -22,12 +32,22 @@ def run() -> None:
 
     try:
         import PIL  # noqa: F401
-        import pytesseract  # noqa: F401
-        ui.ok("pytesseract + Pillow (OCR available)")
+        import pytesseract
+        ui.ok("pytesseract + Pillow")
     except ImportError:
-        ui.warn("pytesseract / Pillow not installed, OCR route unavailable")
-        ui.info("To enable: pip install pytesseract Pillow")
-        ui.info("Also install Tesseract: https://tesseract-ocr.github.io/")
+        ui.error("pytesseract / Pillow missing, run: pip install pytesseract Pillow")
+        ok = False
+    else:
+        found = config.tesseract_path(cfg)
+        if found:
+            pytesseract.pytesseract.tesseract_cmd = found
+        try:
+            pytesseract.get_tesseract_version()
+            ui.ok("Tesseract (scanned PDFs can be read)")
+        except pytesseract.TesseractNotFoundError:
+            ui.warn("Tesseract not found, so scanned PDFs are skipped")
+            ui.info("Windows: winget install UB-Mannheim.TesseractOCR")
+            ui.info("Other systems: https://tesseract-ocr.github.io/tessdoc/Installation.html")
 
     if ok:
         ui.ok("All required dependencies present")

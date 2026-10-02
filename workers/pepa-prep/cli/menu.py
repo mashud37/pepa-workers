@@ -3,7 +3,6 @@ from extract import config as cfg_mod
 from . import (
     biblio_cmd,
     config_cmd,
-    eval_cmd,
     extract_cmd,
     install,
     refine_cmd,
@@ -14,7 +13,7 @@ from . import (
 
 
 def _actions() -> list:
-    return [
+    actions = [
         ("Extract PDFs", "categorise and convert PDFs to markdown", extract_cmd.run),
         ("Validate output", "grade book chapters, quarantine junk, renumber",
          validate_cmd.run),
@@ -27,6 +26,18 @@ def _actions() -> list:
         ("Fetch bibliography + citations",
          "also download citation networks from OpenCitations",
          lambda cfg: _run_biblio(cfg, cite=True)),
+        ("Configure", "set input/output paths and options", config_cmd.main),
+        ("Install / check deps", "verify PyMuPDF, pytesseract, Pillow",
+         lambda cfg: install.run()),
+    ]
+    if cfg_mod.EVALUATION_SHIPPED:
+        actions.extend(_evaluation_actions())
+    return actions
+
+
+def _evaluation_actions() -> list:
+    from . import eval_cmd
+    return [
         ("Label for evaluation", "create correctable segmentation tag files",
          eval_cmd.label),
         ("Score evaluation", "grade segmentation against corrected tag files",
@@ -39,9 +50,6 @@ def _actions() -> list:
          eval_cmd.label_refine),
         ("Score refinement", "grade markdown refinement against corrected gold",
          eval_cmd.score_refine),
-        ("Configure", "set input/output paths and options", config_cmd.main),
-        ("Install / check deps", "verify PyMuPDF, pytesseract, Pillow",
-         lambda cfg: install.run()),
     ]
 
 

@@ -2,8 +2,11 @@
 from backends.anthropic_client import Truncated
 from backends.llm import complete
 from backends.prompt import (
-    SUMMARY_SYSTEM, SUMMARY_TEMPLATE, RUNDOWN_SYSTEM,
-    build_summary_prompt, build_rundown_prompt,
+    RUNDOWN_SYSTEM,
+    SUMMARY_SYSTEM,
+    SUMMARY_TEMPLATE,
+    build_rundown_prompt,
+    build_summary_prompt,
 )
 
 __all__ = [

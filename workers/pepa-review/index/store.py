@@ -4,11 +4,11 @@ BM25+dense RRF when rank_bm25 is installed.
 """
 import json
 import re
+
 import config
-from index.embeddings import embed
 from corpus.metadata import work_list
 from corpus.parse_sum import parse_sum
-
+from index.embeddings import embed
 
 _CHECKPOINT_EVERY = 100
 RETRIEVE_TOP_K = 8

@@ -4,7 +4,7 @@ with /summarize taking a token-guarded {system, prompt} request and
 """
 import os
 
-from flask import Flask, request, jsonify, abort
+from flask import Flask, abort, jsonify, request
 
 from serve.model import generate
 

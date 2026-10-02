@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import io
 import json
 import sys
 
@@ -137,6 +138,7 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="manage.py",
         description="Read-only keyword search over pepa-prep and pepa-sum markdown output",
     )
+    parser.add_argument("--no-input", action="store_true", help="Never ask a question: each one takes its default answer")
     sub = parser.add_subparsers(dest="command")
 
     ix = sub.add_parser("index", help="Scan pepa-prep/pepa-sum output and build the search index")
@@ -181,6 +183,8 @@ def _build_parser() -> argparse.ArgumentParser:
 def main():
     parser = _build_parser()
     args = parser.parse_args()
+    if args.no_input:
+        sys.stdin = io.StringIO()
 
     if args.command is None:
         return _bare(args)

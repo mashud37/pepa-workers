@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import io
 import sys
 
 from cli import install, menu, ui
@@ -48,6 +49,7 @@ _HANDLERS = {
 
 def main():
     parser = argparse.ArgumentParser(prog="manage.py", description="pepa-draft: academic manuscript drafting")
+    parser.add_argument("--no-input", action="store_true", help="Never ask a question: each one takes its default answer")
     sub = parser.add_subparsers(dest="command")
 
     dr = sub.add_parser("draft", help="Write a full manuscript draft")
@@ -73,6 +75,8 @@ def main():
     sub.add_parser("install", help="Set up files and check dependencies")
 
     args = parser.parse_args()
+    if args.no_input:
+        sys.stdin = io.StringIO()
     if args.command is None:
         return menu.main()
     handler = _HANDLERS.get(args.command)

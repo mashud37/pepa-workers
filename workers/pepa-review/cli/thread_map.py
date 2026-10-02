@@ -7,7 +7,8 @@ import re
 import numpy as np
 
 import config
-from cli import ui, map as map_cmd
+from cli import map as map_cmd
+from cli import ui
 
 
 def run(map_file=None, thread=None):

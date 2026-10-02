@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
-import sys
 import argparse
-from cli import menu, install, ui
+import io
+import sys
+
+from cli import install, menu, ui
 
 
 def _build_parser():
     parser = argparse.ArgumentParser(prog="manage.py", description="pepa-review")
+    parser.add_argument("--no-input", action="store_true", help="Never ask a question: each one takes its default answer")
     sub = parser.add_subparsers(dest="command")
 
-    r = sub.add_parser("review", help="Assemble a literature review (WS1)")
+    r = sub.add_parser("review", help="Assemble a literature review")
     r.add_argument("--input", default=None, metavar="FILE",
                    help="Path to outline file (default: pick from input/ or editor)")
     r.add_argument("--auto", action="store_true",
@@ -16,19 +19,19 @@ def _build_parser():
     r.add_argument("--list", default=None, metavar="FILE",
                    help="Path to a stem list (e.g. exported from pepa-reader) to select works from")
 
-    g = sub.add_parser("gaps", help="Gap-check a draft against the corpus (WS2)")
+    g = sub.add_parser("gaps", help="Gap-check a draft against the corpus")
     g.add_argument("--input", default=None, metavar="FILE",
                    help="Path to draft file (default: pick from input/)")
 
-    e = sub.add_parser("explore", help="Interactive discovery over the corpus (WS3)")
+    e = sub.add_parser("explore", help="Interactive discovery over the corpus")
     e.add_argument("--query", default=None, metavar="QUERY",
                    help="Initial query (default: interactive prompt)")
 
-    mp = sub.add_parser("map", help="Generate corpus thematic map (WS4)")
+    mp = sub.add_parser("map", help="Generate corpus thematic map")
     mp.add_argument("--threads", type=int, default=None, metavar="N",
                     help="Target thread count for k-means fallback (default: auto)")
 
-    tm = sub.add_parser("threadmap", help="Re-cluster one thread of a saved map in detail (WS5)")
+    tm = sub.add_parser("threadmap", help="Re-cluster one thread of a saved map in detail")
     tm.add_argument("--map", default=None, metavar="FILE",
                     help="Corpus map file in output/ (default: pick interactively)")
     tm.add_argument("--thread", default=None, metavar="N|NAME|all",
@@ -60,6 +63,8 @@ def _build_parser():
 def main():
     parser = _build_parser()
     args = parser.parse_args()
+    if args.no_input:
+        sys.stdin = io.StringIO()
 
     if args.command is None:
         return menu.main()

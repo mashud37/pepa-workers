@@ -96,6 +96,27 @@ def abort(text, code=1):
     sys.exit(code)
 
 
+def table(rows, columns):
+    """Print a list of dictionaries as an aligned table, one row per unit of work.
+
+    Args:
+        rows: Dictionaries sharing the same keys, one per item processed.
+        columns: Keys to show, in the order they should appear.
+    """
+    widths = [len(name) for name in columns]
+    for row in rows:
+        for position, name in enumerate(columns):
+            widths[position] = max(widths[position], len(str(row.get(name, ""))))
+
+    heading = "  ".join(name.ljust(widths[position]) for position, name in enumerate(columns))
+    print(f"  {_c(BOLD, heading)}")
+    for row in rows:
+        cells = []
+        for position, name in enumerate(columns):
+            cells.append(str(row.get(name, "")).ljust(widths[position]))
+        print("  " + "  ".join(cells))
+
+
 def ask(prompt, default=None):
     suffix = f" [{default}]" if default is not None else ""
     try:

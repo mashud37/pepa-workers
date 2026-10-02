@@ -8,10 +8,12 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parent
-INPUT_DIR = Path(os.environ.get("PEPA_INPUT_DIR", str(ROOT / "input")))
-OUTPUT_DIR = Path(os.environ.get("PEPA_OUTPUT_DIR", str(ROOT / "output")))
-DATA_DIR = ROOT / "data"
-ENV_FILE = ROOT / "env.yaml"
+PROJECT = os.environ.get("PEPA_PROJECT")
+DATA_ROOT = Path(PROJECT) / "pepa-sum" if PROJECT else ROOT
+INPUT_DIR = Path(os.environ.get("PEPA_INPUT_DIR", str(DATA_ROOT / "input")))
+OUTPUT_DIR = Path(os.environ.get("PEPA_OUTPUT_DIR", str(DATA_ROOT / "output")))
+DATA_DIR = DATA_ROOT / "data"
+ENV_FILE = DATA_ROOT / "env.yaml"
 ENV_EXAMPLE = ROOT / "env.yaml.example"
 
 # env.yaml key -> overriding environment variable

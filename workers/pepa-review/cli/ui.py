@@ -4,8 +4,14 @@ Colour and unicode degrade when stdout is not a TTY or NO_COLOR is set.
 import os
 import sys
 
-RESET = "\033[0m"; BOLD = "\033[1m"; DIM = "\033[2m"
-RED = "\033[31m"; GREEN = "\033[32m"; YELLOW = "\033[33m"; BLUE = "\033[34m"
+RESET = "\033[0m"
+BOLD = "\033[1m"
+DIM = "\033[2m"
+RED = "\033[31m"
+GREEN = "\033[32m"
+YELLOW = "\033[33m"
+BLUE = "\033[34m"
+
 WIDTH = 64
 
 
@@ -15,7 +21,8 @@ def _supports_color():
     if not sys.stdout.isatty():
         return False
     if os.name == "nt":
-        try:  # enable ANSI (Virtual Terminal) processing on the Windows console
+        # Enable ANSI (Virtual Terminal) processing on the Windows console.
+        try:
             import ctypes
             k = ctypes.windll.kernel32
             k.SetConsoleMode(k.GetStdHandle(-11), 7)  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
@@ -24,7 +31,8 @@ def _supports_color():
     return True
 
 
-try:  # render unicode even on legacy Windows code pages
+# Try to render unicode symbols even on legacy Windows code pages.
+try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
@@ -52,7 +60,10 @@ def _c(code, text):
 
 def header(text):
     rule = _SYM["rule"] * WIDTH
-    print(); print(_c(BLUE, rule)); print(_c(BOLD + BLUE, f"  {text}")); print(_c(BLUE, rule))
+    print()
+    print(_c(BLUE, rule))
+    print(_c(BOLD + BLUE, f"  {text}"))
+    print(_c(BLUE, rule))
 
 
 def rule():
@@ -60,17 +71,50 @@ def rule():
 
 
 def step(text):
-    print(); print(_c(BOLD + BLUE, f"{_SYM['step']} {text}"))
+    print()
+    print(_c(BOLD + BLUE, f"{_SYM['step']} {text}"))
 
 
-def ok(text):    print(f"  {_c(GREEN, _SYM['ok'])} {text}")
-def warn(text):  print(f"  {_c(YELLOW, _SYM['warn'])} {text}")
-def info(text):  print(f"  {_c(DIM, _SYM['info'])} {text}")
-def error(text): print(f"  {_c(RED, _SYM['err'])} {text}")
+def ok(text):
+    print(f"  {_c(GREEN, _SYM['ok'])} {text}")
+
+
+def warn(text):
+    print(f"  {_c(YELLOW, _SYM['warn'])} {text}")
+
+
+def info(text):
+    print(f"  {_c(DIM, _SYM['info'])} {text}")
+
+
+def error(text):
+    print(f"  {_c(RED, _SYM['err'])} {text}")
 
 
 def abort(text, code=1):
-    error(text); sys.exit(code)
+    error(text)
+    sys.exit(code)
+
+
+def table(rows, columns):
+    """Print a list of dictionaries as an aligned table, one row per unit of work.
+
+    Args:
+        rows: Dictionaries sharing the same keys, one per item processed.
+        columns: Keys to show, in the order they should appear.
+    """
+    widths = [len(name) for name in columns]
+    for row in rows:
+        for position, name in enumerate(columns):
+            widths[position] = max(widths[position], len(str(row.get(name, ""))))
+
+    heading = "  ".join(name.ljust(widths[position]) for position, name in enumerate(columns))
+    print(f"  {_c(BOLD, heading)}")
+    for row in rows:
+        cells = []
+        for position, name in enumerate(columns):
+            cells.append(str(row.get(name, "")).ljust(widths[position]))
+        print("  " + "  ".join(cells))
 
 
 def ask(prompt, default=None):
@@ -78,7 +122,8 @@ def ask(prompt, default=None):
     try:
         raw = input(_c(BOLD, f"  {prompt}{suffix}: ")).lstrip("﻿").strip()
     except (EOFError, KeyboardInterrupt):
-        print(); return default
+        print()
+        return default
     return raw or default
 
 
@@ -115,7 +160,9 @@ def menu(title, options):
     Returns:
         0-based index of the chosen option, or None to close the menu.
     """
-    print(); rule(); print(_c(BOLD, f"  {title}"))
+    print()
+    rule()
+    print(_c(BOLD, f"  {title}"))
     width = max((len(o[0]) if isinstance(o, tuple) else len(o)) for o in options)
     for i, o in enumerate(options, 1):
         if isinstance(o, tuple):

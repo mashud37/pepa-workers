@@ -1,14 +1,14 @@
 """CLI layer for markdown refinement: dry-run diagnosis and apply."""
 from pathlib import Path
 
+from extract.config import DATA_ROOT
 from extract.validate import book_groups
 from refine import engine
 
 from . import ui
 
 _MAX_NAME = 46
-_ROOT = Path(__file__).parent.parent
-REPORT = _ROOT / "data" / "refine_report.md"
+REPORT = DATA_ROOT / "data" / "refine_report.md"
 
 
 def _gather(cfg: dict, book: str | None) -> dict:

@@ -3,8 +3,8 @@ citations tables keyed on `base`, the pepa-sum filename stem, so they join
 cleanly to index.json records.
 """
 import sqlite3
-import config
 
+import config
 
 DDL = """
 CREATE TABLE IF NOT EXISTS works (

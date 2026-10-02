@@ -3,8 +3,9 @@ body of works across turns that the user can follow up on, expand, or
 replace with a new search.
 """
 import config
-from cli import ui, progress
-from backends import llm, prompt as prompts
+from backends import llm
+from backends import prompt as prompts
+from cli import progress, ui
 from index.store import retrieve_hybrid
 
 _K = 40

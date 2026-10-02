@@ -72,8 +72,8 @@ def ensemble_features(records, vecs_norm):
 
 
 def _tfidf_svd(texts, n_components=TFIDF_COMPONENTS):
-    from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.decomposition import TruncatedSVD
+    from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.preprocessing import normalize
 
     vec = TfidfVectorizer(stop_words="english", min_df=2, max_df=0.9, ngram_range=(1, 2))
@@ -164,7 +164,7 @@ def consensus_cluster(coords, k, min_cs):
         clusterers placing i,j together), and "strength" (strength[i] is mean
         co-association to clustermates).
     """
-    from sklearn.cluster import KMeans, AgglomerativeClustering
+    from sklearn.cluster import AgglomerativeClustering, KMeans
     from sklearn.preprocessing import normalize
     n = len(coords)
 

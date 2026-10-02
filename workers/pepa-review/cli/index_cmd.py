@@ -2,7 +2,7 @@
 from functools import partial
 
 import config
-from cli import ui, progress
+from cli import progress, ui
 
 
 def _report_embed_progress(sp, i, total, _label):

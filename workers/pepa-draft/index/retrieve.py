@@ -40,7 +40,7 @@ def retrieve(query: str, k: int = None, restrict_bases: set = None, index_path: 
             return []
         records, vectors = zip(*pairs)
 
-    q_vec = _embed_one(query, idx.get("provider", ""))
+    q_vec = _embed_one(query, idx)
     q = np.array(q_vec, dtype=float)
     mat = np.array(vectors, dtype=float)
     sims = mat @ q / (np.linalg.norm(mat, axis=1) * np.linalg.norm(q) + 1e-9)
@@ -48,14 +48,18 @@ def retrieve(query: str, k: int = None, restrict_bases: set = None, index_path: 
     return [dict(records[i], score=float(sims[i])) for i in top]
 
 
-def _embed_one(text: str, provider: str) -> list[float]:
-    embed = config.embed_config()
-    if embed["provider"] == "gemini":
-        return _gemini_embed(text, embed["model"])
-    if embed["provider"] == "ollama":
-        return _ollama_embed(text, embed["model"])
+def _embed_one(text: str, index: dict) -> list[float]:
+    """Embed the query with the model that built the index, so both sides of the comparison match."""
+    provider = index.get("provider", "")
+    model = index.get("model", "").split("/", 1)[-1]
+    if provider == "gemini":
+        if not config.get("gemini_api_key"):
+            raise SystemExit("The review index was built with Gemini embeddings. Add gemini_api_key to secrets.yaml.")
+        return _gemini_embed(text, model)
+    if provider == "ollama":
+        return _ollama_embed(text, model)
     raise SystemExit(
-        "No embedding provider configured. Add gemini_api_key or ollama_base_url to secrets.yaml."
+        "The review index does not name its embedding model. Rebuild it in pepa-review: python manage.py index --force"
     )
 
 

@@ -22,9 +22,10 @@ def ocr_pages(path, fitz, cfg: dict, progress=None) -> list:
     import pytesseract
     from PIL import Image
 
-    tesseract_cmd = cfg.get("tesseract_cmd", "")
-    if tesseract_cmd:
-        pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
+    from extract.config import tesseract_path
+    found = tesseract_path(cfg)
+    if found:
+        pytesseract.pytesseract.tesseract_cmd = found
     os.environ.setdefault("OMP_THREAD_LIMIT", "1")
 
     dpi = cfg.get("ocr_dpi", 300)

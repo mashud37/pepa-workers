@@ -8,8 +8,9 @@ from datetime import datetime
 from pathlib import Path
 
 import config
-from cli import ui, progress
-from backends import llm, prompt as prompts
+from backends import llm
+from backends import prompt as prompts
+from cli import progress, ui
 
 _MIN_PARA_CHARS = 40        # paragraphs shorter than this are treated as headings/noise
 _FALLBACK_GROUP = 4         # paragraphs per section when a draft has no headings

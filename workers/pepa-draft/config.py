@@ -9,15 +9,17 @@ except ImportError:
     _HAS_YAML = False
 
 ROOT = Path(__file__).resolve().parent
-DATA_DIR = ROOT / "data"
-INPUT_DIR = Path(os.environ.get("PEPADRAFT_INPUT_DIR", str(ROOT / "input")))
-OUTPUT_DIR = Path(os.environ.get("PEPADRAFT_OUTPUT_DIR", str(ROOT / "output")))
-SECRETS_FILE = ROOT / "secrets.yaml"
+PROJECT = os.environ.get("PEPA_PROJECT")
+DATA_ROOT = Path(PROJECT) / "pepa-draft" if PROJECT else ROOT
+DATA_DIR = DATA_ROOT / "data"
+INPUT_DIR = Path(os.environ.get("PEPADRAFT_INPUT_DIR", str(DATA_ROOT / "input")))
+OUTPUT_DIR = Path(os.environ.get("PEPADRAFT_OUTPUT_DIR", str(DATA_ROOT / "output")))
+SECRETS_FILE = DATA_ROOT / "secrets.yaml"
 SECRETS_EXAMPLE = ROOT / "secrets.example.yaml"
 SECTIONS_FILE = DATA_DIR / "sections.json"
 STYLE_INDEX_FILE = DATA_DIR / "style_index.json"  # legacy; use style_index_file(profile)
 STYLE_ACTIVE_FILE = DATA_DIR / "style_active.txt"
-REVIEW_INDEX_DEFAULT = ROOT.parent / "pepa-review" / "data" / "index.json"
+REVIEW_INDEX_DEFAULT = DATA_ROOT.parent / "pepa-review" / "data" / "index.json"
 
 DRAFT_MODEL_DEFAULT = "claude-opus-4-8"
 DRAFT_MODEL_BULK = "claude-sonnet-4-6"

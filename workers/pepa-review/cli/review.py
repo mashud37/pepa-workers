@@ -7,17 +7,18 @@ import re
 import subprocess
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from functools import partial
 from itertools import count
-from datetime import datetime
 from pathlib import Path
 
 import numpy as np
 
 import config
-from cli import ui, progress
-from corpus.metadata import work_list, display_label
-from backends import llm, prompt as prompts
+from backends import llm
+from backends import prompt as prompts
+from cli import progress, ui
+from corpus.metadata import display_label, work_list
 
 
 def run(outline_file=None, auto=False, list_file=None):
