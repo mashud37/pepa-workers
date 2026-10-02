@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icon %}
+{% block title %}{{ place.label }} · {{ app.name }} · pepa{% endblock %}
+{% block content %}
+<nav class="crumbs-nav" aria-label="Breadcrumb">
+  <ol>
+    <li><a href="{{ url_for('console.app_page', name=app.name) }}">{{ app.name }}</a></li>
+    {% if inside %}
+    <li><a href="{{ url_for('console.browse_page', name=app.name, slot=slot) }}">{{ place.label }}</a></li>
+    <li aria-current="page">{{ inside }}</li>
+    {% else %}
+    <li aria-current="page">{{ place.label }}</li>
+    {% endif %}
+  </ol>
+</nav>
+
+<div class="page-head">
+  <div class="heading">
+    <h1>{{ place.label }}{% if inside %}: {{ inside }}{% endif %}</h1>
+    <p class="supporting mono path-line">{{ folder }}</p>
+  </div>
+  <form method="post" action="{{ url_for('console.folders_open') }}">
+    <input type="hidden" name="token" value="{{ token }}">
+    <input type="hidden" name="path" value="{{ folder }}{% if inside %}/{{ inside }}{% endif %}">
+    <input type="hidden" name="back" value="{{ request.full_path }}">
+    <button class="text">{{ icon.open_new() }}Open folder</button>
+  </form>
+</div>
+
+<form class="filter" method="get" role="search">
+  {% if inside %}<input type="hidden" name="in" value="{{ inside }}">{% endif %}
+  <label class="field grow">
+    <span>Find by name</span>
+    <input type="search" name="q" value="{{ wanted }}" placeholder="Part of a file name">
+  </label>
+  <button class="tonal">Find</button>
+  {% if wanted %}<a class="button text" href="{{ url_for('console.browse_page', name=app.name, slot=slot, **({'in': inside} if inside else {})) }}">Show all</a>{% endif %}
+</form>
+
+<p class="meta result-count" role="status">{{ "{:,}".format(listing.total) }} item{% if listing.total != 1 %}s{% endif %}{% if wanted %} matching “{{ wanted }}”{% endif %}{% if listing.pages > 1 %} · page {{ listing.page }} of {{ listing.pages }}{% endif %}</p>
+
+{% if listing.rows or listing.parent is not none %}
+<ul class="list file-list">
+  {% if listing.parent is not none %}
+  <li class="row-item"><a class="row-link" href="{{ url_for('console.browse_page', name=app.name, slot=slot, **({'in': listing.parent} if listing.parent else {})) }}">{{ icon.back() }}<span class="name">Up one folder</span></a></li>
+  {% endif %}
+  {% for row in listing.rows %}
+  <li class="row-item">
+    {% if row.is_folder %}
+    <a class="row-link" href="{{ url_for('console.browse_page', name=app.name, slot=slot, **{'in': row.relative}) }}">{{ icon.folder() }}<span class="file-name">{{ row.name }}/</span><span class="meta">{{ row.when }}</span></a>
+    {% else %}
+    <a class="row-link" href="{{ url_for('console.view_page', name=app.name, slot=slot, relative=row.relative) }}"><span class="file-name">{{ row.name }}</span><span class="meta">{{ row.size }}</span><span class="meta">{{ row.when }}</span></a>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<div class="empty">
+  <h2>{% if wanted %}Nothing matches{% else %}This folder is empty{% endif %}</h2>
+</div>
+{% endif %}
+
+{% if listing.pages > 1 %}
+<nav class="pager" aria-label="Pages">
+  {% set base = {'q': wanted} if wanted else {} %}
+  {% if inside %}{% set base = dict(base, **{'in': inside}) %}{% endif %}
+  {% if listing.page > 1 %}<a class="button text" href="{{ url_for('console.browse_page', name=app.name, slot=slot, page=listing.page - 1, **base) }}">Newer</a>{% endif %}
+  {% if listing.page < listing.pages %}<a class="button text" href="{{ url_for('console.browse_page', name=app.name, slot=slot, page=listing.page + 1, **base) }}">Older</a>{% endif %}
+</nav>
+{% endif %}
+{% endblock %}

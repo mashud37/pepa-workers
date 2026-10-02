@@ -122,14 +122,16 @@ def start_job(app_name, command_name, values):
 def add_output(job_id, text):
     """Add printed text to a job's log; a line still waiting for its newline stays unfinished.
 
-    A carriage return starts its line over, as it does in a terminal.
+    A carriage return starts its line over, as it does in a terminal. A hint to run
+    `python manage.py <command>` is shown as the app's own command, which is what works once installed.
     """
     with LOCK:
         job = JOBS[job_id]
         pieces = (job["partial"] + text).split("\n")
         job["partial"] = pieces.pop()
         for piece in pieces:
-            job["lines"].append(piece.rstrip("\r").split("\r")[-1])
+            line = piece.rstrip("\r").split("\r")[-1]
+            job["lines"].append(line.replace("python manage.py ", job["app"] + " "))
 
 
 def watch_job(job_id):

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}{{ page.title }} · Guide · pepa{% endblock %}
+{% block content %}
+<div class="guide-layout">
+  <nav class="guide-nav" aria-label="Guide pages">
+    <ul>
+      {% for name in guides %}
+      <li><a href="{{ url_for('console.guide_page', name=name) }}"{% if name == page.name %} aria-current="page"{% endif %}>{% if name == "index" %}Getting started{% else %}{{ name }}{% endif %}</a></li>
+      {% endfor %}
+    </ul>
+  </nav>
+  <article class="card document prose">{{ page.html | safe }}</article>
+</div>
+{% endblock %}

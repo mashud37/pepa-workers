@@ -3,8 +3,8 @@
 {% block title %}{{ app.name }} · pepa{% endblock %}
 
 {% macro file_card(app_name, place) %}
-<section class="card files">
-  <header><span class="title">{{ place.label }}</span><span class="meta">{{ "{:,}".format(place.total) }}{% if place.capped %}+{% endif %}</span></header>
+<section class="card files" aria-labelledby="files-{{ place.slot }}">
+  <header><h3 class="title" id="files-{{ place.slot }}">{{ place.label }}</h3><span class="meta">{{ "{:,}".format(place.total) }}{% if place.capped %}+{% endif %} item{% if place.total != 1 %}s{% endif %}</span></header>
   <p class="folder-path mono">{{ place.path }}</p>
   {% if place.deep %}<p class="meta folder-note">Including sub-folders</p>{% endif %}
   {% if place.rows %}
@@ -12,9 +12,9 @@
     {% for row in place.rows %}
     <li>
       {% if row.is_folder %}
-      <span class="entry"><span class="file-name">{{ row.name }}/</span><span class="meta">{{ row.when }}</span></span>
+      <a class="entry" href="{{ url_for('console.browse_page', name=app_name, slot=place.slot, **{'in': row.name}) }}"><span class="file-name">{{ row.name }}/</span><span class="meta">{{ row.when }}</span></a>
       {% else %}
-      <a class="entry" href="{{ url_for('console.app_file', name=app_name, slot=place.slot, relative=row.name) }}" target="_blank"><span class="file-name">{{ row.name }}</span><span class="meta">{{ row.when }}</span></a>
+      <a class="entry" href="{{ url_for('console.view_page', name=app_name, slot=place.slot, relative=row.name) }}"><span class="file-name">{{ row.name }}</span><span class="meta">{{ row.when }}</span></a>
       {% endif %}
     </li>
     {% endfor %}
@@ -23,12 +23,14 @@
   <p class="meta files-empty">{% if place.exists %}Empty{% else %}Not there yet{% endif %}</p>
   {% endif %}
   <div class="files-actions">
+    {% if place.exists %}<a class="button text" href="{{ url_for('console.browse_page', name=app_name, slot=place.slot) }}">Show all</a>{% endif %}
     {% if place.takes_copies %}
     <form method="post" action="{{ url_for('console.app_copy', name=app_name) }}" enctype="multipart/form-data">
       <input type="hidden" name="token" value="{{ token }}">
       <input type="hidden" name="slot" value="{{ place.slot }}">
-      <label class="button text">{{ icon.copy_in() }}Copy files here<input type="file" name="files" multiple hidden data-autosubmit></label>
+      <label class="button text file-button">{{ icon.copy_in() }}Copy files here<input type="file" name="files" multiple class="visually-hidden" data-autosubmit></label>
     </form>
+    <button type="button" class="text" data-open="write-{{ place.slot }}">{{ icon.plus() }}Write a file</button>
     {% endif %}
     {% if place.exists %}
     <form method="post" action="{{ url_for('console.folders_open') }}">
@@ -40,6 +42,21 @@
     {% endif %}
   </div>
 </section>
+{% if place.takes_copies %}
+<dialog id="write-{{ place.slot }}" class="dialog wide" aria-labelledby="write-title-{{ place.slot }}">
+  <form method="post" action="{{ url_for('console.app_write', name=app_name) }}">
+    <input type="hidden" name="token" value="{{ token }}">
+    <input type="hidden" name="slot" value="{{ place.slot }}">
+    <h2 id="write-title-{{ place.slot }}">Write a file into {{ place.label | lower }}</h2>
+    <label class="field"><span>File name</span><input type="text" name="name" placeholder="my-idea.md" required></label>
+    <label class="field"><span>Text</span><textarea name="text" rows="12" required></textarea></label>
+    <div class="actions">
+      <button type="button" class="text" data-close>Cancel</button>
+      <button class="filled">Save</button>
+    </div>
+  </form>
+</dialog>
+{% endif %}
 {% endmacro %}
 
 {% block content %}
@@ -49,12 +66,16 @@
     <h1>{{ app.name }}</h1>
     <p class="supporting">{{ app.blurb }}</p>
   </div>
-  {% if key_sources %}
-  <a class="chip chip-link" href="{{ url_for('console.keys_page') }}">{% if assigned %}Key: {{ assigned | join(", ") }}{% else %}Own key file{% endif %}</a>
-  {% endif %}
+  <div class="actions">
+    {% if key_sources %}
+    <a class="chip chip-link" href="{{ url_for('console.keys_page') }}">{% if assigned %}Key: {{ assigned | join(", ") }}{% else %}No key chosen{% endif %}</a>
+    {% endif %}
+    <a class="button tonal" href="{{ url_for('console.guide_page', name=app.name) }}">How it works</a>
+  </div>
 </div>
 
 <datalist id="paths">{% for path in paths %}<option value="{{ path }}">{% endfor %}</datalist>
+<h2 class="section-title">Commands</h2>
 <div class="list">
   {% for command in app.commands %}
   {% set job = latest[command.name] %}
@@ -63,12 +84,12 @@
       <span class="name">{{ command.name }}</span>
       <span class="supporting">{{ command.help }}</span>
       {% if command.kind == "terminal" %}<span class="chip">Terminal</span>{% elif command.kind == "service" %}<span class="chip">Service</span>{% endif %}
-      <span class="dot{% if job %} dot-{{ job.status }}{% endif %}" data-dot{% if not job %} hidden{% endif %}></span>
+      <span class="dot{% if job %} dot-{{ job.status }}{% endif %}" data-dot role="img" aria-label="{% if job %}{{ job.label }}{% endif %}"{% if not job %} hidden{% endif %}></span>
       {{ icon.chevron() }}
     </summary>
     <div class="row-body">
       {% if command.kind == "terminal" %}
-      <code class="command-line">cd "{{ app.path }}"; python manage.py {{ command.name }}</code>
+      <code class="command-line">{% if installed %}{{ app.name }} {{ command.name }}{% else %}cd "{{ app.path }}"; python manage.py {{ command.name }}{% endif %}</code>
       {% elif command.kind == "service" %}
       <a class="button tonal" href="{{ url_for('console.read_page') }}">Open Read</a>
       {% else %}

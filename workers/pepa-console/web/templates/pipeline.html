@@ -1,23 +1,38 @@
 {% extends "base.html" %}
 {% import "_icons.html" as icon %}
-{% block title %}Pipeline · pepa{% endblock %}
+{% block title %}Library · pepa{% endblock %}
 {% block content %}
 <div class="page-head">
-  <h1>Pipeline</h1>
+  <div class="heading">
+    <h1>Library</h1>
+    <p class="supporting">The papers the workers read, and how far each stage has got.</p>
+  </div>
   <div class="actions">
     <a class="button text" href="{{ url_for('console.folders_page') }}">{{ icon.folder() }}Link a source folder</a>
     <form method="post" action="{{ url_for('console.pipeline_copy') }}" enctype="multipart/form-data">
       <input type="hidden" name="token" value="{{ token }}">
-      <label class="button tonal">{{ icon.copy_in() }}Copy PDFs in<input type="file" name="pdfs" accept=".pdf" multiple hidden data-autosubmit></label>
+      <label class="button tonal file-button">{{ icon.copy_in() }}Copy PDFs in<input type="file" name="pdfs" accept=".pdf" multiple class="visually-hidden" data-autosubmit></label>
     </form>
-    <button type="button" class="filled" data-open="run-dialog">{{ icon.play() }}Run</button>
+    <button type="button" class="filled" data-open="run-dialog">{{ icon.play() }}Process papers</button>
   </div>
 </div>
 
+{% if first_run %}
+<section class="card start" aria-labelledby="start-title">
+  <h2 id="start-title">Start here</h2>
+  <ol>
+    <li><a href="{{ url_for('console.keys_page') }}">Add an Anthropic API key</a>. Summaries, reviews, outlines and drafts need one; preparing PDFs and searching do not.</li>
+    <li>Copy PDFs in with the button above, or <a href="{{ url_for('console.folders_page') }}">link a folder</a> of papers you already have.</li>
+    <li>Press <strong>Process papers</strong>.</li>
+  </ol>
+  <p class="supporting"><a href="{{ url_for('console.guide_page', name='index') }}">Read the guide</a> for what each worker does.</p>
+</section>
+{% endif %}
+
 <ol class="flow">
-  <li><a href="{{ url_for('console.app_page', name='pepa-prep') }}"><span class="count">{{ "{:,}".format(summary.pdfs) }}{% if summary.pdfs_capped %}+{% endif %}</span><span class="label">PDFs waiting</span></a></li>
-  <li><a href="{{ url_for('console.app_page', name='pepa-prep') }}"><span class="count">{{ "{:,}".format(summary.prepared) }}</span><span class="label">Prepared</span></a></li>
-  <li><a href="{{ url_for('console.app_page', name='pepa-sum') }}"><span class="count">{{ "{:,}".format(summary.summarised) }}</span><span class="label">Summarised</span></a></li>
+  <li><a href="{{ url_for('console.browse_page', name='pepa-prep', slot='sources') }}"><span class="count">{{ "{:,}".format(summary.pdfs) }}{% if summary.pdfs_capped %}+{% endif %}</span><span class="label">PDFs</span></a></li>
+  <li><a href="{{ url_for('console.browse_page', name='pepa-prep', slot='results', **{'in': 'text'}) }}"><span class="count">{{ "{:,}".format(summary.prepared) }}</span><span class="label">Prepared</span></a></li>
+  <li><a href="{{ url_for('console.browse_page', name='pepa-sum', slot='results', q='sum_') }}"><span class="count">{{ "{:,}".format(summary.summarised) }}</span><span class="label">Summarised</span></a></li>
   <li><a href="{{ url_for('console.read_page') }}"><span class="count">{{ summary.search_index or "None" }}</span><span class="label">Search index</span></a></li>
   <li><a href="{{ url_for('console.app_page', name='pepa-review') }}"><span class="count">{{ summary.review_index or "None" }}</span><span class="label">Review index</span></a></li>
 </ol>
@@ -26,11 +41,11 @@
   {% if chain %}{% with run = chain, log_url = url_for('console.chain_log', chain_id=chain.id) %}{% include "_run.html" %}{% endwith %}{% endif %}
 </div>
 
-<dialog id="run-dialog" class="dialog">
+<dialog id="run-dialog" class="dialog" aria-labelledby="run-title">
   <form method="post" action="{{ url_for('console.pipeline_run') }}" data-fetch="run" data-slot="pipeline-run">
     <input type="hidden" name="token" value="{{ token }}">
-    <h2>Run pipeline</h2>
-    <p class="supporting">Steps run in order. If one fails, the rest are skipped.</p>
+    <h2 id="run-title">Process papers</h2>
+    <p class="supporting">The ticked steps run in order, and papers already done are skipped. If a step fails, the steps after it do not run.</p>
     <div class="checklist">
       {% for step in steps %}
       <label class="check"><input type="checkbox" name="step" value="{{ step.app }} {{ step.command }}" checked><span class="grow">{{ step.label }}</span>{% if step.paid %}<span class="chip">Paid</span>{% endif %}</label>

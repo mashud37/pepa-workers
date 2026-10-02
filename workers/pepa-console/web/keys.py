@@ -111,12 +111,15 @@ def save_assignments(choices):
 
 
 def environment_for(app_name):
-    """The environment variables a job of this app receives from the store."""
+    """The environment variables a job of this app receives from the store.
+
+    A key already set in the console's own environment wins over the store.
+    """
     store = load_store()
     environment = {}
     for variable, key_name in store["assign"].get(app_name, {}).items():
         stored = store["keys"].get(key_name)
-        if stored is not None:
+        if stored is not None and not os.environ.get(variable):
             environment[variable] = stored["value"]
     return environment
 

@@ -9,6 +9,23 @@
   </div>
 </div>
 
+<h2 class="section-title">Project folder</h2>
+<div class="list">
+  <div class="row-item static place">
+    <span class="name">Every app's own files</span>
+    <span class="role">Writes</span>
+    <span class="supporting mono">{{ project }}</span>
+    <div class="actions">
+      <button type="button" class="text" data-pick data-app="" data-slot="project" data-path="{{ project }}" data-label="Project folder">Change</button>
+      <form method="post" action="{{ url_for('console.folders_open') }}">
+        <input type="hidden" name="token" value="{{ token }}">
+        <input type="hidden" name="path" value="{{ project }}">
+        <button class="icon" aria-label="Open the project folder in the file manager">{{ icon.open_new() }}</button>
+      </form>
+    </div>
+  </div>
+</div>
+
 {% for app in apps %}
 <h2 class="section-title">{{ app.name }}</h2>
 <div class="list">

@@ -33,6 +33,10 @@ document.addEventListener("click", function (event) {
   if (closer) {
     closer.closest("dialog").close();
   }
+  const dismiss = event.target.closest("[data-dismiss]");
+  if (dismiss) {
+    dismiss.closest(".snackbar").remove();
+  }
 });
 
 document.addEventListener("change", function (event) {
@@ -43,6 +47,11 @@ document.addEventListener("change", function (event) {
 
 for (const panel of document.querySelectorAll(".run")) {
   followRun(panel);
+}
+
+const liveRegion = document.querySelector("[data-live]");
+if (liveRegion) {
+  keepRegionFresh(liveRegion);
 }
 
 const pickDialog = document.getElementById("pick");
@@ -270,4 +279,24 @@ function showState(panel, data) {
   const badge = document.querySelector("[data-running]");
   badge.textContent = data.running;
   badge.hidden = data.running === 0;
+}
+
+async function keepRegionFresh(region) {
+  let delay = Number(region.dataset.live);
+  while (delay > 0) {
+    await wait(delay);
+    let page;
+    try {
+      const response = await fetch(window.location.href);
+      page = new DOMParser().parseFromString(await response.text(), "text/html");
+    } catch (error) {
+      return;
+    }
+    const fresh = page.querySelector("[data-region]");
+    if (!fresh) {
+      return;
+    }
+    region.innerHTML = fresh.innerHTML;
+    delay = Number(fresh.dataset.live || 0);
+  }
 }

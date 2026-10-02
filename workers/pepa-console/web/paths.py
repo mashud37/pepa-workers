@@ -57,17 +57,21 @@ def load_store():
     """Every choice the user has made: a folder per app and slot, and which are read deeply.
 
     Returns:
-        dict with "folders", keyed `app/slot`, and "subfolders", the keys read
-        with their sub-folders. A store written before deep reading existed holds
+        dict with "project", the folder every app keeps its own files in,
+        "folders", keyed `app/slot`, and "subfolders", the keys read with their sub-folders. A store written before deep reading existed holds
         the folders alone, so it is read as such.
     """
     path = store_file()
     if not path.exists():
-        return {"folders": {}, "subfolders": []}
+        return {"project": "", "folders": {}, "subfolders": []}
     data = json.loads(path.read_text(encoding="utf-8"))
     if "folders" not in data:
-        return {"folders": data, "subfolders": []}
-    return {"folders": data["folders"], "subfolders": data.get("subfolders", [])}
+        return {"project": "", "folders": data, "subfolders": []}
+    return {
+        "project": data.get("project", ""),
+        "folders": data["folders"],
+        "subfolders": data.get("subfolders", []),
+    }
 
 
 def save_store(store):
@@ -80,6 +84,39 @@ def save_store(store):
 
 
 # ---- Which folder an app uses ----
+
+def project_folder():
+    """The folder every app keeps its own files in: the user's choice, then PEPA_PROJECT,
+    then the folder that holds the apps themselves."""
+    picked = load_store()["project"]
+    if picked:
+        return Path(picked)
+    if os.environ.get("PEPA_PROJECT"):
+        return Path(os.environ["PEPA_PROJECT"])
+    return ROOT
+
+
+def set_project(path_text):
+    """Move every app's own files to another project folder, or back to the default when blank.
+
+    Raises:
+        ValueError: the path is not absolute, or the folder cannot be created.
+    """
+    store = load_store()
+    if not path_text.strip():
+        store["project"] = ""
+        save_store(store)
+        return
+    folder = Path(path_text.strip())
+    if not folder.is_absolute():
+        raise ValueError("Give the full path, starting at the drive or the root folder.")
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+    except OSError as error:
+        raise ValueError(f"Could not create {folder}: {error}") from error
+    store["project"] = str(folder)
+    save_store(store)
+
 
 def find_place(app_name, slot):
     """The one registered folder of an app, or None when there is no such slot."""
@@ -99,8 +136,8 @@ def places_of(app_name):
 
 
 def default_path(place):
-    """The folder this slot uses when the user has chosen nothing: the app's own folder."""
-    return (ROOT / place["default"]).resolve()
+    """The folder this slot uses when the user has chosen nothing: the app's own folder in the project."""
+    return (project_folder() / place["default"]).resolve()
 
 
 def owned_by_app(place, folder):
@@ -159,7 +196,7 @@ def set_subfolders(app_name, slot, wanted):
 
 def environment_for(app_name):
     """The folder variables a job of this app receives, so the child writes where the user chose."""
-    environment = {}
+    environment = {"PEPA_PROJECT": str(project_folder())}
     for place in PLACES:
         if place["app"] == app_name:
             environment[place["variable"]] = str(chosen(app_name, place["slot"]))

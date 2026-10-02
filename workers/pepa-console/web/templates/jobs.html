@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 {% import "_icons.html" as icon %}
-{% block head %}{% if refresh %}<meta http-equiv="refresh" content="3">{% endif %}{% endblock %}
 {% block title %}Jobs · pepa{% endblock %}
 {% block content %}
 <div class="page-head"><h1>Jobs</h1></div>
+<div data-region{% if refresh %} data-live="3000"{% endif %}>
 
 {% if not jobs and not chains %}
 <div class="empty">
@@ -48,4 +48,5 @@
   {% endfor %}
 </div>
 {% endif %}
+</div>
 {% endblock %}

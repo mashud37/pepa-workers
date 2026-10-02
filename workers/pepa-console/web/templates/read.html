@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% import "_icons.html" as icon %}
-{% block head %}{% if job_id and not answering %}<meta http-equiv="refresh" content="2">{% endif %}{% endblock %}
-{% block title %}Read · pepa{% endblock %}
+{% block title %}Search · pepa{% endblock %}
 {% block content %}
+<div data-region{% if job_id and not answering %} data-live="2000"{% endif %}>
 {% if answering %}
 <div class="page-head">
-  <h1>Read</h1>
+  <h1>Search</h1>
   <div class="actions">
-    <a class="button text" href="{{ url }}" target="_blank">{{ icon.open_new() }}New tab</a>
+    <a class="button text" href="{{ url }}" target="_blank" rel="noopener">{{ icon.open_new() }}New tab</a>
     {% if job_id %}
     <form method="post" action="{{ url_for('console.read_stop') }}"><input type="hidden" name="token" value="{{ token }}"><button class="text">Stop</button></form>
     {% endif %}
@@ -28,4 +28,5 @@
   {% endif %}
 </div>
 {% endif %}
+</div>
 {% endblock %}

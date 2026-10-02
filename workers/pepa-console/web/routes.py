@@ -2,9 +2,11 @@
 jobs, or key store, then renders a template, answers with JSON, or redirects.
 """
 import socket
+from pathlib import Path
 
 from flask import (
     Blueprint,
+    Response,
     abort,
     flash,
     jsonify,
@@ -16,7 +18,7 @@ from flask import (
 )
 
 from registry import get_app
-from web import folders, jobs, keys, paths
+from web import documents, folders, jobs, keys, mascot, paths
 from web.settings import SETTINGS
 
 PIPELINE_STEPS = [
@@ -40,6 +42,13 @@ TEXT_SUFFIXES = [
     ".log",
     ".yaml",
 ]
+
+# A page or drawing an app wrote may carry its own script; it runs walled off from the console.
+WALLED_SUFFIXES = [
+    ".html",
+    ".svg",
+]
+WALLED_POLICY = "sandbox allow-scripts"
 
 PORT_CHECK_SECONDS = 0.3
 
@@ -123,17 +132,28 @@ def live_log(log):
     return jsonify(log | extra)
 
 
-# ---- Pipeline ----
+# ---- Icon ----
+
+@bp.route("/favicon.svg")
+def favicon():
+    drawing = str(mascot.svg("pepa", 2)).replace("<svg ", '<svg xmlns="http://www.w3.org/2000/svg" ', 1)
+    return Response(drawing, mimetype="image/svg+xml")
+
+
+# ---- Library ----
 
 @bp.route("/")
 def pipeline():
     chains = jobs.list_chains()
     latest = chains[0] if chains else None
+    summary = folders.pipeline_summary()
+    nothing_yet = summary["pdfs"] == 0 and summary["summarised"] == 0
     return render_template(
         "pipeline.html",
-        summary=folders.pipeline_summary(),
+        summary=summary,
         steps=PIPELINE_STEPS,
         chain=latest,
+        first_run=nothing_yet and not keys.load_store()["keys"],
     )
 
 
@@ -205,6 +225,18 @@ def app_copy(name):
     return redirect(url_for("console.app_page", name=name))
 
 
+@bp.route("/apps/<name>/write", methods=["POST"])
+def app_write(name):
+    find_app(name)
+    slot = request.form.get("slot", "")
+    try:
+        saved = folders.write_new_file(name, slot, request.form.get("name", ""), request.form.get("text", ""))
+        flash(f"Saved {saved}.")
+    except ValueError as error:
+        flash(str(error))
+    return redirect(back_to(url_for("console.app_page", name=name)))
+
+
 @bp.route("/apps/<name>/files/<slot>/<path:relative>")
 def app_file(name, slot, relative):
     find_app(name)
@@ -213,7 +245,51 @@ def app_file(name, slot, relative):
         abort(404)
     if path.suffix.lower() in TEXT_SUFFIXES:
         return send_file(path, mimetype="text/plain")
-    return send_file(path)
+    response = send_file(path)
+    if path.suffix.lower() in WALLED_SUFFIXES:
+        response.headers["Content-Security-Policy"] = WALLED_POLICY
+    return response
+
+
+@bp.route("/view/<name>/<slot>/<path:relative>")
+def view_page(name, slot, relative):
+    app = find_app(name)
+    path = folders.resolve_file(name, slot, relative)
+    if path is None:
+        abort(404)
+    place = paths.find_place(name, slot)
+    return render_template(
+        "view.html",
+        app=app,
+        slot=slot,
+        place=place,
+        relative=relative,
+        folder=str(Path(relative).parent) if Path(relative).parent != Path(".") else "",
+        document=documents.document_view(path),
+        related=documents.related_documents(path.name),
+    )
+
+
+@bp.route("/browse/<name>/<slot>")
+def browse_page(name, slot):
+    app = find_app(name)
+    place = paths.find_place(name, slot)
+    inside = request.args.get("in", "")
+    if place is None or folders.resolve_folder(name, slot, inside) is None:
+        abort(404)
+    page = request.args.get("page", "1")
+    wanted = request.args.get("q", "")
+    listing = documents.folder_listing(paths.chosen(name, slot), inside, wanted, int(page) if page.isdigit() else 1)
+    return render_template(
+        "files.html",
+        app=app,
+        place=place,
+        slot=slot,
+        inside=inside,
+        wanted=wanted,
+        listing=listing,
+        folder=str(paths.chosen(name, slot)),
+    )
 
 
 # ---- Jobs ----
@@ -258,6 +334,21 @@ def chain_log(chain_id):
     return live_log(jobs.chain_log(chain_id, log_position()))
 
 
+# ---- Guide ----
+
+@bp.route("/guide")
+def guide_start():
+    return redirect(url_for("console.guide_page", name="index"))
+
+
+@bp.route("/guide/<name>")
+def guide_page(name):
+    page = documents.guide_page(name.removesuffix(".md"))
+    if page is None:
+        abort(404)
+    return render_template("guide.html", page=page, guides=documents.guide_names())
+
+
 # ---- Read ----
 
 @bp.route("/read")
@@ -295,7 +386,12 @@ def read_stop():
 
 @bp.route("/folders")
 def folders_page():
-    return render_template("folders.html", apps=folders.folder_pages(), store=str(paths.store_file()))
+    return render_template(
+        "folders.html",
+        apps=folders.folder_pages(),
+        project=str(paths.project_folder()),
+        store=str(paths.store_file()),
+    )
 
 
 @bp.route("/folders/set", methods=["POST"])
@@ -303,8 +399,12 @@ def folders_set():
     app_name = request.form.get("app", "")
     slot = request.form.get("slot", "")
     try:
-        paths.set_place(app_name, slot, request.form.get("path", ""))
-        flash(folder_message(app_name, slot))
+        if slot == "project":
+            paths.set_project(request.form.get("path", ""))
+            flash("Saved. Every app now keeps its own files in this folder.")
+        else:
+            paths.set_place(app_name, slot, request.form.get("path", ""))
+            flash(folder_message(app_name, slot))
     except ValueError as error:
         flash(str(error))
     return redirect(url_for("console.folders_page"))

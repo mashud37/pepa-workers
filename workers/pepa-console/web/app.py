@@ -11,7 +11,7 @@ from pathlib import Path
 from flask import Flask, abort, current_app, request
 
 from cli import ui
-from registry import APPS
+from registry import APPS, INSTALLED
 from web import jobs, mascot, routes
 from web.settings import SETTINGS
 
@@ -21,6 +21,11 @@ LOCAL_HOSTS = [
     "localhost",
 ]
 BROWSER_DELAY_SECONDS = 0.8
+CONTENT_POLICY = (
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+    f"frame-src 'self' http://127.0.0.1:{SETTINGS['read_port']} http://localhost:{SETTINGS['read_port']}; "
+    "object-src 'self'; base-uri 'none'; form-action 'self'"
+)
 BYTES_PER_MEGABYTE = 1024 * 1024
 
 
@@ -42,11 +47,19 @@ def template_values():
     return {
         "token": current_app.config["CONSOLE_TOKEN"],
         "apps": APPS,
+        "installed": INSTALLED,
         "status_label": jobs.STATUS_LABEL,
         "running": jobs.running_count(),
         "poll_ms": SETTINGS["poll_ms"],
         "draw_mascot": mascot.svg,
     }
+
+
+def add_security_headers(response):
+    """Allow only this console's own script, so text shown from a file can never run as code."""
+    response.headers.setdefault("Content-Security-Policy", CONTENT_POLICY)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 def create_app():
@@ -59,6 +72,7 @@ def create_app():
     app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
     app.config["MAX_CONTENT_LENGTH"] = SETTINGS["upload_limit_mb"] * BYTES_PER_MEGABYTE
     app.before_request(check_request)
+    app.after_request(add_security_headers)
     app.context_processor(template_values)
     app.register_blueprint(routes.bp)
     return app

@@ -6,7 +6,6 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from registry import ROOT
 from web import paths
 
 PDFS_WAITING = {"app": "pepa-prep", "slot": "sources", "inside": "", "prefix": "", "suffix": ".pdf"}
@@ -93,7 +92,7 @@ def matching_names(stage):
 
 def index_built(index):
     """The day an index file was last written, or an empty string when it does not exist."""
-    path = ROOT / index["app"] / index["path"]
+    path = paths.project_folder() / index["app"] / index["path"]
     if not path.exists():
         return ""
     return datetime.fromtimestamp(path.stat().st_mtime).strftime(DAY_FORMAT)
@@ -268,6 +267,44 @@ def copy_into(app_name, slot, files, required_suffix):
         target.write_bytes(file["data"])
         copied.append(file["name"])
     return {"copied": sorted(set(copied)), "left_out": sorted(set(left_out)), "folder": str(folder)}
+
+
+def write_new_file(app_name, slot, name, text):
+    """Save typed text as a new file in one of the app's own folders, never replacing a file already there.
+
+    Returns:
+        the file's name as saved.
+
+    Raises:
+        ValueError: the folder is the user's own, the name is not usable, or the file exists already.
+    """
+    place = paths.find_place(app_name, slot)
+    folder = paths.chosen(app_name, slot)
+    if place is None or not paths.owned_by_app(place, folder):
+        raise ValueError(f"{app_name} reads that folder from elsewhere, so nothing was written into it.")
+    name = name.strip()
+    if not name or Path(name).name != name or name.startswith("."):
+        raise ValueError("Give a plain file name, without folders.")
+    if not Path(name).suffix:
+        name += ".md"
+    target = folder / name
+    if target.exists():
+        raise ValueError(f"{name} is there already. Choose another name.")
+    folder.mkdir(parents=True, exist_ok=True)
+    target.write_text(text, encoding="utf-8")
+    return name
+
+
+def resolve_folder(app_name, slot, inside):
+    """The sub-folder a browse link points at, or None when it is missing or outside the app's folder."""
+    folder = paths.chosen(app_name, slot)
+    if folder is None:
+        return None
+    allowed = folder.resolve()
+    target = (allowed / inside).resolve()
+    if not target.is_relative_to(allowed) or not target.is_dir():
+        return None
+    return target
 
 
 def resolve_file(app_name, slot, relative):
