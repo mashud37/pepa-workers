@@ -1,7 +1,10 @@
-"""Export each app's committed files at HEAD, so uncommitted work never reaches a wheel."""
+"""Export each app's files from one commit: HEAD for a release, a snapshot of the working tree for a development build."""
+import os
 import shutil
 import subprocess
+import tempfile
 import zipfile
+from pathlib import Path
 
 from bundle import manifest
 
@@ -19,13 +22,26 @@ def head_commit():
     return found.stdout.strip()
 
 
-def export(name, into):
-    """Write one app's committed files at HEAD into a folder.
+def working_tree_commit():
+    """A commit of the working tree as it is now, made without touching HEAD, the branch or the index,
+    so a development build can test work before it is committed."""
+    index_file = Path(tempfile.gettempdir()) / "pepa-workers-snapshot.index"
+    environment = dict(os.environ, GIT_INDEX_FILE=str(index_file))
+    git = ["git", "-C", str(manifest.ROOT)]
+    subprocess.run(git + ["read-tree", "HEAD"], env=environment, check=True)
+    subprocess.run(git + ["add", "--all"], env=environment, check=True)
+    tree = subprocess.run(git + ["write-tree"], env=environment, capture_output=True, text=True, check=True)
+    made = subprocess.run(git + ["commit-tree", tree.stdout.strip(), "-p", "HEAD", "-m", "Working tree snapshot"], capture_output=True, text=True, check=True)
+    index_file.unlink()
+    return made.stdout.strip()
+
+
+def export(name, into, commit):
+    """Write one app's files, as they are in the given commit, into a folder.
 
     Returns:
         dict with "commit" and "files", the number of files written.
     """
-    commit = head_commit()
     into.mkdir(parents=True, exist_ok=True)
     archive = into.parent / f"{name}.zip"
     packing = ["git", "-C", str(manifest.ROOT), "archive", "--format=zip", "-o", str(archive), f"{commit}:workers/{name}"]

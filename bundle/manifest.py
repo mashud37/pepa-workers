@@ -1,11 +1,13 @@
 """Read workers.yaml and say which apps ship and what each leaves out."""
+import tempfile
 from pathlib import Path
 
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 MANIFEST_FILE = ROOT / "workers.yaml"
-BUILD_FOLDER = ROOT / "build"
+# Built outside the repository, where a syncing folder cannot lock files mid-build.
+BUILD_FOLDER = Path(tempfile.gettempdir()) / "pepa-workers-build"
 DIST_FOLDER = ROOT / "dist"
 
 REQUIRED_APP_KEYS = [

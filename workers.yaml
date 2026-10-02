@@ -13,6 +13,8 @@ apps:
     released: false
     leave_out:
       - data/eval
+      - evaluate
+      - cli/eval_cmd.py
   pepa-sum:
     released: false
     leave_out:

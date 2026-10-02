@@ -50,11 +50,17 @@ def clears_gate(row):
 
 
 def app_text(folder):
-    """The app's entry file, settings, and cli modules read as one piece of text."""
+    """Every Python file of the app read as one piece of text."""
     pieces = []
-    for path in sorted(folder.glob("*.py")) + sorted(folder.glob("cli/*.py")):
+    for path in sorted(folder.rglob("*.py")):
         pieces.append(path.read_text(encoding="utf-8", errors="replace"))
     return "\n".join(pieces)
+
+
+def finds_siblings_by_code_folder(text):
+    """True when the app still finds a sibling's files next to its own code rather than its data."""
+    without_data_root = text.replace("DATA_ROOT.parent", "")
+    return "ROOT.parent" in without_data_root
 
 
 def has_clean_tree(folder):
@@ -87,10 +93,10 @@ def gate_row(name, entry):
     return {
         "app": name,
         "released": mark(entry["released"]),
-        "licence": mark((folder / "LICENSE").exists()),
+        "licence": mark((manifest.ROOT / "LICENSE").exists()),
         "free": mark(not copyleft_in(folder)),
-        "data root": mark("DATA_ROOT" in text),
-        "siblings": mark("ROOT.parent" not in text),
+        "data root": mark("PEPA_PROJECT" in text),
+        "siblings": mark(not finds_siblings_by_code_folder(text)),
         "no-input": mark("--no-input" in text),
         "clean": mark(has_clean_tree(folder)),
     }
