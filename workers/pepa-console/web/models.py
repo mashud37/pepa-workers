@@ -8,11 +8,13 @@ import subprocess
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
-from web import keys
+from web import keys, paths
 from web.settings import SETTINGS
 
 MODELS_FILE_NAME = "models.json"
+SERVERS_RECORD = Path("pepa-host") / "data" / "servers.json"
 LIST_TIMEOUT_SECONDS = 8
 CLOUD_RUN_HOST = ".run.app"
 BLANK_GENERATION = {
@@ -32,7 +34,7 @@ ROUTES = {
     "claude": {"label": "Claude", "backend": "anthropic", "detail": "Anthropic's models, with a key"},
     "service": {"label": "Another service", "backend": "openai-compatible", "detail": "DeepSeek, Kimi, Qwen and others, with a key"},
     "computer": {"label": "This computer", "backend": "openai-compatible", "detail": "Ollama, LM Studio, vLLM or llama.cpp"},
-    "cloud": {"label": "Your own cloud", "backend": "openai-compatible", "detail": "A server you deployed, such as pepa-sum's"},
+    "cloud": {"label": "Your own cloud", "backend": "openai-compatible", "detail": "A server you deployed with pepa-host"},
 }
 
 # Prices are list prices in US dollars per million tokens, input then output.
@@ -122,6 +124,13 @@ LOCAL_HOSTS = [
     "127.0.0.1",
 ]
 
+# What a server deployed with pepa-host can take, handed to the apps that would otherwise send it
+# more: its context window and the requests it answers at once.
+SERVER_LIMITS = {
+    "pepa-sum": {"context_tokens": "PEPA_CONTEXT_TOKENS", "concurrency": "PEPA_MAX_CONCURRENCY"},
+    "pepa-plan": {"concurrency": "PEPAPLAN_CONCURRENCY"},
+}
+
 
 # ---- The store ----
 
@@ -170,6 +179,24 @@ def save_store(store):
     os.replace(temporary, path)
 
 
+# ---- Servers deployed with pepa-host ----
+
+def deployed_servers():
+    """Every server pepa-host has deployed from the project folder, with its address, model and key."""
+    record = paths.project_folder() / SERVERS_RECORD
+    if not record.exists():
+        return []
+    return json.loads(record.read_text(encoding="utf-8")).get("servers", [])
+
+
+def server_at(base_url):
+    """The deployed server at this address, or None for any other server."""
+    for server in deployed_servers():
+        if server["address"].rstrip("/") == base_url.rstrip("/"):
+            return server
+    return None
+
+
 # ---- Saving the page ----
 
 def check_server(base_url, model, what):
@@ -202,8 +229,13 @@ def save_choices(form):
             chosen["base_url"] = form.get(f"{app_name}|base_url", "").strip()
         for slot in app["slots"]:
             chosen[slot["setting"]] = form.get(f"{app_name}|{slot['setting']}|{field_kind}", "").strip()
+        server = server_at(chosen["base_url"]) if route == "cloud" else None
+        if server and not chosen["model"]:
+            chosen["model"] = server["model"]
         if route and route != "claude":
             check_server(chosen["base_url"], chosen["model"], app_name)
+        if server:
+            keys.use_server_key(app_name, f"pepa-host-{server['name']}", server["key"])
         store["generation"][app_name] = chosen
 
     for setting in BLANK_EMBEDDING:
@@ -253,6 +285,9 @@ def list_models(app_name, base_url):
         raise ValueError("Enter the server address first; it starts with http:// or https://.")
     headers = {}
     key = server_key(app_name)
+    server = server_at(base_url)
+    if server:
+        key = server["key"]
     if key:
         headers["Authorization"] = f"Bearer {key}"
     host = urllib.parse.urlparse(base_url).hostname or ""
@@ -284,6 +319,10 @@ def generation_variables(app_name, chosen):
     for slot in app["slots"]:
         if chosen[slot["setting"]]:
             wanted[slot[backend]] = chosen[slot["setting"]]
+    server = server_at(chosen["base_url"]) if chosen["route"] == "cloud" else None
+    if server:
+        for limit, variable in SERVER_LIMITS.get(app_name, {}).items():
+            wanted[variable] = str(server[limit])
     return wanted
 
 
@@ -316,11 +355,15 @@ def page_view():
             "chosen": store["generation"][app_name],
             "slots": app["slots"],
         })
+    addresses = dict(ADDRESSES)
+    addresses["cloud"] = []
+    for server in deployed_servers():
+        addresses["cloud"].append({"value": server["address"], "label": f"{server['name']} · {server['model']}"})
     return {
         "apps": apps,
         "routes": ROUTES,
         "claude_models": CLAUDE_MODELS,
-        "addresses": ADDRESSES,
+        "addresses": addresses,
         "embedding": store["embedding"],
         "embed_providers": EMBED_PROVIDERS,
         "file": str(store_file()),

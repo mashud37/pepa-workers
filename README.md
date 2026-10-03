@@ -7,7 +7,7 @@ own app with its own commands, so a researcher takes only the parts they need; t
 the writing stay with them, and the workers add capacity for reading, ideation, and drafting.
 Everything runs on one machine for one person; only language-model and embedding calls leave it.
 Those go to Anthropic's Claude, to any service that accepts OpenAI's chat format such as DeepSeek,
-Kimi or Qwen, or to a model running on the same machine.
+Kimi or Qwen, or to a model running on the same machine or on a cloud server of the user's own.
 
 ## Layout
 
@@ -19,6 +19,7 @@ workers/
   pepa-review/   embedding index over the sum corpus; literature review, gap, and synthesis workstreams
   pepa-plan/     rhetorical-move labelling and learned skeletons to a paragraph-by-paragraph outline
   pepa-draft/    rough section drafts from a plan and the review, to test an idea in prose
+  pepa-host/     a model server of your own on Google Cloud or Azure, for any worker to use
   pepa-console/  the console that drives all of the above
 workers.yaml     which apps the package ships and what each leaves out
 bundle/          exports each app's committed files and writes the packaging files around them

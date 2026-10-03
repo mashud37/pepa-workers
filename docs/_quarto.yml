@@ -23,6 +23,7 @@ website:
           - pepa-review.md
           - pepa-plan.md
           - pepa-draft.md
+          - pepa-host.md
       - text: Commands
         menu:
           - commands/pepa-console.md
@@ -32,6 +33,7 @@ website:
           - commands/pepa-review.md
           - commands/pepa-plan.md
           - commands/pepa-draft.md
+          - commands/pepa-host.md
       - href: news.md
         text: News
     right:

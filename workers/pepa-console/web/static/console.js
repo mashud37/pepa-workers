@@ -18,6 +18,7 @@ const THEME_NAMES = {
 const ADDRESS_GROUPS = {
   service: "Services",
   computer: "On this computer",
+  cloud: "Your own cloud",
 };
 const MENU_STEPS = {
   ArrowDown: 1,
@@ -605,7 +606,13 @@ function showAddressMenu(button) {
     for (const address of addresses[name]) {
       items.push({value: address.value, label: address.label, detail: address.value});
     }
-    groups.push({label: ADDRESS_GROUPS[name], items: items});
+    if (items.length > 0) {
+      groups.push({label: ADDRESS_GROUPS[name], items: items});
+    }
+  }
+  if (groups.length === 0) {
+    showMessage("No server deployed yet. Deploy one from pepa-host's page.");
+    return;
   }
   const input = button.closest(".combo").querySelector("input");
   openMenu(button, groups, input.value, function (value) {

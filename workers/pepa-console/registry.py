@@ -75,7 +75,6 @@ APPS: list[App] = [
         Command("clean", "safe", "List failed outputs, delete nothing", default_flags=("-n",), fields=(
             {"name": "--output", "type": "folder", "help": "Output folder to check (default: output/)"},
         )),
-        Command("deploy", "terminal", "Put a self-hosted model on Cloud Run and use it"),
         Command("settings", "interactive", "Choose backend and rundown method"),
         Command("install", "safe", "Create env.yaml, store the key, check dependencies"),
     ], keys=("ANTHROPIC_API_KEY", "PEPA_LLM_API_KEY")),
@@ -176,6 +175,17 @@ APPS: list[App] = [
         Command("setup", "terminal", "Configure API keys and paths; keys typed here belong on the Keys page"),
         Command("install", "safe", "Set up files and check dependencies"),
     ], keys=("ANTHROPIC_API_KEY", "PEPA_LLM_API_KEY", "GEMINI_API_KEY", "PEPA_EMBED_API_KEY")),
+    App("pepa-host", "A model server of your own on Google Cloud or Azure, for any worker to use", [
+        Command("deploy", "heavy", "Put a model server on Google Cloud or Azure; it asks for the project, then for a yes", fields=(
+            {"name": "--host", "type": "choice", "choices": ("gcloud", "azure"), "help": "Where the server runs"},
+            {"name": "--server", "type": "choice", "choices": ("small", "large"), "help": "small runs on CPU, large on a GPU"},
+        )),
+        Command("list", "safe", "List the deployed servers"),
+        Command("remove", "heavy", "Delete a deployed server; it asks you to type its name", fields=(
+            {"name": "name", "type": "text", "help": "The server's name, as list shows it"},
+        )),
+        Command("install", "safe", "Check which hosts are ready"),
+    ]),
 ]
 
 

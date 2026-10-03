@@ -33,6 +33,9 @@ apps:
   pepa-draft:
     released: false
     leave_out: []
+  pepa-host:
+    released: false
+    leave_out: []
   pepa-console:
     released: false
     leave_out: []
