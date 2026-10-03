@@ -35,10 +35,8 @@ def run():
     if backend == "anthropic":
         ui.info("Claude Haiku is pay-per-use (~$0.03–0.05 per paper for all three")
         ui.info("documents); batch mode bills the same tokens at ~50%; idle is free.")
-    elif backend == "openai-compatible":
-        ui.info("Billed by the provider per token, or free on a server you run yourself.")
     else:
-        ui.info("Self-hosted Cloud Run scales to zero: you pay only while a paper")
-        ui.info("is being processed (CPU seconds), plus image storage.")
+        ui.info("Billed by the provider per token, or by the second while a server")
+        ui.info("deployed with pepa-host runs.")
     ui.info("Estimates only; verify current pricing.")
     return 0

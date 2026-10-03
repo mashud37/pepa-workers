@@ -40,6 +40,5 @@ python manage.py install
 | Summarise every paper in the input folder | `python manage.py summarize` |
 | Remove failed outputs so they are redone | `python manage.py clean` |
 | Choose the backend and speed | `python manage.py settings` |
-| Put a self-hosted model on Cloud Run and use it | `python manage.py deploy` |
 | Show the configuration | `python manage.py config` |
 | Check dependencies | `python manage.py install` |

@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 import config
-from cli import cleanup, deploy, install, menu, settings, show_config, summarize, ui
+from cli import cleanup, install, menu, settings, show_config, summarize, ui
 
 
 def main():
@@ -34,7 +34,6 @@ def main():
     sub.add_parser("settings", help="Choose backend + paragraph-rundown method")
     sub.add_parser("config", help="Print effective config and cost note")
     sub.add_parser("install", help="Create env.yaml, store API key, check dependencies")
-    sub.add_parser("deploy", help="Put a self-hosted model on Cloud Run and use it")
 
     args = parser.parse_args()
     if args.no_input:
@@ -52,8 +51,6 @@ def main():
         return show_config.run()
     if args.command == "install":
         return install.run()
-    if args.command == "deploy":
-        return deploy.run()
 
 
 if __name__ == "__main__":

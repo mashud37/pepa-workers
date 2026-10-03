@@ -1,5 +1,5 @@
-"""Forward OpenAI-format requests to a local vLLM server on Cloud Run, holding each until the model
-has loaded, so pepa-draft reaches it like any other openai-compatible address.
+"""Forward OpenAI-format requests to the vLLM server beside it, holding each until the model has
+loaded, so a cold start waits instead of failing.
 """
 import json
 import time
@@ -8,7 +8,7 @@ import urllib.request
 
 from flask import Flask, Response, abort, request
 
-READY_WAIT_SECONDS = 280
+READY_WAIT_SECONDS = 230
 VLLM = "http://127.0.0.1:8001"
 NO_THINKING = {"enable_thinking": False}
 
