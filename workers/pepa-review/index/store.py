@@ -13,6 +13,10 @@ from index.embeddings import embed
 _CHECKPOINT_EVERY = 100
 RETRIEVE_TOP_K = 8
 RRF_K = 60
+# Each paper's closest papers, written beside the index so a page can show them without loading it.
+RELATED_FILE = config.DATA_DIR / "related.json"
+RELATED_COUNT = 10
+RELATED_ROWS_AT_ONCE = 1000
 
 
 def build_index(force=False, progress_cb=None, status_cb=None):
@@ -32,6 +36,8 @@ def build_index(force=False, progress_cb=None, status_cb=None):
     to_index = all_works if force else [w for w in all_works if w["base"] not in existing_bases]
 
     if not to_index:
+        if existing.get("records") and not RELATED_FILE.exists():
+            write_related(existing["records"], existing["vectors"])
         return {
             "n_records": len(existing.get("records", [])),
             "model_used": existing.get("model", ""),
@@ -60,7 +66,35 @@ def build_index(force=False, progress_cb=None, status_cb=None):
     if status_cb:
         status_cb("saving index")
     _write_index(records, vectors, model)
+    if status_cb:
+        status_cb("finding related papers")
+    write_related(records, vectors)
     return {"n_records": len(records), "model_used": model}
+
+
+def write_related(records, vectors):
+    """Record each paper's closest papers by cosine similarity, as {base: [[base, score], ...]}.
+
+    The similarities are worked out a block of rows at a time, so a large library never holds
+    the whole papers-by-papers table in memory.
+    """
+    import numpy as np
+    matrix = np.array(vectors, dtype=np.float32)
+    matrix /= np.linalg.norm(matrix, axis=1, keepdims=True) + 1e-9
+    count = min(RELATED_COUNT, len(records) - 1)
+    related = {}
+    RELATED_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if count < 1:
+        RELATED_FILE.write_text(json.dumps(related), encoding="utf-8")
+        return
+    for start in range(0, len(records), RELATED_ROWS_AT_ONCE):
+        block = matrix[start:start + RELATED_ROWS_AT_ONCE] @ matrix.T
+        for offset, scores in enumerate(block):
+            scores[start + offset] = -1.0
+            best = np.argpartition(scores, -count)[-count:]
+            best = best[np.argsort(scores[best])[::-1]]
+            related[records[start + offset]["base"]] = [[records[i]["base"], round(float(scores[i]), 3)] for i in best]
+    RELATED_FILE.write_text(json.dumps(related), encoding="utf-8")
 
 
 def _embed_new_works(to_index, base_records, base_vectors, progress_cb):
