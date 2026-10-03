@@ -25,6 +25,8 @@ def main():
     s.add_argument("-f", "--force", action="store_true", help="Redo papers already processed")
     s.add_argument("--mode", choices=["auto", "serial", "parallel", "batch"],
                    help="Execution mode (default: auto, chosen by estimated time)")
+    s.add_argument("--estimate", action="store_true", help="Print the papers to do, the estimated cost and each mode's time as JSON, then stop")
+    s.add_argument("--approve-cost", action="store_true", help="Spend past the cost threshold without asking")
 
     c = sub.add_parser("clean", help="Delete failed outputs (sum_ files missing the template) + their pairs")
     c.add_argument("-o", "--output", type=Path, help="Output folder to clean")
@@ -40,9 +42,12 @@ def main():
         sys.stdin = io.StringIO()
     if args.command is None:
         return menu.main()
+    if args.command == "summarize" and args.estimate:
+        return summarize.print_estimate(input_dir=args.input, output_dir=args.output,
+                                        force=args.force, mode=args.mode)
     if args.command == "summarize":
         return summarize.run(input_dir=args.input, output_dir=args.output,
-                             force=args.force, mode=args.mode)
+                             force=args.force, mode=args.mode, approve_cost=args.approve_cost)
     if args.command == "clean":
         return cleanup.run(output_dir=args.output, dry_run=args.dry_run, force=args.force)
     if args.command == "settings":

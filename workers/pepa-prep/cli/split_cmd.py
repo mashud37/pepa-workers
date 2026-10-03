@@ -1,4 +1,5 @@
 """CLI layer for manual chapter correction of extracted books."""
+import difflib
 import tempfile
 from pathlib import Path
 
@@ -61,19 +62,26 @@ def _resolve_file(file: str, books: dict[str, split_mod.Book]) -> split_mod.Book
 def _pick_book(books: dict[str, split_mod.Book]) -> split_mod.Book | None:
     stems = sorted(books)
     ui.step(f"Books available for manual correction  [{len(stems)} total]")
+    ui.info("To mark chapter starts on pictures of the pages instead, use the Papers page in pepa-console.")
 
     while True:
-        query = ui.ask("Search author/title (blank = list all, 0 = back)")
-        if query in (None, "0"):
+        query = ui.ask("Search author/title (blank = list all, 0 = back)", default="")
+        if query == "0":
             return None
         terms = query.lower().split()
-        matches = [s for s in stems if all(t in s.lower() for t in terms)]
+        matches = [s for s in stems if all(_mentions(s, t) for t in terms)]
         if not matches:
             ui.warn("No books match, try a different term")
             continue
         book = _choose(books, matches)
         if book is not None:
             return book
+
+
+def _mentions(stem: str, term: str) -> bool:
+    """True when the term is in the book's name, or close to one of its words, so a typo still finds it."""
+    words = stem.lower().replace("_", " ").split()
+    return term in stem.lower() or bool(difflib.get_close_matches(term, words, cutoff=0.8))
 
 
 def _choose(books: dict[str, split_mod.Book],

@@ -47,20 +47,19 @@ def _pin_threads():
         os.environ[var] = "1"
 
 
-def run(input_dir=None, output_dir=None, force=False, mode=None):
+def run(input_dir=None, output_dir=None, force=False, mode=None, approve_cost=False):
     _pin_threads()  # parent sets them so spawned workers inherit before numpy imports
     try:
         from extract import extract_signals, read_document, select_passages  # noqa: F401
     except ImportError as e:
         raise SystemExit(f"Missing dependency ({e.name}). Run: pip install -r requirements.txt")
-    _require_backend()
-    from extract.signals import ensure_model
-    ensure_model()
-
     in_dir = (input_dir or config.INPUT_DIR)
     out_dir = (output_dir or config.OUTPUT_DIR)
     if not in_dir.is_dir():
         raise SystemExit(f"Input folder not found: {in_dir}")
+    _require_backend()
+    from extract.signals import ensure_model
+    ensure_model()
     out_dir.mkdir(parents=True, exist_ok=True)
 
     sources = _discover_sources(in_dir)
@@ -86,7 +85,7 @@ def run(input_dir=None, output_dir=None, force=False, mode=None):
 
     chosen = _select_mode(len(work), mode)
     _show_plan(len(work), chosen, mode)
-    _preflight_cost_check(work, chosen)
+    _preflight_cost_check(work, chosen, approve_cost)
     _reset_usage()
 
     if chosen == "serial":
@@ -97,6 +96,28 @@ def run(input_dir=None, output_dir=None, force=False, mode=None):
         code = _run_parallel(work, out_dir, skipped)
     _report_cost()
     return code
+
+
+def print_estimate(input_dir=None, output_dir=None, force=False, mode=None):
+    """Print, as one JSON line, how many papers a run would do, its estimated cost, and each mode's time."""
+    import json
+
+    in_dir = input_dir or config.INPUT_DIR
+    out_dir = output_dir or config.OUTPUT_DIR
+    sources = _discover_sources(in_dir) if in_dir.is_dir() else []
+    work = _plan_work(sources, out_dir, force, config.load('ON_EXISTING'))["work"]
+    n = len(work)
+    cost = {}
+    for name in _estimate(n):
+        cost[name] = _estimated_cost(n, name)
+    print(json.dumps({
+        "papers": n,
+        "model": config.model_name(),
+        "auto": _select_mode(n, mode) if n else "serial",
+        "seconds": _estimate(n),
+        "cost": cost,
+    }))
+    return 0
 
 
 def _require_backend():
@@ -907,29 +928,36 @@ def _build_docs(pdf, out_dir, todo, artifacts):
 
 # ---- Cost reporting and shared helpers ----
 
-def _preflight_cost_check(work, mode, threshold=COST_CONFIRM_THRESHOLD):
-    if not work:
-        return
+def _estimated_cost(n, mode):
+    """The list-price cost of summarising n papers in this mode, or None when the backend has no known price."""
     if config.load('BACKEND') != "anthropic":
-        return
+        return None
     price = config.price_per_mtok()
     if price is None:
-        return
-    model = config.load('ANTHROPIC_MODEL')
-    p_in, p_out = price
-    n = len(work)
-    ratio = config.chars_per_token(model)
+        return None
+    ratio = config.chars_per_token(config.load('ANTHROPIC_MODEL'))
     total_in = n * config.PAPER_INPUT_CHARS / ratio
     total_out = n * config.PAPER_OUTPUT_CHARS / ratio
-    cost = total_in / 1e6 * p_in + total_out / 1e6 * p_out
+    cost = total_in / 1e6 * price[0] + total_out / 1e6 * price[1]
     if mode == "batch":
         cost *= 0.5
-    if cost > threshold:
-        ui.warn(f"Estimated cost: ~${cost:.2f}  ({total_in / 1e6:.2f}M in + {total_out / 1e6:.2f}M out · {model})")
-        if not ui.confirm("Cost exceeds threshold, proceed?"):
-            raise SystemExit("Aborted.")
-    else:
-        ui.info(f"Est. cost ~${cost:.2f}")
+    return cost
+
+
+def _preflight_cost_check(work, mode, approved, threshold=COST_CONFIRM_THRESHOLD):
+    """Show the estimated cost; above the threshold, go on only when the run was approved or the user says yes."""
+    cost = _estimated_cost(len(work), mode)
+    if not work or cost is None:
+        return
+    model = config.load('ANTHROPIC_MODEL')
+    if cost <= threshold:
+        ui.info(f"Est. cost ~${cost:.2f} ({model})")
+        return
+    ui.warn(f"Estimated cost: ~${cost:.2f} ({model})")
+    if approved:
+        return
+    if not ui.confirm("Cost exceeds threshold, proceed?", default_yes=False):
+        raise SystemExit("Stopped before spending. Approve the cost in the console's Process papers, or run with --approve-cost.")
 
 
 def _reset_usage():

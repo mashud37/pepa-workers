@@ -129,8 +129,8 @@ def _preflight_cost_check(parsed, chosen, threshold=COST_WARNING_THRESHOLD):
             f"Estimated cost: ~${cost:.2f}  "
             f"({total_in / 1e6:.2f}M in + {total_out / 1e6:.2f}M out · {model})"
         )
-        if not ui.confirm("Cost exceeds threshold, proceed?"):
-            raise SystemExit("Aborted.")
+        if not ui.confirm("Cost exceeds threshold, proceed?", default_yes=False):
+            raise SystemExit("Stopped before spending.")
     else:
         ui.info(f"Est. cost ~${cost:.2f}")
 

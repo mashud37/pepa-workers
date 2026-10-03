@@ -106,7 +106,7 @@ def _cmd_list_delete(args):
     conn = _list_conn()
     try:
         row = _find_list(conn, args.name)
-        if not ui.confirm(f"Delete list '{args.name}' ({row['id']})?", default_yes=False):
+        if not args.yes and not ui.confirm(f"Delete list '{args.name}' ({row['id']})?", default_yes=False):
             return
         list_store.delete_list(conn, row["id"])
     finally:
@@ -174,6 +174,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     ld = sub.add_parser("list-delete", help="Delete a literature list")
     ld.add_argument("name", help="List name")
+    ld.add_argument("-y", "--yes", action="store_true", help="Delete without asking")
 
     return parser
 
