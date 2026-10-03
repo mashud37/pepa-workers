@@ -17,13 +17,7 @@ apps:
       - cli/eval_cmd.py
   pepa-sum:
     released: false
-    leave_out:
-      - Dockerfile
-      - deploy.ps1
-      - deploy.sh
-      - gcloud_app.yaml
-      - requirements-serve.txt
-      - serve
+    leave_out: []
   pepa-read:
     released: false
     leave_out: []
