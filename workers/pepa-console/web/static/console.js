@@ -1,4 +1,14 @@
 const confirmDialog = document.getElementById("confirm");
+const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+const CONFETTI_COLOURS = [
+  "#0b57d0",
+  "#d93025",
+  "#f6b8b3",
+  "#1e8e3e",
+  "#f9ab00",
+];
+const CONFETTI_PIECES = 18;
 
 const AFTER_SEND = {
   run: showRun,
@@ -58,6 +68,13 @@ const pickDialog = document.getElementById("pick");
 if (pickDialog) {
   document.addEventListener("click", handlePickClick);
 }
+
+if (!calm) {
+  for (const count of document.querySelectorAll("[data-count]")) {
+    countUp(count);
+  }
+}
+
 
 
 function askFirst(form) {
@@ -215,7 +232,10 @@ async function followRun(panel) {
 
     const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 40;
     if (data.lines.length > 0) {
-      log.insertBefore(document.createTextNode(data.lines.join("\n") + "\n"), pending);
+      const chunk = document.createElement("span");
+      chunk.className = "fresh";
+      chunk.textContent = data.lines.join("\n") + "\n";
+      log.insertBefore(chunk, pending);
     }
     pending.textContent = data.partial;
     if (atBottom) {
@@ -238,12 +258,26 @@ function showState(panel, data) {
     statusText += " · exit " + data.exit_code;
   }
   status.textContent = statusText;
+  const before = panel.dataset.last;
+  panel.dataset.last = data.status;
   status.className = "status status-" + data.status;
+  if (before && before !== data.status) {
+    popOnce(status);
+  }
+  if (before === undefined && data.status === "running") {
+    buddyMood("running");
+  }
+  if (before === "running" && data.status !== "running") {
+    buddyMood(data.status);
+    if (data.status === "ok" && !calm) {
+      throwConfetti(status);
+    }
+  }
   panel.querySelector("[data-elapsed]").textContent = data.elapsed;
 
   const stepDots = panel.querySelectorAll("[data-steps] .dot");
   for (let index = 0; index < stepDots.length; index++) {
-    stepDots[index].className = "dot dot-" + data.steps[index].status;
+    showDot(stepDots[index], data.steps[index].status);
   }
 
   const row = panel.closest("details");
@@ -277,8 +311,57 @@ function showState(panel, data) {
 
   document.body.classList.toggle("busy", data.running > 0);
   const badge = document.querySelector("[data-running]");
+  if (badge.textContent !== String(data.running)) {
+    popOnce(badge);
+  }
   badge.textContent = data.running;
   badge.hidden = data.running === 0;
+}
+
+function showDot(dot, stepStatus) {
+  const before = dot.dataset.status;
+  dot.dataset.status = stepStatus;
+  dot.className = "dot dot-" + stepStatus;
+  if (before && before !== stepStatus) {
+    popOnce(dot);
+  }
+}
+
+function popOnce(element) {
+  element.classList.add("pop");
+  element.addEventListener("animationend", function () {
+    element.classList.remove("pop");
+  }, {once: true});
+}
+
+function throwConfetti(anchor) {
+  const box = anchor.getBoundingClientRect();
+  for (let index = 0; index < CONFETTI_PIECES; index++) {
+    const angle = (index / CONFETTI_PIECES) * 2 * Math.PI;
+    const distance = 36 + Math.random() * 44;
+    const piece = document.createElement("span");
+    piece.className = "confetti";
+    piece.style.left = box.left + 16 + "px";
+    piece.style.top = box.top + box.height / 2 + "px";
+    piece.style.background = CONFETTI_COLOURS[index % CONFETTI_COLOURS.length];
+    piece.style.setProperty("--dx", Math.cos(angle) * distance + "px");
+    piece.style.setProperty("--dy", Math.sin(angle) * distance - 24 + "px");
+    piece.addEventListener("animationend", function () {
+      piece.remove();
+    });
+    document.body.append(piece);
+  }
+}
+
+async function countUp(element) {
+  const target = Number(element.dataset.count);
+  const suffix = element.dataset.suffix || "";
+  const frames = 24;
+  for (let frame = 1; frame <= frames; frame++) {
+    const progress = 1 - Math.pow(1 - frame / frames, 3);
+    element.textContent = Math.round(target * progress).toLocaleString("en") + suffix;
+    await wait(28);
+  }
 }
 
 async function keepRegionFresh(region) {
@@ -296,7 +379,9 @@ async function keepRegionFresh(region) {
     if (!fresh) {
       return;
     }
+    region.dataset.refreshed = "yes";
     region.innerHTML = fresh.innerHTML;
     delay = Number(fresh.dataset.live || 0);
   }
 }
+

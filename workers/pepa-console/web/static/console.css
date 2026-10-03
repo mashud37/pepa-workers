@@ -33,6 +33,7 @@
   --font: "Google Sans Text", "Google Sans", Roboto, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   --font-display: "Google Sans", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
   --mono: "Roboto Mono", "Cascadia Mono", Consolas, monospace;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -258,7 +259,6 @@ input[type=checkbox] { flex: none; width: 18px; height: 18px; margin: 0; accent-
 .read { display: block; width: 100%; height: calc(100vh - 176px); border: 1px solid var(--outline); border-radius: 16px; background: #fff; }
 
 .empty { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 64px 24px; text-align: center; }
-.empty .mascot { margin-bottom: 12px; }
 .empty form { margin-top: 12px; }
 
 
@@ -285,9 +285,6 @@ dialog.dialog .actions { justify-content: flex-end; margin-top: 8px; }
 .mascot .lid { opacity: 0; animation: blink 6s steps(1, end) infinite; }
 .mascot .figure { animation: hop 11s steps(1, end) infinite; }
 .mascot-kopi .twin { animation: copy 7s steps(1, end) infinite; }
-.brand:hover .mascot .figure { animation: bounce 0.36s steps(1, end) infinite; }
-body.busy .top .mascot .figure { animation: bounce 0.6s steps(1, end) infinite; }
-body.busy .top .mascot .ink rect { animation: write 1.4s steps(1, end) infinite; animation-delay: calc(var(--i) * 110ms); }
 @keyframes blink { 0% { opacity: 0; } 93% { opacity: 1; } 96% { opacity: 0; } }
 @keyframes hop { 0% { transform: translateY(0); } 96% { transform: translateY(-1px); } 98% { transform: translateY(0); } }
 @keyframes bounce { 0% { transform: translateY(0); } 50% { transform: translateY(-1px); } }
@@ -347,11 +344,91 @@ body.busy .top .mascot .ink rect { animation: write 1.4s steps(1, end) infinite;
 .guide-nav a[aria-current="page"] { background: var(--primary-container); color: var(--on-primary-container); }
 
 
+/* ---- Motion ---- */
+
+/* Moving between pages cross-fades, and the highlighted tab slides to its new place. */
+@view-transition { navigation: auto; }
+.tabs a[aria-current="page"] { view-transition-name: current-tab; }
+.buddy-button { view-transition-name: buddy; }
+::view-transition-group(current-tab) { animation-duration: 0.32s; animation-timing-function: var(--ease); }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.16s; }
+
+/* A page settles in from below, its cards and rows one after another. */
+main > *, .grid > *, .list > *, .flow > li { animation: rise 0.4s var(--ease) both; animation-delay: calc(var(--n, 0) * 40ms); }
+main > :nth-child(2), .grid > :nth-child(2), .list > :nth-child(2), .flow > :nth-child(2) { --n: 1; }
+main > :nth-child(3), .grid > :nth-child(3), .list > :nth-child(3), .flow > :nth-child(3) { --n: 2; }
+main > :nth-child(4), .grid > :nth-child(4), .list > :nth-child(4), .flow > :nth-child(4) { --n: 3; }
+main > :nth-child(5), .grid > :nth-child(5), .list > :nth-child(5), .flow > :nth-child(5) { --n: 4; }
+main > :nth-child(6), .grid > :nth-child(6), .list > :nth-child(6) { --n: 5; }
+main > :nth-child(7), .grid > :nth-child(7), .list > :nth-child(7) { --n: 6; }
+main > :nth-child(n+8), .grid > :nth-child(n+8), .list > :nth-child(n+8) { --n: 7; }
+[data-refreshed] > *, [data-refreshed] .grid > *, [data-refreshed] .list > * { animation: none; }
+details[open] > .row-body { animation: rise 0.25s var(--ease); }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+
+/* Buttons give under the pointer; cards and stages lift towards it. */
+button, .button, a.card, .flow .count, .flow li::after { transition: background 0.15s, box-shadow 0.2s, border-color 0.2s, transform 0.15s var(--ease); }
+button:active, .button:active { transform: scale(0.96); }
+a.card:hover { transform: translateY(-2px); }
+.flow .count { display: inline-block; }
+.flow a:hover .count { transform: translateY(-3px); }
+.flow li:hover::after { transform: translate(3px, -50%); }
+
+dialog.dialog[open] { animation: open-dialog 0.22s var(--ease); }
+dialog.dialog[open]::backdrop { animation: fade-in 0.22s ease; }
+@keyframes open-dialog { from { opacity: 0; transform: scale(0.94); } }
+@keyframes fade-in { from { opacity: 0; } }
+
+/* A run's news: a changed status or step pops, and fresh log lines arrive in ink. */
+.pop { animation: pop 0.36s var(--ease); }
+.dot.pop { animation: pop-dot 0.4s var(--ease); }
+.fresh { animation: ink 1.4s ease-out; }
+@keyframes pop { 40% { transform: scale(1.08); } }
+@keyframes pop-dot { 40% { transform: scale(1.9); } }
+@keyframes ink { from { color: var(--primary); } }
+
+/* A finished run throws pixels for joy. */
+.confetti { position: fixed; z-index: 25; width: 6px; height: 6px; pointer-events: none; animation: fly 1s var(--ease) forwards; }
+@keyframes jump { 0% { transform: translateY(0); } 25% { transform: translateY(-2px); } 50% { transform: translateY(-3px); } 75% { transform: translateY(-1px); } }
+@keyframes shake { 0% { transform: translateX(0); } 25% { transform: translateX(-1px); } 75% { transform: translateX(1px); } }
+@keyframes fly { 55% { opacity: 1; transform: translate(var(--dx), var(--dy)); } 100% { opacity: 0; transform: translate(var(--dx), calc(var(--dy) + 48px)); } }
+
+
+/* ---- pepa in the corner ---- */
+
+.buddy { position: fixed; right: 20px; bottom: 16px; z-index: 15; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; pointer-events: none; animation: arrive 0.7s steps(7, end) both; }
+.buddy > * { pointer-events: auto; }
+.buddy.settled { animation: none; }
+.buddy-button { position: relative; width: auto; height: auto; padding: 4px; border-radius: 12px; }
+.buddy-button:hover { background: transparent; }
+.bubble { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; max-width: 260px; padding: 12px 14px 4px; border-radius: 16px 16px 4px 16px; background: var(--surface); color: var(--text); box-shadow: var(--shadow-3); font-size: 13px; line-height: 18px; transform-origin: bottom right; animation: speak 0.22s var(--ease); }
+.bubble .text { height: 28px; margin-left: -12px; padding: 0 12px; font-size: 12px; }
+
+.buddy.hop .figure { animation: jump 0.48s steps(1, end); }
+.buddy.jump .figure { animation: jump 0.48s steps(1, end) 3; }
+.buddy.shake .figure { animation: shake 0.24s steps(1, end) 4; }
+.buddy.stretch .figure { animation: stretch 0.9s steps(1, end); }
+.buddy.look .eye, .buddy.look .lid { animation: look-around 1.8s steps(1, end); }
+.buddy.walk .buddy-button { animation: walk 4.2s steps(28, end); }
+.buddy.walk .figure { animation: bounce 0.3s steps(1, end) 14; }
+body.busy .buddy .ink rect { animation: write 1.4s steps(1, end) infinite; animation-delay: calc(var(--i) * 110ms); }
+.buddy.asleep .lid { opacity: 1; animation: none; }
+.buddy.asleep .buddy-button::before { content: "z"; position: absolute; top: -6px; left: 2px; color: var(--text-tertiary); font: 500 13px var(--mono); animation: snore 2.4s steps(4, end) infinite; }
+.buddy.tucked .buddy-button { transform: translateY(40px); transition: transform 0.3s steps(4, end); }
+.buddy.tucked .buddy-button:hover { transform: translateY(30px); }
+
+@keyframes arrive { from { transform: translateY(90px); } }
+@keyframes speak { from { opacity: 0; transform: scale(0.8) translateY(6px); } }
+@keyframes stretch { 0% { transform: translateY(1px); } 40% { transform: translateY(-2px); } 80% { transform: translateY(0); } }
+@keyframes look-around { 0% { transform: translate(-1px, 0); } 40% { transform: translate(1px, 0); } 75% { transform: translate(0, -1px); } }
+@keyframes walk { 45% { transform: translateX(-96px); } 55% { transform: translateX(-96px); } 100% { transform: translateX(0); } }
+@keyframes snore { 0% { opacity: 0; transform: translate(0, 0); } 50% { opacity: 1; transform: translate(-4px, -8px); } 100% { opacity: 0; transform: translate(-8px, -16px); } }
+
+
 /* ---- Narrow screens and reduced motion ---- */
 
 @media (max-width: 760px) {
   .top { gap: 16px; padding: 0 16px; }
-  .brand span { display: none; }
   main { padding: 8px 16px 72px; }
   .flow { grid-template-columns: 1fr 1fr; }
   .flow li + li { border-left: 0; }
@@ -364,8 +441,10 @@ body.busy .top .mascot .ink rect { animation: write 1.4s steps(1, end) infinite;
   .guide-layout { grid-template-columns: 1fr; }
   .guide-nav { position: static; }
   .document { padding: 16px; }
+  .buddy { right: 8px; bottom: 8px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mascot *, .dot, .status::before, .snackbar { animation: none !important; }
+  @view-transition { navigation: none; }
+  *, *::before, *::after, *::backdrop { animation: none !important; transition: none !important; }
 }

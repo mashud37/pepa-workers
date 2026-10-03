@@ -12,7 +12,7 @@
 <a class="skip" href="#content">Skip to content</a>
 {% set section = request.path.split("/")[1] %}
 <header class="top">
-  <a class="brand" href="{{ url_for('console.pipeline') }}"><span aria-hidden="true">{{ draw_mascot("pepa", 2) }}</span><span>pepa</span></a>
+  <a class="brand" href="{{ url_for('console.pipeline') }}">pepa</a>
   <nav class="tabs" aria-label="Main">
     <a href="{{ url_for('console.pipeline') }}"{% if section == "" %} aria-current="page"{% endif %}>Library</a>
     <a href="{{ url_for('console.apps_page') }}"{% if section in ["apps", "view", "browse"] %} aria-current="page"{% endif %}>Apps</a>
@@ -29,6 +29,12 @@
 {% block content %}{% endblock %}
 </main>
 
+<div class="buddy" data-buddy>
+  <div class="bubble" data-bubble role="status" hidden><span data-bubble-text></span><button type="button" class="text" data-tuck>Tuck away</button></div>
+  <button type="button" class="buddy-button" data-buddy-button aria-label="pepa: a tip for this page">{{ draw_mascot("pepa", 4) }}</button>
+</div>
+<script type="application/json" id="tips">{{ tips | tojson }}</script>
+
 {% with messages = get_flashed_messages() %}{% if messages %}<div class="snackbar" role="status"><span>{{ messages | join(" ") }}</span><button type="button" class="text" data-dismiss>Close</button></div>{% endif %}{% endwith %}
 
 <dialog id="confirm" class="dialog" aria-labelledby="confirm-text">
@@ -42,6 +48,7 @@
   </form>
 </dialog>
 
+<script src="{{ url_for('static', filename='buddy.js') }}"></script>
 <script src="{{ url_for('static', filename='console.js') }}"></script>
 </body>
 </html>

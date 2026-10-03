@@ -1,5 +1,5 @@
-"""Draw the pepa and kopi mascots as pixel-art SVG from small character grids.
-The page header shows one, and the stylesheet animates its eyes, its ink, and kopi's copy.
+"""Draw the pepa and kopi mascots as pixel-art SVG from character grids, and hold pepa's tips.
+Every page shows pepa in its corner, where it gives these tips.
 """
 from markupsafe import Markup
 
@@ -73,6 +73,41 @@ MASCOTS = {
     "kopi": KOPI,
 }
 
+# What pepa says when clicked, by the first part of the page's address.
+TIPS = {
+    "": [
+        "Press Process papers and I read everything new. Papers already done are skipped.",
+        "Each number opens what is behind it.",
+        "Copy PDFs in, or link a folder you already keep papers in.",
+    ],
+    "apps": [
+        "Every app works on its own. Open one to see what it can do.",
+        "Each app page has a Settings card for how it runs.",
+    ],
+    "read": [
+        "Search one part of a brief: methods:interviews author:smith.",
+        "Plain words search the whole paper too.",
+    ],
+    "jobs": [
+        "Every run keeps its log here, finished or not.",
+    ],
+    "folders": [
+        "Link the folder your reference manager uses. I only read from it.",
+    ],
+    "models": [
+        "Claude Haiku is the cheapest. Sonnet writes a better review.",
+        "A model on this computer keeps every paper on this computer.",
+        "Show models asks the server which models it has.",
+    ],
+    "keys": [
+        "Keys are kept on this computer, outside your project folder.",
+    ],
+    "guide": [
+        "Each worker has its own page in the guide.",
+    ],
+}
+GREETING = "Hello! Click me for a tip."
+
 
 def pixel(column, row, colour):
     """One square of the drawing; its column lets the stylesheet stagger an animation."""
@@ -95,6 +130,8 @@ def svg(name, scale):
                 continue
             part = PARTS.get(character, "body")
             groups[part].append(pixel(column, row, COLOURS[character]))
+            if part == "eye":
+                groups["body"].append(pixel(column, row, COLOURS["w"]))
             if character == "E":
                 groups["lid"].append(pixel(column, row, COLOURS["w"]))
 

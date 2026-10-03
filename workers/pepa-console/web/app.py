@@ -52,6 +52,7 @@ def template_values():
         "running": jobs.running_count(),
         "poll_ms": SETTINGS["poll_ms"],
         "draw_mascot": mascot.svg,
+        "tips": {"pages": mascot.TIPS, "greeting": mascot.GREETING},
     }
 
 

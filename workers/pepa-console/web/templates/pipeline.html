@@ -30,9 +30,9 @@
 {% endif %}
 
 <ol class="flow">
-  <li><a href="{{ url_for('console.browse_page', name='pepa-prep', slot='sources') }}"><span class="count">{{ "{:,}".format(summary.pdfs) }}{% if summary.pdfs_capped %}+{% endif %}</span><span class="label">PDFs</span></a></li>
-  <li><a href="{{ url_for('console.browse_page', name='pepa-prep', slot='results', **{'in': 'text'}) }}"><span class="count">{{ "{:,}".format(summary.prepared) }}</span><span class="label">Prepared</span></a></li>
-  <li><a href="{{ url_for('console.browse_page', name='pepa-sum', slot='results', q='sum_') }}"><span class="count">{{ "{:,}".format(summary.summarised) }}</span><span class="label">Summarised</span></a></li>
+  <li><a href="{{ url_for('console.browse_page', name='pepa-prep', slot='sources') }}"><span class="count" data-count="{{ summary.pdfs }}"{% if summary.pdfs_capped %} data-suffix="+"{% endif %}>{{ "{:,}".format(summary.pdfs) }}{% if summary.pdfs_capped %}+{% endif %}</span><span class="label">PDFs</span></a></li>
+  <li><a href="{{ url_for('console.browse_page', name='pepa-prep', slot='results', **{'in': 'text'}) }}"><span class="count" data-count="{{ summary.prepared }}">{{ "{:,}".format(summary.prepared) }}</span><span class="label">Prepared</span></a></li>
+  <li><a href="{{ url_for('console.browse_page', name='pepa-sum', slot='results', q='sum_') }}"><span class="count" data-count="{{ summary.summarised }}">{{ "{:,}".format(summary.summarised) }}</span><span class="label">Summarised</span></a></li>
   <li><a href="{{ url_for('console.read_page') }}"><span class="count">{{ summary.search_index or "None" }}</span><span class="label">Search index</span></a></li>
   <li><a href="{{ url_for('console.app_page', name='pepa-review') }}"><span class="count">{{ summary.review_index or "None" }}</span><span class="label">Review index</span></a></li>
 </ol>
