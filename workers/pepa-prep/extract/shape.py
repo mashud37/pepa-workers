@@ -7,6 +7,8 @@ _OVERSPLIT_UNITS = 8
 _OVERSPLIT_MEDIAN_PAGES = 3
 _TOC_OVERLAP = 0.5
 _BLANK_PAGE_CHARS = 200
+_NOTE_LEAD_SHARE = 0.10
+_MAX_LEAD_SHARE = 0.25
 _ROMAN_VALUES = {"i": 1, "v": 5, "x": 10, "l": 50, "c": 100, "d": 500, "m": 1000}
 
 _ORD_RE = re.compile(
@@ -65,6 +67,10 @@ def plausible(bounds: list, page_count: int, cfg: dict) -> dict:
     if n >= _OVERSPLIT_UNITS and median_span < _OVERSPLIT_MEDIAN_PAGES:
         return {"ok": False,
                 "notes": [f"{n} units at median {median_span:.0f} page(s): over-split"]}
+    lead = bounds[0]["page"]
+    if lead > _MAX_LEAD_SHARE * page_count:
+        return {"ok": False,
+                "notes": [f"first unit starts at page {lead + 1} of {page_count}: the split misses the book's start"]}
     return {"ok": True, "notes": []}
 
 
@@ -75,6 +81,8 @@ def diagnose(bounds: list, page_count: int) -> list:
     if not n:
         return notes
     median_span = statistics.median(spans(bounds, page_count))
+    if bounds[0]["page"] > _NOTE_LEAD_SHARE * page_count:
+        notes.append(f"the {bounds[0]['page']} page(s) before the first chapter are left out")
     nums = ordinals([b["title"] for b in bounds])
     runs = [r for r in _runs(nums) if len(r) >= 3]
     for r in runs:
