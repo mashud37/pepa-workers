@@ -898,8 +898,9 @@ def _preflight_cost_check(work, mode, threshold=COST_CONFIRM_THRESHOLD):
     model = config.load('ANTHROPIC_MODEL')
     p_in, p_out = price
     n = len(work)
-    total_in = n * 5000
-    total_out = n * 2500
+    ratio = config.chars_per_token(model)
+    total_in = n * config.PAPER_INPUT_CHARS / ratio
+    total_out = n * config.PAPER_OUTPUT_CHARS / ratio
     cost = total_in / 1e6 * p_in + total_out / 1e6 * p_out
     if mode == "batch":
         cost *= 0.5

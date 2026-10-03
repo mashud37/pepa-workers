@@ -83,6 +83,21 @@ _PRICES_PER_MTOK = {
     "claude-opus-4-8": (5.0, 25.0),
 }
 
+# Characters per token on paper text, by model: Opus 4.8 and the 5.x models use a
+# tokenizer that splits the same text into about 40% more tokens.
+_CHARS_PER_TOKEN_BY_MODEL = {
+    "claude-haiku-4-5": 4.1,
+    "claude-sonnet-4-6": 4.1,
+    "claude-opus-4-8": 2.9,
+    "claude-sonnet-5-5": 2.9,
+    "claude-opus-5-5": 2.9,
+}
+
+# Characters a typical paper sends to the model (brief plus rundown, system
+# prompts included) and gets back (sum_ plus para_), for the pre-run cost estimate.
+PAPER_INPUT_CHARS = 110_000
+PAPER_OUTPUT_CHARS = 17_500
+
 BACKENDS = (
     "anthropic",
     "openai-compatible",
@@ -230,6 +245,15 @@ def price_per_mtok(model=None):
         if model.startswith(key):
             return price
     return None
+
+
+def chars_per_token(model=None):
+    """Characters per token for the model's tokenizer; the older tokenizer's ratio when unknown."""
+    model = model or load("ANTHROPIC_MODEL")
+    for key, ratio in _CHARS_PER_TOKEN_BY_MODEL.items():
+        if model.startswith(key):
+            return ratio
+    return 4.1
 
 
 def _clamped_int(key, default, lo, hi):

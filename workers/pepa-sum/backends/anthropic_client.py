@@ -19,7 +19,8 @@ _BATCH_MAX_REQUESTS = 90000
 # Conservative byte budget (margin under 256 MB, and chars under-count UTF-8).
 _BATCH_MAX_BYTES = 180_000_000
 
-# Anthropic models expose a 200k-token context window. A prompt that, with its
+# Haiku 4.5 has a 200k-token context window (the 5.x models 1M; the guard keeps the
+# smaller one, which the text budget never approaches for them). A prompt that, with its
 # reserved output, would exceed it returns a fatal 400 mid-run, and a single
 # oversized paper would otherwise abort the whole batch (serial re-raises the
 # SystemExit; a batch request just fails silently and re-fails on every re-run).
