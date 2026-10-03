@@ -7,6 +7,7 @@
 <title>{% block title %}pepa{% endblock %}</title>
 <link rel="icon" type="image/svg+xml" href="{{ url_for('console.favicon') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='console.css') }}">
+<script src="{{ url_for('static', filename='theme.js') }}"></script>
 </head>
 <body{% if running %} class="busy"{% endif %}>
 <a class="skip" href="#content">Skip to content</a>
@@ -23,6 +24,11 @@
     <a href="{{ url_for('console.keys_page') }}"{% if section == "keys" %} aria-current="page"{% endif %}>Keys</a>
     <a href="{{ url_for('console.guide_page', name='index') }}"{% if section == "guide" %} aria-current="page"{% endif %}>Guide</a>
   </nav>
+  <button type="button" class="icon theme-toggle" data-theme-toggle aria-label="Theme" title="Theme: follow the system, light, or dark">
+    <svg class="icon-svg theme-system" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18V4a8 8 0 0 1 0 16z"/></svg>
+    <svg class="icon-svg theme-light" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10zM11 1h2v3h-2zm0 19h2v3h-2zM1 11h3v2H1zm19 0h3v2h-3zM4.22 5.64l1.42-1.42 2.12 2.12-1.42 1.42zm12.02 12.02 1.42-1.42 2.12 2.12-1.42 1.42zM4.22 18.36l2.12-2.12 1.42 1.42-2.12 2.12zM16.24 6.34l2.12-2.12 1.42 1.42-2.12 2.12z"/></svg>
+    <svg class="icon-svg theme-dark" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/></svg>
+  </button>
 </header>
 
 <main id="content" tabindex="-1">

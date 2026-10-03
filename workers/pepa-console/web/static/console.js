@@ -10,6 +10,21 @@ const CONFETTI_COLOURS = [
 ];
 const CONFETTI_PIECES = 18;
 
+const THEME_NAMES = {
+  system: "Theme: follows the system",
+  light: "Theme: light",
+  dark: "Theme: dark",
+};
+const ADDRESS_GROUPS = {
+  service: "Services",
+  computer: "On this computer",
+};
+const MENU_STEPS = {
+  ArrowDown: 1,
+  ArrowUp: -1,
+};
+const openedMenu = {menu: null, anchor: null, pick: null};
+
 const AFTER_SEND = {
   run: showRun,
   stop: function () {},
@@ -75,6 +90,12 @@ if (!calm) {
   }
 }
 
+for (const select of document.querySelectorAll("select")) {
+  enhanceSelect(select);
+}
+document.addEventListener("click", handleMenuClick);
+document.addEventListener("keydown", handleMenuKeys);
+labelThemeButton();
 
 
 function askFirst(form) {
@@ -385,3 +406,240 @@ async function keepRegionFresh(region) {
   }
 }
 
+
+// ---- Theme ----
+
+function cycleTheme() {
+  const now = savedTheme();
+  const next = THEME_CHOICES[(THEME_CHOICES.indexOf(now) + 1) % THEME_CHOICES.length];
+  saveTheme(next);
+  applyTheme(next);
+  labelThemeButton();
+}
+
+function labelThemeButton() {
+  const button = document.querySelector("[data-theme-toggle]");
+  button.setAttribute("aria-label", THEME_NAMES[savedTheme()]);
+  button.title = THEME_NAMES[savedTheme()];
+}
+
+
+// ---- Dropdown menus ----
+
+function handleMenuClick(event) {
+  if (event.target.closest("[data-theme-toggle]")) {
+    cycleTheme();
+    return;
+  }
+  const option = event.target.closest(".menu-option");
+  if (option) {
+    chooseOption(option);
+    return;
+  }
+  if (event.target.closest(".menu")) {
+    return;
+  }
+  const opener = event.target.closest(".select-button, [data-pick-address], [data-list-models]");
+  const sameOpener = opener !== null && opener === openedMenu.anchor;
+  closeMenu();
+  if (opener === null || sameOpener) {
+    return;
+  }
+  if (opener.matches(".select-button")) {
+    showSelectMenu(opener);
+  } else if (opener.matches("[data-pick-address]")) {
+    showAddressMenu(opener);
+  } else {
+    showModelMenu(opener);
+  }
+}
+
+function handleMenuKeys(event) {
+  if (openedMenu.menu === null) {
+    if (event.key === "ArrowDown" && event.target.matches(".select-button")) {
+      event.preventDefault();
+      showSelectMenu(event.target);
+    }
+    return;
+  }
+  if (event.key === "Escape") {
+    event.preventDefault();
+    const anchor = openedMenu.anchor;
+    closeMenu();
+    anchor.focus();
+    return;
+  }
+  if (event.key === "Tab") {
+    closeMenu();
+    return;
+  }
+  const step = MENU_STEPS[event.key];
+  if (step) {
+    event.preventDefault();
+    moveFocus(step);
+  }
+}
+
+function openMenu(anchor, groups, chosen, pick) {
+  const menu = document.createElement("div");
+  menu.className = "menu";
+  menu.setAttribute("role", "listbox");
+  for (const group of groups) {
+    if (group.label) {
+      const heading = document.createElement("div");
+      heading.className = "menu-group";
+      heading.textContent = group.label;
+      menu.append(heading);
+    }
+    for (const item of group.items) {
+      menu.append(menuOption(item, chosen));
+    }
+  }
+  const box = (anchor.closest(".combo") || anchor).getBoundingClientRect();
+  menu.style.left = box.left + window.scrollX + "px";
+  menu.style.top = box.bottom + window.scrollY + 4 + "px";
+  menu.style.minWidth = box.width + "px";
+  document.body.append(menu);
+  anchor.setAttribute("aria-expanded", "true");
+  openedMenu.menu = menu;
+  openedMenu.anchor = anchor;
+  openedMenu.pick = pick;
+  const first = menu.querySelector('[aria-selected="true"]') || menu.querySelector(".menu-option");
+  if (first) {
+    first.focus();
+  }
+}
+
+function menuOption(item, chosen) {
+  const option = document.createElement("button");
+  option.type = "button";
+  option.className = "menu-option";
+  option.setAttribute("role", "option");
+  option.setAttribute("aria-selected", String(item.value === chosen));
+  option.dataset.value = item.value;
+  const label = document.createElement("span");
+  label.textContent = item.label;
+  option.append(label);
+  if (item.detail) {
+    const detail = document.createElement("span");
+    detail.className = "menu-detail";
+    detail.textContent = item.detail;
+    option.append(detail);
+  }
+  return option;
+}
+
+function closeMenu() {
+  if (openedMenu.menu === null) {
+    return;
+  }
+  openedMenu.menu.remove();
+  openedMenu.anchor.setAttribute("aria-expanded", "false");
+  openedMenu.menu = null;
+  openedMenu.anchor = null;
+  openedMenu.pick = null;
+}
+
+function chooseOption(option) {
+  const anchor = openedMenu.anchor;
+  const pick = openedMenu.pick;
+  closeMenu();
+  pick(option.dataset.value);
+  anchor.focus();
+}
+
+function moveFocus(step) {
+  const options = Array.from(openedMenu.menu.querySelectorAll(".menu-option"));
+  const now = options.indexOf(document.activeElement);
+  const next = Math.min(Math.max(now + step, 0), options.length - 1);
+  options[next].focus();
+}
+
+function enhanceSelect(select) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "select-button";
+  button.setAttribute("aria-haspopup", "listbox");
+  button.setAttribute("aria-expanded", "false");
+  button.append(document.createElement("span"));
+  select.classList.add("visually-hidden");
+  select.tabIndex = -1;
+  select.after(button);
+  showChoice(select, button);
+  select.addEventListener("change", function () {
+    showChoice(select, button);
+  });
+}
+
+function showChoice(select, button) {
+  const option = select.options[select.selectedIndex];
+  const choice = option ? option.textContent : "";
+  button.firstChild.textContent = choice;
+  const field = select.closest("label");
+  const name = field && field.querySelector("span") ? field.querySelector("span").textContent : select.getAttribute("aria-label");
+  button.setAttribute("aria-label", (name || "Choice") + ": " + choice);
+}
+
+function showSelectMenu(button) {
+  const select = button.previousElementSibling;
+  const items = [];
+  for (const option of select.options) {
+    items.push({value: option.value, label: option.textContent, detail: option.dataset.detail || ""});
+  }
+  openMenu(button, [{label: "", items: items}], select.value, function (value) {
+    select.value = value;
+    select.dispatchEvent(new Event("change", {bubbles: true}));
+  });
+}
+
+function showAddressMenu(button) {
+  const addresses = JSON.parse(document.getElementById("addresses").textContent);
+  const checked = button.closest(".model-card").querySelector('input[type="radio"]:checked');
+  const route = checked ? checked.value : "";
+  const groups = [];
+  for (const name in ADDRESS_GROUPS) {
+    if (route && route !== name) {
+      continue;
+    }
+    const items = [];
+    for (const address of addresses[name]) {
+      items.push({value: address.value, label: address.label, detail: address.value});
+    }
+    groups.push({label: ADDRESS_GROUPS[name], items: items});
+  }
+  const input = button.closest(".combo").querySelector("input");
+  openMenu(button, groups, input.value, function (value) {
+    input.value = value;
+  });
+}
+
+async function showModelMenu(button) {
+  const input = button.closest(".combo").querySelector("input");
+  const form = new FormData();
+  form.append("token", document.querySelector('input[name="token"]').value);
+  form.append("app", button.dataset.app);
+  form.append("base_url", button.closest(".model-card").querySelector("[data-address]").value);
+  const label = button.textContent;
+  button.textContent = "Looking…";
+  button.disabled = true;
+  let data;
+  try {
+    const response = await fetch(button.dataset.listUrl, {method: "POST", body: form});
+    data = await response.json();
+  } catch (error) {
+    data = {error: "The console did not answer. Reload the page and try again."};
+  }
+  button.textContent = label;
+  button.disabled = false;
+  if (data.error) {
+    showMessage(data.error);
+    return;
+  }
+  const items = [];
+  for (const name of data.models) {
+    items.push({value: name, label: name, detail: ""});
+  }
+  openMenu(button, [{label: "", items: items}], input.value, function (value) {
+    input.value = value;
+  });
+}

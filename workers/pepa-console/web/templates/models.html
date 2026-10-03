@@ -4,51 +4,88 @@
 <div class="page-head">
   <div class="heading">
     <h1>Models</h1>
-    <p class="supporting">Which model each app writes with. Claude is the default. An OpenAI-compatible server is any service that accepts OpenAI's chat format, such as DeepSeek, Kimi, Qwen or GLM, or Ollama, LM Studio and vLLM running on this computer. Its key goes on the Keys page as PEPA_LLM_API_KEY; a server on this computer needs none.</p>
+    <p class="supporting">Which model writes for each app, and where it runs. Keys go on the Keys page.</p>
   </div>
 </div>
 
 <form method="post" action="{{ url_for('console.models_save') }}">
   <input type="hidden" name="token" value="{{ token }}">
   {% for app in page.apps %}
-  <h2 class="section-title">{{ app.name }}</h2>
-  <div class="card model-card">
-    <div class="fields">
-      <label class="field"><span>Backend</span>
-        <select name="{{ app.name }}|backend">
-          <option value="">Own file</option>
-          {% for option in app.options %}<option value="{{ option.value }}"{% if option.value == app.chosen.backend %} selected{% endif %}>{{ option.label }}</option>{% endfor %}
-        </select>
-      </label>
-      <label class="field"><span>Server address</span><input type="text" name="{{ app.name }}|base_url" list="addresses" value="{{ app.chosen.base_url }}" placeholder="OpenAI-compatible only"></label>
-      <label class="field"><span>Model</span><input type="text" name="{{ app.name }}|model" value="{{ app.chosen.model }}" placeholder="For example qwen3:8b"></label>
-      {% if app.has_quality %}
-      <label class="field"><span>Quality model</span><input type="text" name="{{ app.name }}|quality_model" value="{{ app.chosen.quality_model }}" placeholder="Same as the model"></label>
-      {% endif %}
+  <section class="card model-card" aria-labelledby="{{ app.name }}-title">
+    <h2 class="title" id="{{ app.name }}-title">{{ app.name }}</h2>
+    <div class="routes" role="radiogroup" aria-label="Where {{ app.name }}'s model runs">
+      <label class="route"><input type="radio" name="{{ app.name }}|route" value=""{% if not app.chosen.route %} checked{% endif %}><span class="route-name">Its own settings</span><span class="route-detail">Whatever its settings file says</span></label>
+      {% for value, route in page.routes.items() %}
+      <label class="route"><input type="radio" name="{{ app.name }}|route" value="{{ value }}"{% if app.chosen.route == value %} checked{% endif %}><span class="route-name">{{ route.label }}</span><span class="route-detail">{{ route.detail }}</span></label>
+      {% endfor %}
     </div>
-  </div>
+
+    <div class="route-fields when-claude">
+      {% for slot in app.slots %}
+      <label class="field"><span>{{ slot.label }}</span>
+        <select name="{{ app.name }}|{{ slot.setting }}|claude">
+          <option value="" data-detail="The app's own choice">Default: {% for model in page.claude_models if model.value == slot.default %}{{ model.label }}{% endfor %}</option>
+          {% for model in page.claude_models %}<option value="{{ model.value }}" data-detail="{{ model.detail }}"{% if app.chosen.route == 'claude' and app.chosen[slot.setting] == model.value %} selected{% endif %}>{{ model.label }}</option>{% endfor %}
+        </select>
+        <small class="hint">{{ slot.help }}</small>
+      </label>
+      {% endfor %}
+    </div>
+
+    <div class="route-fields when-server">
+      <div class="field wide"><span>Server address</span>
+        <div class="combo">
+          <input type="text" name="{{ app.name }}|base_url" value="{{ app.chosen.base_url }}" placeholder="https://… ending in /v1" data-address>
+          <button type="button" class="text" data-pick-address>Choose</button>
+        </div>
+        <small class="hint when-service">The provider's address. Its key goes on the Keys page as PEPA_LLM_API_KEY.</small>
+        <small class="hint when-computer">Start the program first; a server on this computer needs no key.</small>
+        <small class="hint when-cloud">Your service's address followed by /v1. pepa-sum's deploy command sets one up.</small>
+      </div>
+      {% for slot in app.slots %}
+      <div class="field"><span>{{ slot.label }}</span>
+        <div class="combo">
+          <input type="text" name="{{ app.name }}|{{ slot.setting }}|server" value="{% if app.chosen.route not in ['', 'claude'] %}{{ app.chosen[slot.setting] }}{% endif %}" placeholder="{% if slot.setting == 'quality_model' %}Same as the other{% else %}For example qwen3:8b{% endif %}" data-model-name>
+          <button type="button" class="text" data-list-models data-app="{{ app.name }}" data-list-url="{{ url_for('console.models_list') }}">Show models</button>
+        </div>
+        <small class="hint">{{ slot.help }}</small>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
   {% endfor %}
 
-  <h2 class="section-title">Embeddings for pepa-review and pepa-draft</h2>
-  <div class="card model-card">
-    <p class="supporting">pepa-draft searches the index pepa-review builds, so both use this one choice. After a change, rebuild that index: run pepa-review's index command with Rebuild from scratch ticked. DeepSeek and Kimi offer no embeddings; Qwen does, and Ollama runs them on this computer. Its key goes on the Keys page as PEPA_EMBED_API_KEY.</p>
+  <section class="card model-card embedding-card" aria-labelledby="embedding-title">
+    <h2 class="title" id="embedding-title">Embeddings for pepa-review and pepa-draft</h2>
+    <p class="supporting">pepa-draft searches the index pepa-review builds, so both use this one choice. After a change, run pepa-review's index with Rebuild from scratch ticked.</p>
     <div class="fields">
       <label class="field"><span>Provider</span>
         <select name="embedding|provider">
-          <option value="">Own file</option>
-          {% for value, label in page.embed_providers.items() %}<option value="{{ value }}"{% if value == page.embedding.provider %} selected{% endif %}>{{ label }}</option>{% endfor %}
+          <option value="" data-detail="Whatever their settings files say">Their own settings</option>
+          {% for provider in page.embed_providers %}<option value="{{ provider.value }}" data-detail="{{ provider.detail }}"{% if provider.value == page.embedding.provider %} selected{% endif %}>{{ provider.label }}</option>{% endfor %}
         </select>
       </label>
-      <label class="field"><span>Server address</span><input type="text" name="embedding|base_url" list="addresses" value="{{ page.embedding.base_url }}" placeholder="OpenAI-compatible only"></label>
-      <label class="field"><span>Model</span><input type="text" name="embedding|model" value="{{ page.embedding.model }}" placeholder="For example bge-m3"></label>
     </div>
-  </div>
+    <div class="route-fields when-embed-server">
+      <div class="field wide"><span>Server address</span>
+        <div class="combo">
+          <input type="text" name="embedding|base_url" value="{{ page.embedding.base_url }}" placeholder="https://… ending in /v1" data-address>
+          <button type="button" class="text" data-pick-address>Choose</button>
+        </div>
+        <small class="hint">A hosted provider's key goes on the Keys page as PEPA_EMBED_API_KEY.</small>
+      </div>
+      <div class="field"><span>Model</span>
+        <div class="combo">
+          <input type="text" name="embedding|model" value="{{ page.embedding.model }}" placeholder="For example bge-m3" data-model-name>
+          <button type="button" class="text" data-list-models data-app="embedding" data-list-url="{{ url_for('console.models_list') }}">Show models</button>
+        </div>
+      </div>
+    </div>
+  </section>
 
   <div class="form-actions"><button class="filled">Save</button></div>
 </form>
 
-<datalist id="addresses">
-  {% for address in page.addresses %}<option value="{{ address.url }}" label="{{ address.name }}"></option>{% endfor %}
-</datalist>
+<script type="application/json" id="addresses">{{ page.addresses | tojson }}</script>
 <p class="meta footnote">{{ page.file }}</p>
 {% endblock %}

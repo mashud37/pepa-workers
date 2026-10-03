@@ -465,6 +465,17 @@ def models_save():
     return redirect(url_for("console.models_page"))
 
 
+@bp.route("/models/list", methods=["POST"])
+def models_list():
+    try:
+        names = models.list_models(request.form.get("app", ""), request.form.get("base_url", "").strip())
+    except ValueError as error:
+        return jsonify({"error": str(error)})
+    if not names:
+        return jsonify({"error": "The server lists no models. Download one first, for example with ollama pull."})
+    return jsonify({"models": names})
+
+
 # ---- Keys ----
 
 @bp.route("/keys")

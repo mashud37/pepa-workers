@@ -1,14 +1,18 @@
 """Keep which model and server each app uses, and hand the choices to its jobs as environment variables.
-Apps left on their own file keep reading their own settings.
+Apps left on their own settings keep reading their own file.
 """
 import json
 import os
+import urllib.error
+import urllib.request
 
+from web import keys
 from web.settings import SETTINGS
 
 MODELS_FILE_NAME = "models.json"
+LIST_TIMEOUT_SECONDS = 8
 BLANK_GENERATION = {
-    "backend": "",
+    "route": "",
     "base_url": "",
     "model": "",
     "quality_model": "",
@@ -19,40 +23,53 @@ BLANK_EMBEDDING = {
     "model": "",
 }
 
-BACKEND_LABELS = {
-    "anthropic": "Anthropic (Claude)",
-    "openai-compatible": "OpenAI-compatible server (experimental)",
+# Where a model runs, as the page offers it; every route but Claude is an OpenAI-compatible server.
+ROUTES = {
+    "claude": {"label": "Claude", "backend": "anthropic", "detail": "Anthropic's models, with a key"},
+    "service": {"label": "Another service", "backend": "openai-compatible", "detail": "DeepSeek, Kimi, Qwen and others, with a key"},
+    "computer": {"label": "This computer", "backend": "openai-compatible", "detail": "Ollama, LM Studio, vLLM or llama.cpp"},
+    "cloud": {"label": "Your own cloud", "backend": "openai-compatible", "detail": "A server you deployed, such as pepa-sum's"},
 }
 
-# Each app's backends, and the environment variable each of its settings arrives in.
+# Prices are list prices in US dollars per million tokens, input then output.
+CLAUDE_MODELS = [
+    {"value": "claude-haiku-4-5-20251001", "label": "Claude Haiku 4.5", "detail": "Fastest and cheapest · $1 in, $5 out"},
+    {"value": "claude-sonnet-5-5", "label": "Claude Sonnet 5.5", "detail": "Better writing · $2 in, $10 out"},
+    {"value": "claude-opus-5-5", "label": "Claude Opus 5.5", "detail": "Strongest · $4 in, $20 out"},
+]
+
+# Each app's one or two model slots: what the slot does, the app's own Claude default, and the
+# variable the choice arrives in for Claude and for an OpenAI-compatible server.
 GENERATION = {
     "pepa-sum": {
-        "backends": ["anthropic", "openai-compatible"],
         "backend": "PEPA_BACKEND",
         "base_url": "PEPA_LLM_BASE_URL",
-        "model": "PEPA_LLM_MODEL",
-        "quality_model": "",
+        "slots": [
+            {"setting": "model", "label": "Model", "help": "Writes every brief and rundown.", "default": "claude-haiku-4-5-20251001", "anthropic": "PEPA_ANTHROPIC_MODEL", "openai-compatible": "PEPA_LLM_MODEL"},
+        ],
     },
     "pepa-review": {
-        "backends": ["anthropic", "openai-compatible"],
         "backend": "PEPAREVIEW_BACKEND",
         "base_url": "PEPAREVIEW_LLM_BASE_URL",
-        "model": "PEPAREVIEW_LLM_MODEL",
-        "quality_model": "PEPAREVIEW_LLM_QUALITY_MODEL",
+        "slots": [
+            {"setting": "model", "label": "Model for the many short steps", "help": "Sorts and labels papers, one small call each.", "default": "claude-haiku-4-5-20251001", "anthropic": "PEPAREVIEW_ANTHROPIC_MODEL", "openai-compatible": "PEPAREVIEW_LLM_MODEL"},
+            {"setting": "quality_model", "label": "Model for the writing", "help": "Writes the review, the gap map and the synthesis.", "default": "claude-sonnet-5-5", "anthropic": "PEPAREVIEW_REVIEW_MODEL", "openai-compatible": "PEPAREVIEW_LLM_QUALITY_MODEL"},
+        ],
     },
     "pepa-plan": {
-        "backends": ["anthropic", "openai-compatible"],
         "backend": "PEPAPLAN_BACKEND",
         "base_url": "PEPAPLAN_LLM_BASE_URL",
-        "model": "PEPAPLAN_LLM_MODEL",
-        "quality_model": "PEPAPLAN_LLM_QUALITY_MODEL",
+        "slots": [
+            {"setting": "model", "label": "Model for the many short steps", "help": "Labels the moves in every paragraph.", "default": "claude-haiku-4-5-20251001", "anthropic": "PEPAPLAN_ANTHROPIC_MODEL", "openai-compatible": "PEPAPLAN_LLM_MODEL"},
+            {"setting": "quality_model", "label": "Model for the writing", "help": "Writes the skeletons and the outline.", "default": "claude-sonnet-5-5", "anthropic": "PEPAPLAN_REVIEW_MODEL", "openai-compatible": "PEPAPLAN_LLM_QUALITY_MODEL"},
+        ],
     },
     "pepa-draft": {
-        "backends": ["anthropic", "openai-compatible"],
         "backend": "PEPADRAFT_BACKEND",
         "base_url": "PEPADRAFT_LLM_BASE_URL",
-        "model": "PEPADRAFT_LLM_MODEL",
-        "quality_model": "",
+        "slots": [
+            {"setting": "model", "label": "Model", "help": "Writes each section of the draft.", "default": "claude-opus-5-5", "anthropic": "PEPADRAFT_MODEL", "openai-compatible": "PEPADRAFT_LLM_MODEL"},
+        ],
     },
 }
 
@@ -69,28 +86,36 @@ EMBEDDING = {
         "model": "PEPADRAFT_EMBED_MODEL",
     },
 }
-EMBED_PROVIDER_LABELS = {
-    "gemini": "Gemini",
-    "openai-compatible": "OpenAI-compatible server",
-}
+EMBED_PROVIDERS = [
+    {"value": "gemini", "label": "Gemini", "detail": "Google's embeddings, with a key"},
+    {"value": "openai-compatible", "label": "OpenAI-compatible server", "detail": "Qwen, Ollama on this computer, and others"},
+]
 
-# Addresses offered as suggestions; any other address works the same way.
-ADDRESSES = [
-    {"name": "DeepSeek", "url": "https://api.deepseek.com/v1"},
-    {"name": "Kimi (Moonshot)", "url": "https://api.moonshot.ai/v1"},
-    {"name": "Kimi (Moonshot, mainland China)", "url": "https://api.moonshot.cn/v1"},
-    {"name": "Qwen (Alibaba Model Studio)", "url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"},
-    {"name": "Qwen (Alibaba Model Studio, mainland China)", "url": "https://dashscope.aliyuncs.com/compatible-mode/v1"},
-    {"name": "GLM (Zhipu)", "url": "https://open.bigmodel.cn/api/paas/v4"},
-    {"name": "Mistral", "url": "https://api.mistral.ai/v1"},
-    {"name": "Hugging Face Inference Providers", "url": "https://router.huggingface.co/v1"},
-    {"name": "OpenRouter", "url": "https://openrouter.ai/api/v1"},
-    {"name": "OpenAI", "url": "https://api.openai.com/v1"},
-    {"name": "Gemini", "url": "https://generativelanguage.googleapis.com/v1beta/openai"},
-    {"name": "Ollama on this computer", "url": "http://localhost:11434/v1"},
-    {"name": "LM Studio on this computer", "url": "http://localhost:1234/v1"},
-    {"name": "vLLM on this computer", "url": "http://localhost:8000/v1"},
-    {"name": "llama.cpp server on this computer", "url": "http://localhost:8080/v1"},
+# Addresses offered for each route; any other address works the same way.
+ADDRESSES = {
+    "service": [
+        {"value": "https://api.deepseek.com/v1", "label": "DeepSeek"},
+        {"value": "https://api.moonshot.ai/v1", "label": "Kimi (Moonshot)"},
+        {"value": "https://api.moonshot.cn/v1", "label": "Kimi (Moonshot, mainland China)"},
+        {"value": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1", "label": "Qwen (Alibaba Model Studio)"},
+        {"value": "https://dashscope.aliyuncs.com/compatible-mode/v1", "label": "Qwen (Alibaba Model Studio, mainland China)"},
+        {"value": "https://open.bigmodel.cn/api/paas/v4", "label": "GLM (Zhipu)"},
+        {"value": "https://api.mistral.ai/v1", "label": "Mistral"},
+        {"value": "https://router.huggingface.co/v1", "label": "Hugging Face Inference Providers"},
+        {"value": "https://openrouter.ai/api/v1", "label": "OpenRouter"},
+        {"value": "https://api.openai.com/v1", "label": "OpenAI"},
+        {"value": "https://generativelanguage.googleapis.com/v1beta/openai", "label": "Gemini"},
+    ],
+    "computer": [
+        {"value": "http://localhost:11434/v1", "label": "Ollama"},
+        {"value": "http://localhost:1234/v1", "label": "LM Studio"},
+        {"value": "http://localhost:8000/v1", "label": "vLLM"},
+        {"value": "http://localhost:8080/v1", "label": "llama.cpp server"},
+    ],
+}
+LOCAL_HOSTS = [
+    "localhost",
+    "127.0.0.1",
 ]
 
 
@@ -101,6 +126,20 @@ def store_file():
     return SETTINGS["keys_file"].parent / MODELS_FILE_NAME
 
 
+def route_of(saved):
+    """The route a saved choice belongs to; a choice saved before routes existed is read from its backend and address."""
+    if saved.get("route"):
+        return saved["route"]
+    if saved.get("backend") == "anthropic":
+        return "claude"
+    if saved.get("backend") != "openai-compatible":
+        return ""
+    for host in LOCAL_HOSTS:
+        if host in saved.get("base_url", ""):
+            return "computer"
+    return "service"
+
+
 def load_store():
     """Every choice made on the Models page, with a blank entry for anything not chosen yet."""
     data = {"generation": {}, "embedding": {}}
@@ -108,8 +147,11 @@ def load_store():
         data = json.loads(store_file().read_text(encoding="utf-8"))
     generation = {}
     for app_name in GENERATION:
+        saved = data.get("generation", {}).get(app_name, {})
         generation[app_name] = dict(BLANK_GENERATION)
-        generation[app_name].update(data.get("generation", {}).get(app_name, {}))
+        for setting in BLANK_GENERATION:
+            generation[app_name][setting] = saved.get(setting, "")
+        generation[app_name]["route"] = route_of(saved)
     embedding = dict(BLANK_EMBEDDING)
     embedding.update(data.get("embedding", {}))
     return {"generation": generation, "embedding": embedding}
@@ -142,42 +184,94 @@ def save_choices(form):
     """Check and store the Models page form, whose fields are named `app|setting` and `embedding|setting`.
 
     Raises:
-        ValueError: a backend the app does not offer, or an OpenAI-compatible choice without address or model.
+        ValueError: an unknown route, or a server choice without address or model.
     """
     store = {"generation": {}, "embedding": {}}
     for app_name, app in GENERATION.items():
-        chosen = {}
-        for setting in BLANK_GENERATION:
-            chosen[setting] = form.get(f"{app_name}|{setting}", "").strip()
-        if chosen["backend"] and chosen["backend"] not in app["backends"]:
-            raise ValueError(f"{app_name} has no backend called {chosen['backend']}.")
-        if chosen["backend"] == "openai-compatible":
+        route = form.get(f"{app_name}|route", "").strip()
+        if route and route not in ROUTES:
+            raise ValueError(f"{app_name} has no route called {route}.")
+        field_kind = "claude" if route == "claude" else "server"
+        chosen = dict(BLANK_GENERATION)
+        chosen["route"] = route
+        if route and route != "claude":
+            chosen["base_url"] = form.get(f"{app_name}|base_url", "").strip()
+        for slot in app["slots"]:
+            chosen[slot["setting"]] = form.get(f"{app_name}|{slot['setting']}|{field_kind}", "").strip()
+        if route and route != "claude":
             check_server(chosen["base_url"], chosen["model"], app_name)
         store["generation"][app_name] = chosen
 
     for setting in BLANK_EMBEDDING:
         store["embedding"][setting] = form.get(f"embedding|{setting}", "").strip()
     provider = store["embedding"]["provider"]
-    if provider and provider not in EMBED_PROVIDER_LABELS:
+    known = [choice["value"] for choice in EMBED_PROVIDERS]
+    if provider and provider not in known:
         raise ValueError(f"There is no embedding provider called {provider}.")
     if provider == "openai-compatible":
         check_server(store["embedding"]["base_url"], store["embedding"]["model"], "Embeddings")
     save_store(store)
 
 
+# ---- Listing a server's models ----
+
+def server_key(app_name):
+    """The key a server lookup sends for this app: the console's environment first, then the key store."""
+    variable = "PEPA_EMBED_API_KEY" if app_name == "embedding" else "PEPA_LLM_API_KEY"
+    if os.environ.get(variable):
+        return os.environ[variable]
+    store_app = "pepa-review" if app_name == "embedding" else app_name
+    return keys.environment_for(store_app).get(variable, "")
+
+
+def list_models(app_name, base_url):
+    """The model names an OpenAI-compatible server offers, asked from its /models address.
+
+    Raises:
+        ValueError: the address is not a web address, or the server refused or did not answer.
+    """
+    if not base_url.startswith(("http://", "https://")):
+        raise ValueError("Enter the server address first; it starts with http:// or https://.")
+    headers = {}
+    key = server_key(app_name)
+    if key:
+        headers["Authorization"] = f"Bearer {key}"
+    request = urllib.request.Request(base_url.rstrip("/") + "/models", headers=headers)
+    try:
+        with urllib.request.urlopen(request, timeout=LIST_TIMEOUT_SECONDS) as reply:
+            data = json.loads(reply.read())
+    except urllib.error.HTTPError as error:
+        if error.code in (401, 403):
+            raise ValueError("The server refused the key. Add it on the Keys page as PEPA_LLM_API_KEY.")
+        raise ValueError(f"The server answered with error {error.code}.")
+    except (urllib.error.URLError, OSError, ValueError):
+        raise ValueError("No answer from that address. Is the server running?")
+    names = [entry.get("id", "") for entry in data.get("data", [])]
+    return sorted(name for name in names if name)
+
+
 # ---- What a job receives ----
+
+def generation_variables(app_name, chosen):
+    """The variables one app's generation choice sets: its backend, its address, and a model per slot."""
+    app = GENERATION[app_name]
+    backend = ROUTES[chosen["route"]]["backend"]
+    wanted = {app["backend"]: backend}
+    if backend == "openai-compatible":
+        wanted[app["base_url"]] = chosen["base_url"]
+    for slot in app["slots"]:
+        if chosen[slot["setting"]]:
+            wanted[slot[backend]] = chosen[slot["setting"]]
+    return wanted
+
 
 def environment_for(app_name):
     """The model variables a job of this app receives. A variable already set in the console's
-    own environment wins, and an app left on its own file receives nothing."""
+    own environment wins, and an app left on its own settings receives nothing."""
     store = load_store()
     wanted = {}
-    if app_name in GENERATION and store["generation"][app_name]["backend"]:
-        chosen = store["generation"][app_name]
-        for setting in BLANK_GENERATION:
-            variable = GENERATION[app_name][setting]
-            if variable and chosen[setting]:
-                wanted[variable] = chosen[setting]
+    if app_name in GENERATION and store["generation"][app_name]["route"]:
+        wanted.update(generation_variables(app_name, store["generation"][app_name]))
     if app_name in EMBEDDING and store["embedding"]["provider"]:
         for setting, value in store["embedding"].items():
             if value:
@@ -185,7 +279,7 @@ def environment_for(app_name):
 
     environment = {}
     for variable, value in wanted.items():
-        if not os.environ.get(variable):
+        if value and not os.environ.get(variable):
             environment[variable] = value
     return environment
 
@@ -195,19 +289,17 @@ def page_view():
     store = load_store()
     apps = []
     for app_name, app in GENERATION.items():
-        options = []
-        for backend in app["backends"]:
-            options.append({"value": backend, "label": BACKEND_LABELS[backend]})
         apps.append({
             "name": app_name,
-            "options": options,
             "chosen": store["generation"][app_name],
-            "has_quality": bool(app["quality_model"]),
+            "slots": app["slots"],
         })
     return {
         "apps": apps,
-        "embedding": store["embedding"],
-        "embed_providers": EMBED_PROVIDER_LABELS,
+        "routes": ROUTES,
+        "claude_models": CLAUDE_MODELS,
         "addresses": ADDRESSES,
+        "embedding": store["embedding"],
+        "embed_providers": EMBED_PROVIDERS,
         "file": str(store_file()),
     }

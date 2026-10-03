@@ -7,14 +7,16 @@ computer in Ollama, LM Studio or vLLM.
 
 ## Choosing a model
 
-1. On **Models**, set a worker's backend to **OpenAI-compatible server**.
-2. Pick the server address from the list, or type another.
-3. Enter the model's name as the provider writes it.
+1. On **Models**, choose where a worker's model runs: **Claude**, **Another service**, **This
+   computer** or **Your own cloud**.
+2. For Claude, pick the model from the list.
+3. Otherwise, pick the server's address with **Choose** or type it, then **Show models** lists the
+   models that server offers.
 4. For a hosted service, add its key on **Keys** as `PEPA_LLM_API_KEY`. A server on this computer
    needs no key.
 
-pepa-review and pepa-plan also take a quality model for their longer writing; left blank, they use
-the one model throughout.
+pepa-review and pepa-plan use two models: one for the many short steps, such as labelling every
+paragraph, and one for the writing.
 
 | Provider | Address |
 |---|---|
