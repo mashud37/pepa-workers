@@ -12,7 +12,7 @@ import config
 from cli import ui
 
 _PLACEHOLDERS = {"", "changeme", "REPLACE_ME"}
-_CORE_DEPS = ["anthropic", "openai", "pypdf", "spacy", "sklearn", "rank_bm25", "numpy", "yaml"]
+_CORE_DEPS = ["anthropic", "openai", "pypdfium2", "spacy", "sklearn", "rank_bm25", "numpy", "yaml"]
 _DEFAULTS = {"BACKEND": "anthropic", "PARA_METHOD": "llm", "ON_EXISTING": "ask"}
 
 

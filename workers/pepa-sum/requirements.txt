@@ -1,6 +1,6 @@
 anthropic
 openai
-pypdf
+pypdfium2
 spacy
 scikit-learn
 numpy

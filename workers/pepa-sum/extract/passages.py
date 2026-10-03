@@ -65,7 +65,7 @@ def salient_sentences(text, signals, k=_TOP_SALIENT_SENTENCES,
 
 def _looks_noisy(s):
     """Reject footnotes, interview logs, page headers, and citation dumps
-    (the text pypdf interleaves into the body) as quote candidates."""
+    (the text the PDF's text layer interleaves into the body) as quote candidates."""
     if not s[:1].isalpha() or not s[0].isupper():
         return True
     if s[-1] not in ".!?\"'”’":

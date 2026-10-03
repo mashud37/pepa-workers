@@ -1,19 +1,22 @@
-"""Extract text from a PDF via PyMuPDF's embedded text layer, falling back
-to pypdf, then to local tesseract OCR for image-only pages.
+"""Extract text from a PDF's embedded text layer through pypdfium2, falling back
+to local tesseract OCR for image-only pages.
 """
-import logging
 import os
 import re
 import shutil
+import threading
 from collections import Counter
 from pathlib import Path
 
-from pypdf import PdfReader
+import pypdfium2 as pdfium
 
 import config
 from cli import ui
 
-logging.getLogger("pypdf").setLevel(logging.ERROR)
+# PDFium allows one call at a time in a process, and papers are read on several threads.
+_PDFIUM_LOCK = threading.Lock()
+# PDFium's mark for a hyphen it has already joined across a line break.
+_JOINED_HYPHEN = "\ufffe"
 
 # Where the Windows installer puts Tesseract, which it does not add to PATH.
 _WINDOWS_TESSERACT = Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Tesseract-OCR" / "tesseract.exe"
@@ -52,34 +55,19 @@ def read_pdf(path) -> str:
 
 
 def _text_pages(path):
-    """Per-page text via PyMuPDF (fitz): C-fast, and instant on image-only pages,
-    so a scanned/print-to-PDF is recognised as text-less at once instead of grinding
-    pypdf's pure-Python content-stream parser for minutes. Falls back to pypdf only
-    when PyMuPDF is not installed."""
-    try:
-        import fitz
-    except ImportError:
-        return _text_pages_pypdf(path)
-    # Malformed/print-to-PDF content streams make MuPDF print "syntax error in
-    # content stream" straight to stderr; the text still extracts fine, so mute
-    # the chatter: left on, it collides with the progress spinner's live line.
-    try:
-        fitz.TOOLS.mupdf_display_errors(False)
-    except Exception:
-        pass
+    """Per-page text through pypdfium2: fast, and instant on image-only pages, so a
+    scanned PDF is recognised as text-less at once."""
     out = []
-    with fitz.open(str(path)) as doc:
-        for page in doc:
-            raw = (page.get_text("text") or "").strip()
-            out.append(raw.encode("utf-8", "surrogatepass").decode("utf-8", "ignore"))
-    return out
-
-
-def _text_pages_pypdf(path):
-    out = []
-    for page in PdfReader(str(path)).pages:
-        raw = (page.extract_text() or "").strip()
-        out.append(raw.encode("utf-8", "surrogatepass").decode("utf-8", "ignore"))
+    with _PDFIUM_LOCK:
+        doc = pdfium.PdfDocument(str(path))
+        try:
+            for page in doc:
+                textpage = page.get_textpage()
+                raw = textpage.get_text_range().replace("\r\n", "\n").replace(_JOINED_HYPHEN, "")
+                textpage.close()
+                out.append(raw.strip().encode("utf-8", "surrogatepass").decode("utf-8", "ignore"))
+        finally:
+            doc.close()
     return out
 
 
@@ -106,7 +94,7 @@ def _strip_running_headers(pages, edge_lines=_HEADER_EDGE_LINES):
     """Remove running headers/footers and bare page-number lines.
 
     A running header (journal name, article title, author) repeats near the top
-    or bottom of most pages, so pypdf splices it into the body between pages. We
+    or bottom of most pages, so the text layer splices it into the body between pages. We
     find edge lines whose text (minus the page number) recurs across many pages
     and drop them everywhere, plus any line that is only a page number."""
     if len(pages) < 4:
@@ -148,35 +136,34 @@ def _ocr_pages(path, page_numbers):
 
     Degrades to a warning and no text when the OCR stack is unavailable."""
     try:
-        import fitz
         import pytesseract
-        from PIL import Image
     except ImportError:
         ui.warn(f"{path.name}: {len(page_numbers)} scanned page(s) skipped "
-                "(install PyMuPDF + pytesseract, plus tesseract)")
+                "(install pytesseract, plus tesseract)")
         return []
     if not shutil.which("tesseract") and _WINDOWS_TESSERACT.exists():
         pytesseract.pytesseract.tesseract_cmd = str(_WINDOWS_TESSERACT)
 
     dpi = config.ocr_dpi()
-    scale = dpi / 72
     total = len(page_numbers)
     # Heads-up BEFORE the slow loop starts, so a scanned paper reads as "OCR is
     # working" rather than a hang. Set OCR: off (or PEPA_OCR=off) to skip it.
     ui.warn(f"{path.name}: scanned, OCR-ing {total} page(s) at {dpi} dpi (slow)")
-    doc = fitz.open(str(path))
+    with _PDFIUM_LOCK:
+        doc = pdfium.PdfDocument(str(path))
     pages = []
     try:
         for i, n in enumerate(page_numbers, 1):
             ui.info(f"[{i}/{total}] OCR page {n + 1}")
             try:
-                pix = doc[n].get_pixmap(matrix=fitz.Matrix(scale, scale))
-                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                with _PDFIUM_LOCK:
+                    img = doc[n].render(scale=dpi / 72).to_pil()
                 raw = pytesseract.image_to_string(img).strip()
                 clean = raw.encode("utf-8", "surrogatepass").decode("utf-8", "ignore")
                 pages.append((n, clean))
             except Exception as e:
                 ui.warn(f"{path.name}: OCR failed on page {n + 1} ({e})")
     finally:
-        doc.close()
+        with _PDFIUM_LOCK:
+            doc.close()
     return pages
