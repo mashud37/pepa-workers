@@ -40,14 +40,19 @@ def page_count(doc):
 
 def page_size(doc, index):
     with LOCK:
-        return doc[index].get_size()
+        page = doc[index]
+        size = page.get_size()
+        page.close()
+    return size
 
 
 def page_text(doc, index):
     with LOCK:
-        textpage = doc[index].get_textpage()
+        page = doc[index]
+        textpage = page.get_textpage()
         text = textpage.get_text_range()
         textpage.close()
+        page.close()
     return text
 
 
@@ -69,6 +74,7 @@ def drawn_rules(doc, index):
                 counts["across"] += 1
             if right - left < RULE_THICKNESS and top - bottom > RULE_DOWN_SHARE * height:
                 counts["down"] += 1
+        page.close()
     return counts
 
 
@@ -97,9 +103,12 @@ def page_with_label(doc, label):
 def page_image(doc, index, dpi):
     """One page as a greyscale image for OCR."""
     with LOCK:
-        bitmap = doc[index].render(scale=dpi / 72, grayscale=True)
-        image = bitmap.to_pil()
-    return image.convert("L")
+        page = doc[index]
+        bitmap = page.render(scale=dpi / 72, grayscale=True)
+        image = bitmap.to_pil().convert("L")
+        bitmap.close()
+        page.close()
+    return image
 
 
 # ---- Characters into lines ----
@@ -146,6 +155,7 @@ def page_characters(doc, index):
                 "breaks": character == LINE_END_HYPHEN,
             })
         textpage.close()
+        page.close()
     return chars
 
 

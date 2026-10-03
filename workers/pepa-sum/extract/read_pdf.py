@@ -65,6 +65,7 @@ def _text_pages(path):
                 textpage = page.get_textpage()
                 raw = textpage.get_text_range().replace("\r\n", "\n").replace(_JOINED_HYPHEN, "")
                 textpage.close()
+                page.close()
                 out.append(raw.strip().encode("utf-8", "surrogatepass").decode("utf-8", "ignore"))
         finally:
             doc.close()
@@ -157,7 +158,11 @@ def _ocr_pages(path, page_numbers):
             ui.info(f"[{i}/{total}] OCR page {n + 1}")
             try:
                 with _PDFIUM_LOCK:
-                    img = doc[n].render(scale=dpi / 72).to_pil()
+                    page = doc[n]
+                    bitmap = page.render(scale=dpi / 72)
+                    img = bitmap.to_pil().copy()
+                    bitmap.close()
+                    page.close()
                 raw = pytesseract.image_to_string(img).strip()
                 clean = raw.encode("utf-8", "surrogatepass").decode("utf-8", "ignore")
                 pages.append((n, clean))
