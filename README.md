@@ -6,8 +6,6 @@ argument, and drafting quickly enough to test an idea before committing to it. E
 own app with its own commands, so a researcher takes only the parts they need; the judgement and
 the writing stay with them, and the workers add capacity for reading, ideation, and drafting.
 Everything runs on one machine for one person; only language-model and embedding calls leave it.
-Those go to Anthropic's Claude, to any service that accepts OpenAI's chat format such as DeepSeek,
-Kimi or Qwen, or to a model running on the same machine or on a cloud server of the user's own.
 
 ## Layout
 
