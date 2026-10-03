@@ -11,6 +11,7 @@ NAME_SEPARATORS = [
     "-",
     "_",
 ]
+OWNER_ONLY = 0o600
 
 
 def key_variables():
@@ -33,11 +34,13 @@ def load_store():
 
 
 def save_store(store):
-    """Write the store through a temporary file, so a crash never leaves half a file behind."""
+    """Write the store through a temporary file, so a crash never leaves half a file behind.
+    Only this user may read it, which matters on macOS and Linux; Windows already keeps APPDATA private."""
     path = SETTINGS["keys_file"]
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(".tmp")
     temporary.write_text(json.dumps(store, indent=2), encoding="utf-8")
+    temporary.chmod(OWNER_ONLY)
     os.replace(temporary, path)
 
 

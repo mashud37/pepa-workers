@@ -43,11 +43,15 @@ TEXT_SUFFIXES = [
     ".yaml",
 ]
 
-# A page or drawing an app wrote may carry its own script; it runs walled off from the console.
-WALLED_SUFFIXES = [
-    ".html",
-    ".svg",
+SHOWN_AS_IS = [
+    ".pdf",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
 ]
+
+# Any other file, such as a saved web page, may carry its own script; it runs walled off from the console.
 WALLED_POLICY = "sandbox allow-scripts"
 
 PORT_CHECK_SECONDS = 0.3
@@ -99,7 +103,7 @@ def folder_message(app_name, slot):
 def back_to(default):
     """The page a form asks to return to, or the given page when it asks for nothing sensible."""
     wanted = request.form.get("back", "")
-    if wanted.startswith("/") and not wanted.startswith("//"):
+    if wanted.startswith("/") and not wanted.startswith("//") and "\\" not in wanted:
         return wanted
     return default
 
@@ -258,7 +262,7 @@ def app_file(name, slot, relative):
     if path.suffix.lower() in TEXT_SUFFIXES:
         return send_file(path, mimetype="text/plain")
     response = send_file(path)
-    if path.suffix.lower() in WALLED_SUFFIXES:
+    if path.suffix.lower() not in SHOWN_AS_IS:
         response.headers["Content-Security-Policy"] = WALLED_POLICY
     return response
 
