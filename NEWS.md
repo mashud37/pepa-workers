@@ -1,3 +1,11 @@
+# pepa-workers 0.2.0 (unreleased)
+
+* New worker, `pepa-host`: deploys a model server of your own on Google Cloud Run or Azure
+  Container Apps for any worker to use. The console's Models page lists the servers it deployed.
+* pepa-prep and pepa-sum read PDFs with pypdfium2 and pdfplumber in place of PyMuPDF and pypdf.
+* The console copies PDFs one at a time with progress, lists each file a run is working on, and
+  starts no step that lacks a key.
+
 # pepa-workers 0.1.0 (unreleased)
 
 The first release: seven standalone workers in one package.
