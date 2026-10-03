@@ -9,7 +9,7 @@ _ACTIONS = [
     ("Settings", "backend + paragraph-rundown method", settings.run),
     ("Show config", "backend, model, costs", show_config.run),
     ("Install / setup", "env.yaml, API key, dependency checks", install.run),
-    ("Deploy service", "build + deploy the self-hosted fallback", deploy.run),
+    ("Deploy model", "put a self-hosted model on Cloud Run", deploy.run),
 ]
 
 

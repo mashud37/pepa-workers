@@ -34,7 +34,7 @@ def main():
     sub.add_parser("settings", help="Choose backend + paragraph-rundown method")
     sub.add_parser("config", help="Print effective config and cost note")
     sub.add_parser("install", help="Create env.yaml, store API key, check dependencies")
-    sub.add_parser("deploy", help="Build and deploy the self-hosted fallback service")
+    sub.add_parser("deploy", help="Put a self-hosted model on Cloud Run and use it")
 
     args = parser.parse_args()
     if args.no_input:

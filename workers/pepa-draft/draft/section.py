@@ -38,7 +38,7 @@ def draft(section_key: str, plan_items: list, context: dict = None, target: int 
         plan_items: Plan items assigned to this section.
         context: Dict with optional keys: review_text, retrieval, style.
         target: Target word count (default: config.SECTION_TARGETS[section_key]).
-        backend: LLM backend ('anthropic' or 'vllm').
+        backend: LLM backend ('anthropic' or 'openai-compatible').
 
     Returns:
         Dict with keys text and words.

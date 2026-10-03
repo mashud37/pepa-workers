@@ -1,19 +1,13 @@
-FROM vllm/vllm-openai:latest AS vllm
-
-FROM python:3.12-slim
+# pepa-draft self-hosted model: vLLM's OpenAI-compatible server behind a proxy that holds requests while the model loads.
+FROM vllm/vllm-openai:v0.30.0
 
 ARG DRAFT_MODEL=Qwen/Qwen3-32B-AWQ
 ENV DRAFT_MODEL=${DRAFT_MODEL}
 
-COPY --from=vllm /usr/local/bin/vllm /usr/local/bin/vllm
-COPY --from=vllm /usr/local/lib/python3.12/dist-packages /usr/local/lib/python3.12/dist-packages
+WORKDIR /app
 
-RUN pip install flask gunicorn
+RUN pip install --no-cache-dir flask gunicorn
 
 COPY cloud/serve_vllm.py /app/serve_vllm.py
 
-WORKDIR /app
-
-# Start vLLM in background, then launch the Flask proxy
-CMD sh -c "vllm serve ${DRAFT_MODEL} --port 8001 --tensor-parallel-size 1 & \
-    gunicorn -w 1 -b 0.0.0.0:8080 serve_vllm:app"
+ENTRYPOINT ["sh", "-c", "vllm serve ${DRAFT_MODEL} --served-model-name ${DRAFT_MODEL} --api-key ${API_KEY} --port 8001 --tensor-parallel-size 1 & gunicorn -w 1 -t 0 -b 0.0.0.0:8080 serve_vllm:app"]

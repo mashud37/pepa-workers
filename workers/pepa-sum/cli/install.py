@@ -3,7 +3,6 @@ dependencies. Safe to rerun: only missing, blank, or placeholder values are
 filled, a real key is never overwritten.
 """
 import getpass
-import secrets
 import shutil
 import sys
 
@@ -28,10 +27,7 @@ def run():
     _check_deps()
     _check_spacy_model()
     ui.step("Next")
-    backend = config.load('BACKEND')
-    if backend == "cloudrun":
-        ui.info(f"Deploy the self-hosted service:  {config.COMMAND} deploy")
-    elif backend == "openai-compatible" and not (config.load('LLM_BASE_URL') and config.load('LLM_MODEL')):
+    if config.load('BACKEND') == "openai-compatible" and not (config.load('LLM_BASE_URL') and config.load('LLM_MODEL')):
         ui.info(f"Set LLM_BASE_URL and LLM_MODEL in env.yaml, then run:  {config.COMMAND} summarize")
     else:
         ui.info(f"Drop PDFs in input/ and run:  {config.COMMAND} summarize")
@@ -59,11 +55,6 @@ def _ensure_env():
         if str(data.get(key, "")).strip() in _PLACEHOLDERS:
             data[key] = default
             changed = True
-
-    if str(data.get("JOB_TOKEN", "")).strip() in _PLACEHOLDERS:
-        data["JOB_TOKEN"] = secrets.token_hex(32)
-        changed = True
-        ui.ok("generated JOB_TOKEN (self-hosted fallback)")
 
     if data.get("BACKEND") == "anthropic" and not config.load('ANTHROPIC_API_KEY'):
         key = _prompt_api_key()

@@ -15,7 +15,6 @@ def run():
     embed = config.embed_config()
     ui.info(f"embed_provider  : {embed['provider'] or '(none)'}")
     ui.info(f"embed_model     : {embed['model'] or '(none)'}")
-    ui.info(f"vllm_base_url   : {config.get('vllm_base_url') or '(none)'}")
     ui.info(f"review_index    : {config.review_index_file()}")
     ui.info(f"  exists        : {config.review_index_file().exists()}")
     ui.info(f"style_index     : {config.STYLE_INDEX_FILE}")

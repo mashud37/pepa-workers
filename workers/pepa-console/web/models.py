@@ -22,14 +22,12 @@ BLANK_EMBEDDING = {
 BACKEND_LABELS = {
     "anthropic": "Anthropic (Claude)",
     "openai-compatible": "OpenAI-compatible server (experimental)",
-    "cloudrun": "Cloud Run service",
-    "vllm": "Cloud Run vLLM service",
 }
 
 # Each app's backends, and the environment variable each of its settings arrives in.
 GENERATION = {
     "pepa-sum": {
-        "backends": ["anthropic", "openai-compatible", "cloudrun"],
+        "backends": ["anthropic", "openai-compatible"],
         "backend": "PEPA_BACKEND",
         "base_url": "PEPA_LLM_BASE_URL",
         "model": "PEPA_LLM_MODEL",
@@ -50,7 +48,7 @@ GENERATION = {
         "quality_model": "PEPAPLAN_LLM_QUALITY_MODEL",
     },
     "pepa-draft": {
-        "backends": ["anthropic", "openai-compatible", "vllm"],
+        "backends": ["anthropic", "openai-compatible"],
         "backend": "PEPADRAFT_BACKEND",
         "base_url": "PEPADRAFT_LLM_BASE_URL",
         "model": "PEPADRAFT_LLM_MODEL",

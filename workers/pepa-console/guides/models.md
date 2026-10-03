@@ -40,6 +40,15 @@ pepa-sum sends each paper whole when it fits the model's context window, 32,768 
 `CONTEXT_TOKENS` in pepa-sum's `env.yaml` says otherwise. Ollama drops whatever goes past its own
 context length, so start it with `OLLAMA_CONTEXT_LENGTH` set to the same number.
 
+## A model in your own cloud
+
+pepa-sum's **deploy** puts Qwen2.5 3B on Google Cloud Run in your own project and points pepa-sum at
+it. It needs the `gcloud` command, signed in.
+
+pepa-draft's `cloud/Dockerfile.vllm` runs a larger model, Qwen3 32B, on a Cloud Run GPU. Deploy it
+with an `API_KEY` variable, then enter its address followed by `/v1` and that key as for any other
+server.
+
 ## Embeddings
 
 pepa-review's index and pepa-draft's style matching compare texts by their embeddings, a list of

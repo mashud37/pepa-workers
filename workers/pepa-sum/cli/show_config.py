@@ -20,16 +20,13 @@ def run():
         ui.info(f"server       {config.load('LLM_BASE_URL') or 'MISSING'}")
         ui.info(f"API key      {'set' if config.load('LLM_API_KEY') else 'none'}")
         ui.info(f"context      {config.context_tokens():,} tokens")
-    else:
-        ui.info(f"endpoint     {config.load('BASE_URL') or '(not deployed)'}")
-        ui.info(f"token        {'set' if config.load('JOB_TOKEN') else 'missing'}")
 
     ui.info(f"text budget  {config.text_budget():,} chars sent per paper")
     ui.info(f"run mode     {config.load('MODE')}  ·  speed tier {config.speed()}  ·  "
             f"local stage {config.local_workers()} process(es)")
-    ui.info(f"concurrency  {config.paper_workers()} papers at once  ·  "
-            f"max {config.max_concurrency()} LLM calls in flight  ·  "
-            f"{config.max_workers()} rundown workers")
+    ui.info(f"concurrency  {config.throughput('PAPER_WORKERS')} papers at once  ·  "
+            f"max {config.throughput('MAX_CONCURRENCY')} LLM calls in flight  ·  "
+            f"{config.throughput('MAX_WORKERS')} rundown workers")
     ui.info(f"look-ahead   read up to {config.local_batch()} papers ahead (parallel mode)")
     if config.load('BACKEND') == "anthropic":
         ui.info(f"batch poll   every {config.batch_poll_seconds()}s (batch mode)")

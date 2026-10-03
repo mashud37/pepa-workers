@@ -48,8 +48,6 @@ _ENV_OVERRIDE = {
     "gemini_api_key": "GEMINI_API_KEY",
     "ollama_base_url": "PEPADRAFT_OLLAMA_URL",
     "embed_model": "PEPADRAFT_EMBED_MODEL",
-    "vllm_base_url": "PEPADRAFT_VLLM_URL",
-    "vllm_token": "PEPADRAFT_VLLM_TOKEN",
     "review_index": "PEPADRAFT_REVIEW_INDEX",
     "backend": "PEPADRAFT_BACKEND",
     "llm_base_url": "PEPADRAFT_LLM_BASE_URL",
@@ -64,19 +62,15 @@ DEFAULTS = {
     "anthropic_api_key": "",
     "gemini_api_key": "",
     "ollama_base_url": "http://localhost:11434",
-    "vllm_base_url": "",
-    "vllm_token": "",
     "backend": "anthropic",
     "embed_provider": "gemini",
 }
 
 # `anthropic` calls Claude; `openai-compatible` calls any server that accepts OpenAI's
-# chat format (DeepSeek, Kimi, Qwen, Ollama, vLLM) at llm_base_url; `vllm` calls the
-# Cloud Run service.
+# chat format (DeepSeek, Kimi, Qwen, Ollama, vLLM, the service in cloud/) at llm_base_url.
 BACKENDS = (
     "anthropic",
     "openai-compatible",
-    "vllm",
 )
 
 # Each embedding provider's default model, and the setting it cannot run without.

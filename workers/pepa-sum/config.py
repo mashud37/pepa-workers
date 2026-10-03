@@ -26,9 +26,6 @@ _ENV_OVERRIDE = {
     "SUBFOLDERS": "PEPA_SUBFOLDERS",
     "ANTHROPIC_API_KEY": "ANTHROPIC_API_KEY",
     "ANTHROPIC_MODEL": "PEPA_ANTHROPIC_MODEL",
-    "BASE_URL": "PEPA_BASE_URL",
-    "JOB_TOKEN": "PEPA_JOB_TOKEN",
-    "MODEL": "PEPA_MODEL",
     "LLM_BASE_URL": "PEPA_LLM_BASE_URL",
     "LLM_MODEL": "PEPA_LLM_MODEL",
     "LLM_API_KEY": "PEPA_LLM_API_KEY",
@@ -53,9 +50,6 @@ DEFAULTS = {
     "SUBFOLDERS": "off",
     "ANTHROPIC_API_KEY": None,
     "ANTHROPIC_MODEL": "claude-haiku-4-5-20251001",
-    "BASE_URL": None,
-    "JOB_TOKEN": None,
-    "MODEL": "qwen2.5-3b-instruct",
     "LLM_BASE_URL": None,
     "LLM_MODEL": None,
     "LLM_API_KEY": None,
@@ -101,7 +95,6 @@ PAPER_OUTPUT_CHARS = 17_500
 BACKENDS = (
     "anthropic",
     "openai-compatible",
-    "cloudrun",
 )
 PARA_METHODS = ("llm", "extractive")
 # OCR policy for scanned pages. `auto` only OCRs a document that is mostly image
@@ -129,15 +122,18 @@ _SPEED = {
     "balanced": {"paper": 6,  "conc": 16, "rundown": 4, "pph": 750},
     "turbo":    {"paper": 12, "conc": 28, "rundown": 6, "pph": 1200},
 }
+_THROUGHPUT = {
+    "PAPER_WORKERS": {"tier": "paper", "low": 1, "high": 16},
+    "MAX_CONCURRENCY": {"tier": "conc", "low": 1, "high": 32},
+    "MAX_WORKERS": {"tier": "rundown", "low": 1, "high": 8},
+}
 
 # Characters of paper text sent to the LLM. Anthropic models have a 200k-token
 # context; this caps only the body text, so it must stay well under the ceiling
 # to leave room for the signals block, system prompt, and the output reservation
 # (~200k tokens ≈ 800k chars, but dense academic text runs ~3.5 chars/token, so
 # 600k keeps the full-text path safely under the limit). Past it we fall back to
-# opening + retrieved passages. The cloudrun self-hosted model is limited to 16k
-# tokens (~36k chars), so it falls back far sooner.
-_TEXT_BUDGET_CLOUDRUN = 70_000
+# opening + retrieved passages.
 _TEXT_BUDGET_ANTHROPIC = 600_000
 
 # An openai-compatible model's context window varies by model and server, so the
@@ -148,10 +144,7 @@ CHARS_PER_TOKEN = 3.5
 
 
 def text_budget():
-    backend = load("BACKEND")
-    if backend == "cloudrun":
-        return _TEXT_BUDGET_CLOUDRUN
-    if backend == "openai-compatible":
+    if load("BACKEND") == "openai-compatible":
         room = context_tokens() - CONTEXT_RESERVE_TOKENS
         return int(room * CHARS_PER_TOKEN)
     return _TEXT_BUDGET_ANTHROPIC
@@ -164,11 +157,8 @@ def context_tokens():
 
 def model_name():
     """The model the configured backend generates with."""
-    backend = load("BACKEND")
-    if backend == "openai-compatible":
+    if load("BACKEND") == "openai-compatible":
         return load("LLM_MODEL")
-    if backend == "cloudrun":
-        return load("MODEL")
     return load("ANTHROPIC_MODEL")
 
 
@@ -282,27 +272,11 @@ def est_parallel_pph():
     return _tier()["pph"]
 
 
-def max_workers():
-    """Concurrent LLM requests for the paragraph rundown. The self-hosted
-    cloudrun model is a single scale-to-zero instance, so it stays serial."""
-    if load("BACKEND") == "cloudrun":
-        return 1
-    return _clamped_int("MAX_WORKERS", _tier()["rundown"], 1, 8)
-
-
-def paper_workers():
-    """Papers processed concurrently across the batch. cloudrun is a single
-    scale-to-zero instance, so it stays serial regardless of this value."""
-    if load("BACKEND") == "cloudrun":
-        return 1
-    return _clamped_int("PAPER_WORKERS", _tier()["paper"], 1, 16)
-
-
-def max_concurrency():
-    """Hard cap on total simultaneous Anthropic requests across all papers and
-    their internal fan-out: the real throttle that bounds rate-limit exposure
-    however the paper and rundown pools happen to nest."""
-    return _clamped_int("MAX_CONCURRENCY", _tier()["conc"], 1, 32)
+def throughput(key):
+    """PAPER_WORKERS (papers at once), MAX_CONCURRENCY (LLM calls in flight, the real rate-limit
+    guard) or MAX_WORKERS (rundown calls per paper): the setting, else the speed tier's default."""
+    limits = _THROUGHPUT[key]
+    return _clamped_int(key, _tier()[limits["tier"]], limits["low"], limits["high"])
 
 
 def local_workers():
@@ -328,7 +302,7 @@ def local_batch():
     most this many extracted papers are held in memory at once, so peak memory
     stays bounded instead of holding every paper's text. Defaults to keeping the
     paper pool comfortably fed."""
-    default = max(paper_workers() * 4, 24)
+    default = max(throughput('PAPER_WORKERS') * 4, 24)
     return _clamped_int("LOCAL_BATCH", default, 4, 2000)
 
 

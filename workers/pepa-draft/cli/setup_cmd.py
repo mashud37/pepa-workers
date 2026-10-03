@@ -9,8 +9,6 @@ _KEYS = [
     ("llm_model", "OpenAI-compatible model name (skip if using Anthropic)", False),
     ("gemini_api_key", "Gemini API key (embeddings; skip if using Ollama)", False),
     ("ollama_base_url", "Ollama base URL (embeddings; skip if using Gemini)", False),
-    ("vllm_base_url", "vLLM Cloud Run URL (skip if using Anthropic only)", False),
-    ("vllm_token", "vLLM auth token (skip if no vLLM URL)", False),
     ("review_index", "Path to pepa-review index.json (skip to use default)", False),
 ]
 

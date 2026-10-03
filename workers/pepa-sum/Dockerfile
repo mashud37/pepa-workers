@@ -1,4 +1,6 @@
+# pepa-sum self-hosted model: llama.cpp's OpenAI-compatible server on CPU, the model baked in.
 FROM python:3.11-slim
+
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -7,14 +9,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements-serve.txt .
 RUN pip install --no-cache-dir -r requirements-serve.txt
 
-# Bake the instruction-tuned model into the image so inference is ready on a
-# cold start. Override the URL at build time to swap models.
 ARG MODEL_GGUF_URL=https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf
+ARG MODEL_ALIAS=qwen2.5-3b-instruct
 RUN mkdir -p /models && curl -fSL "$MODEL_GGUF_URL" -o /models/model.gguf
 
-COPY serve/ ./serve/
+ENV MODEL=/models/model.gguf
+ENV MODEL_ALIAS=${MODEL_ALIAS}
+ENV HOST=0.0.0.0
+ENV N_CTX=16384
+ENV N_THREADS=8
 
-ENV MODEL_PATH=/models/model.gguf
-ENV PORT=8080
-# One worker (the model is large); no request timeout — CPU generation is slow.
-CMD ["sh", "-c", "gunicorn -b 0.0.0.0:${PORT} -w 1 -t 0 serve.app:app"]
+CMD ["python", "-m", "llama_cpp.server"]

@@ -150,14 +150,11 @@ def _docs_todo(pdf, out_dir, regen):
 # ---- Mode selection (by estimated wall-clock time) ----
 
 def _select_mode(n, override=None):
-    """Resolve the execution mode. cloudrun is always serial; an explicit mode
-    (flag or config) is honoured; otherwise `auto` picks the fastest estimate."""
+    """Resolve the execution mode. An explicit mode (flag or config) is
+    honoured; otherwise `auto` picks the fastest estimate."""
     wanted = (override or config.load('MODE') or "auto").lower()
-    backend = config.load('BACKEND')
-    if wanted == "batch" and backend != "anthropic":
+    if wanted == "batch" and config.load('BACKEND') != "anthropic":
         raise SystemExit("Batch mode requires the anthropic backend.")
-    if backend == "cloudrun":
-        return "serial"
     if wanted in ("serial", "parallel", "batch"):
         return wanted
     if wanted != "auto":
@@ -174,7 +171,7 @@ def _estimate(n):
     account's rate limit); batch carries a latency floor but very high throughput
     once running, so it overtakes parallel on large volumes."""
     cores = config.local_workers()
-    conc = config.max_concurrency()
+    conc = config.throughput('MAX_CONCURRENCY')
     local_serial = n * config.EST_LOCAL_SECONDS
     llm_serial = n * config.EST_LLM_SECONDS
     serial = local_serial + llm_serial
@@ -188,9 +185,6 @@ def _estimate(n):
 
 def _show_plan(n, chosen, override):
     ui.step(f"Planning {n} paper(s)")
-    if config.load('BACKEND') == "cloudrun":
-        ui.info("cloudrun backend: serial (single scale-to-zero instance)")
-        return
     est = _estimate(n)
     for m in est:
         mark = "  <- chosen" if m == chosen else ""
@@ -445,11 +439,11 @@ def _run_parallel(work, out_dir, skipped):
         return 0
 
     local_w = min(config.local_workers(), n)
-    paper_w = min(config.paper_workers(), n)
+    paper_w = min(config.throughput('PAPER_WORKERS'), n)
     window = max(config.local_batch(), paper_w)
     ui.info(f"parallel ({config.speed()}): reading up to {window} papers ahead "
             f"across {local_w} process(es), summarising {paper_w} at once, up to "
-            f"{config.max_concurrency()} LLM calls in flight  ·  "
+            f"{config.throughput('MAX_CONCURRENCY')} LLM calls in flight  ·  "
             f"Ctrl-C to stop after running papers finish")
     ui.step(f"Summarising {n} paper(s)")
 
@@ -730,7 +724,7 @@ def _batch_progress(status):
             f"{c.errored} err · {c.processing} processing")
 
 
-# ---- Serial mode (single paper, or the cloudrun backend) ----
+# ---- Serial mode ----
 # Live spinner per step, with a one-paper look-ahead so the next paper's local
 # stage overlaps the LLM.
 
@@ -914,7 +908,7 @@ def _preflight_cost_check(work, mode, threshold=COST_CONFIRM_THRESHOLD):
 
 def _reset_usage():
     """Zero the token tally before a run, so the cost estimate covers only it.
-    Only the anthropic backend reports usage; cloudrun bills by CPU time."""
+    Only the anthropic backend reports usage."""
     if config.load('BACKEND') == "anthropic":
         from backends import anthropic_client
         anthropic_client.reset_usage()

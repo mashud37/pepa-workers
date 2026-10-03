@@ -44,8 +44,8 @@ def run():
     })
     ui.ok(f"saved: backend={backend}, para_method={para}, on_existing={on_existing}, "
           f"mode={run_mode}, speed={speed}, ocr={ocr}")
-    ui.info(f"{speed} → {config.paper_workers()} papers · "
-            f"{config.max_concurrency()} LLM calls · {config.local_workers()} read process(es) "
+    ui.info(f"{speed} → {config.throughput('PAPER_WORKERS')} papers · "
+            f"{config.throughput('MAX_CONCURRENCY')} LLM calls · {config.local_workers()} read process(es) "
             f"· up to {config.local_batch()} read ahead")
 
     if backend == "anthropic" and not config.load('ANTHROPIC_API_KEY'):

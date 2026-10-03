@@ -33,7 +33,7 @@ def calls_in_flight():
     """One semaphore sized to MAX_CONCURRENCY, so every thread together stays under the cap."""
     with _lock:
         if _gate["semaphore"] is None:
-            _gate["semaphore"] = threading.BoundedSemaphore(config.max_concurrency())
+            _gate["semaphore"] = threading.BoundedSemaphore(config.throughput('MAX_CONCURRENCY'))
         return _gate["semaphore"]
 
 

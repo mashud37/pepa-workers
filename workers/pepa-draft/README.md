@@ -2,7 +2,8 @@
 
 Turns a pepa-review literature review and a pepa-plan outline into rough section drafts, so an idea
 for a paper can be read in prose before committing to it. Only the model call leaves the machine,
-and it goes to Claude, any server that accepts OpenAI's chat format, or a self-hosted vLLM endpoint.
+and it goes to Claude or any server that accepts OpenAI's chat format, including a self-hosted vLLM
+service built from `cloud/Dockerfile.vllm`.
 
 ## How it works
 

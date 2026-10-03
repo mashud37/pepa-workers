@@ -48,7 +48,7 @@ def _complete_chunk(chunk):
 
 def _llm_rundown(paragraphs):
     chunks = _chunks(paragraphs)
-    workers = min(config.max_workers(), len(chunks))
+    workers = min(config.throughput('MAX_WORKERS'), len(chunks))
     if workers <= 1:
         texts = [_complete_chunk(c) for c in chunks]
     else:

@@ -86,9 +86,9 @@ def reset_usage():
 
 
 def _governor():
-    """One BoundedSemaphore sized to config.max_concurrency(), shared by every
+    """One BoundedSemaphore sized to config.throughput('MAX_CONCURRENCY'), shared by every
     thread, so total simultaneous API calls stay within the configured cap."""
-    limit = config.max_concurrency()
+    limit = config.throughput('MAX_CONCURRENCY')
     with _gate_lock:
         if _gate["sem"] is None or _gate["limit"] != limit:
             _gate["limit"] = limit
