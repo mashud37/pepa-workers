@@ -4,7 +4,7 @@
 {% block content %}
 <nav class="crumbs-nav" aria-label="Breadcrumb">
   <ol>
-    <li><a href="{{ url_for('console.pipeline') }}">Library</a></li>
+    <li><a href="{{ url_for('console.pipeline') }}">Home</a></li>
     <li><a href="{{ url_for('console.app_page', name=app.name) }}">{{ app.name }}</a></li>
     {% if inside %}
     <li><a href="{{ url_for('console.browse_page', name=app.name, slot=slot) }}">{{ place.label }}</a></li>

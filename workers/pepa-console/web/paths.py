@@ -15,7 +15,7 @@ from web.settings import SETTINGS
 PLACES = [
     {"app": "pepa-prep", "slot": "sources", "role": "reads", "label": "PDFs to prepare", "variable": "PEPAPREP_INPUT_DIR", "default": "pepa-prep/input"},
     {"app": "pepa-prep", "slot": "results", "role": "writes", "label": "Prepared text", "variable": "PEPAPREP_OUTPUT_DIR", "default": "pepa-prep/output"},
-    {"app": "pepa-sum", "slot": "sources", "role": "reads", "label": "Papers to summarise", "variable": "PEPA_INPUT_DIR", "default": "pepa-sum/input"},
+    {"app": "pepa-sum", "slot": "sources", "role": "reads", "label": "Papers to summarise", "variable": "PEPA_INPUT_DIR", "default": "pepa-prep/output/text"},
     {"app": "pepa-sum", "slot": "results", "role": "writes", "label": "Summaries", "variable": "PEPA_OUTPUT_DIR", "default": "pepa-sum/output"},
     {"app": "pepa-read", "slot": "texts", "role": "reads", "label": "Prepared text to index", "variable": "PEPA_READER_TEXT_DIR", "default": "pepa-prep/output/text"},
     {"app": "pepa-read", "slot": "summaries", "role": "reads", "label": "Summaries to index", "variable": "PEPA_READER_SUM_DIR", "default": "pepa-sum/output"},
@@ -43,6 +43,10 @@ OPEN_COMMAND = {
 
 FOLDERS_FILE_NAME = "folders.json"
 EXCLUDED_FILE_NAME = "excluded.json"
+EXCLUDING_APPS = [
+    "pepa-prep",
+    "pepa-sum",
+]
 DRIVE_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 MAX_ENTRIES = 500
 
@@ -85,29 +89,61 @@ def save_store(store):
 
 
 def excluded_file():
-    """Where the names of the PDFs set aside are kept, a list every job that reads PDFs skips."""
+    """Where the PDFs set aside are kept, one list of file names per stage that skips them."""
     return SETTINGS["keys_file"].parent / EXCLUDED_FILE_NAME
 
 
 def load_excluded():
-    """The file names set aside, as a set."""
-    path = excluded_file()
-    if not path.exists():
-        return set()
-    return set(json.loads(path.read_text(encoding="utf-8")))
+    """The PDF names set aside, keyed by the app whose stage skips them."""
+    lists = {app_name: [] for app_name in EXCLUDING_APPS}
+    if excluded_file().exists():
+        lists.update(json.loads(excluded_file().read_text(encoding="utf-8")))
+    return lists
 
 
-def set_excluded(names, wanted):
-    """Set these file names aside, or bring them back when wanted is false."""
-    excluded = load_excluded()
+def set_excluded(names, app_name, wanted):
+    """Set these PDF names aside from one app's stage, or bring them back when wanted is false."""
+    lists = load_excluded()
+    kept = set(lists[app_name])
     if wanted:
-        excluded.update(names)
+        kept.update(names)
     else:
-        excluded.difference_update(names)
-    path = excluded_file()
+        kept.difference_update(names)
+    lists[app_name] = sorted(kept)
+    write_json(excluded_file(), lists)
+
+
+def prepared_names(stem):
+    """The text files pepa-prep wrote for one PDF: one whole file, or one per chapter."""
+    folder = chosen("pepa-prep", "results") / "text"
+    if not folder.is_dir():
+        return []
+    names = []
+    with os.scandir(folder) as entries:
+        for entry in entries:
+            number = entry.name[len(f"text_{stem}_"):-len(".md")]
+            chapter = entry.name.startswith(f"text_{stem}_") and number.isdigit()
+            if entry.name == f"text_{stem}.md" or chapter:
+                names.append(entry.name)
+    return sorted(names)
+
+
+def exclude_list_for(app_name):
+    """Write the file names one app skips and return where; pepa-sum skips the text files of its PDFs."""
+    names = set(load_excluded().get(app_name, []))
+    if app_name == "pepa-sum":
+        for pdf_name in list(names):
+            names.update(prepared_names(Path(pdf_name).stem))
+    path = excluded_file().with_name(f"excluded-{app_name}.json")
+    write_json(path, sorted(names))
+    return path
+
+
+def write_json(path, value):
+    """Write a JSON file through a temporary file, so a crash never leaves half a file behind."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(".tmp")
-    temporary.write_text(json.dumps(sorted(excluded), indent=2), encoding="utf-8")
+    temporary.write_text(json.dumps(value, indent=2), encoding="utf-8")
     os.replace(temporary, path)
 
 
@@ -226,8 +262,9 @@ def environment_for(app_name):
     """The folder variables a job of this app receives, so the child writes where the user chose."""
     environment = {
         "PEPA_PROJECT": str(project_folder()),
-        "PEPA_EXCLUDE_FILE": str(excluded_file()),
     }
+    if app_name in EXCLUDING_APPS:
+        environment["PEPA_EXCLUDE_FILE"] = str(exclude_list_for(app_name))
     for place in PLACES:
         if place["app"] == app_name:
             environment[place["variable"]] = str(chosen(app_name, place["slot"]))

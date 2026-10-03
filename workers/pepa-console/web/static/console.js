@@ -60,6 +60,10 @@ document.addEventListener("click", function (event) {
   if (closer) {
     closer.closest("dialog").close();
   }
+  const runClose = event.target.closest("[data-run-close]");
+  if (runClose) {
+    closeRun(runClose.closest(".run"));
+  }
   const dismiss = event.target.closest("[data-dismiss]");
   if (dismiss) {
     dismiss.closest(".snackbar").remove();
@@ -79,6 +83,69 @@ document.addEventListener("change", function (event) {
     copyOneByOne(event.target);
   }
 });
+
+const runDialog = document.getElementById("run-dialog");
+if (runDialog && runDialog.querySelector("[data-sum-step]")) {
+  const form = runDialog.querySelector("form");
+  document.querySelector('[data-open="run-dialog"]').addEventListener("click", function () {
+    loadEstimate(form);
+  });
+  form.addEventListener("change", function () {
+    showEstimate(form);
+  });
+}
+
+async function loadEstimate(form) {
+  const line = form.querySelector("[data-sum-estimate]");
+  line.textContent = "Working out the cost…";
+  delete form.dataset.estimate;
+  try {
+    const response = await fetch(form.action.replace("/run", "/estimate"));
+    const data = await response.json();
+    if (response.ok) {
+      form.dataset.estimate = JSON.stringify(data);
+    }
+  } catch (error) {
+    line.textContent = "The cost could not be worked out.";
+  }
+  showEstimate(form);
+}
+
+function showEstimate(form) {
+  const ticked = form.querySelector("[data-sum-step]").checked;
+  const options = form.querySelector("[data-sum-options]");
+  options.hidden = !ticked;
+  delete form.dataset.confirm;
+  if (!ticked || !form.dataset.estimate) {
+    return;
+  }
+  const data = JSON.parse(form.dataset.estimate);
+  const select = form.querySelector("[data-sum-mode]");
+  select.querySelector('option[value="batch"]').hidden = !("batch" in data.seconds);
+  let mode = select.value;
+  if (mode === "auto") {
+    mode = data.auto;
+  }
+  const cost = data.cost[mode];
+  let text = `${data.papers} paper${data.papers === 1 ? "" : "s"} to summarise with ${data.model}, ${roughTime(data.seconds[mode])}`;
+  let detail = "Billed to your key.";
+  if (cost !== null && cost !== undefined) {
+    text += `, about $${cost.toFixed(2)} at list price`;
+    detail = `About $${cost.toFixed(2)} at list price, billed to your key.`;
+  }
+  form.querySelector("[data-sum-estimate]").textContent = text + ".";
+  form.dataset.confirm = `Summarise ${data.papers} paper${data.papers === 1 ? "" : "s"}?`;
+  form.dataset.confirmDetail = detail;
+  form.dataset.confirmButton = "Run";
+}
+
+function roughTime(seconds) {
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  if (minutes < 90) {
+    return `about ${minutes} min`;
+  }
+  return `about ${Math.round(minutes / 60)} h`;
+}
 
 function countMarks(form) {
   const ticked = form.querySelectorAll('input[name="start"]:checked').length;
@@ -285,6 +352,13 @@ function pickNote(data) {
   return "";
 }
 
+function closeRun(panel) {
+  const body = new FormData();
+  body.append("token", panel.querySelector('input[name="token"]').value);
+  fetch(panel.querySelector("[data-run-close]").dataset.runClose, {method: "POST", body: body});
+  panel.remove();
+}
+
 function showMessage(text) {
   const old = document.querySelector(".snackbar");
   if (old) {
@@ -447,6 +521,12 @@ function showState(panel, data) {
   stop.hidden = data.cancel_url === null;
   if (data.cancel_url) {
     stop.action = data.cancel_url;
+  }
+  panel.querySelector("[data-run-close]").hidden = data.status === "running";
+  if (data.status === "cancelled" && !panel.closest(".run-page")) {
+    closeRun(panel);
+    showMessage("Stopped. Finished work is kept and skipped next time.");
+    return;
   }
 
   const answer = panel.querySelector('[data-fetch="answer"]');

@@ -8,29 +8,56 @@ from web.settings import SETTINGS
 
 OPTIONS_FILE_NAME = "options.json"
 
-# Each app's settings: the environment variable it arrives in, its label, and either the
-# values it takes or the lowest and highest number it accepts.
+# Each app's settings: the environment variable it arrives in, its label, and either its choices,
+# each value with the words shown for it, or the lowest and highest number it accepts. A setting
+# with a "default" sends that value when nothing was chosen, so a console run never stops to ask.
 OPTIONS = {
     "pepa-prep": [
-        {"variable": "PEPAPREP_WORKERS", "label": "PDFs read at once", "low": 1, "high": 16},
-        {"variable": "PEPAPREP_OCR_DPI", "label": "Scan resolution (dpi)", "low": 72, "high": 600},
-        {"variable": "PEPAPREP_BOOK_PAGES", "label": "Pages that make a book", "low": 20, "high": 2000},
-        {"variable": "PEPAPREP_MAX_CHAPTERS", "label": "Most chapters per book", "low": 1, "high": 500},
+        {"variable": "PEPAPREP_BOOK_PAGES", "label": "Treat a PDF as a book from this many pages", "low": 20, "high": 2000},
+        {"variable": "PEPAPREP_OCR_DPI", "label": "Scan resolution for scanned pages, in dpi", "low": 72, "high": 600},
+        {"variable": "PEPAPREP_WORKERS", "label": "PDFs prepared at once", "low": 1, "high": 16},
+        {"variable": "PEPAPREP_MAX_CHAPTERS", "label": "Most chapters a book can have", "low": 1, "high": 500},
     ],
     "pepa-sum": [
-        {"variable": "PEPA_SPEED", "label": "Speed", "choices": ["eco", "balanced", "turbo"]},
-        {"variable": "PEPA_MODE", "label": "Run mode", "choices": ["auto", "serial", "parallel", "batch"]},
-        {"variable": "PEPA_PARA_METHOD", "label": "Paragraph rundown", "choices": ["llm", "extractive"]},
-        {"variable": "PEPA_ON_EXISTING", "label": "Papers already done", "choices": ["ask", "skip", "overwrite"]},
-        {"variable": "PEPA_OCR", "label": "Scanned pages", "choices": ["auto", "off", "force"]},
-        {"variable": "PEPA_OCR_DPI", "label": "Scan resolution (dpi)", "low": 72, "high": 400},
-        {"variable": "PEPA_CONTEXT_TOKENS", "label": "Model context (tokens)", "low": 16384, "high": 2000000},
+        {"variable": "PEPA_MODE", "label": "How to run", "choices": {
+            "auto": "Auto: the fastest for this many papers",
+            "serial": "One paper at a time",
+            "parallel": "Several papers at once",
+            "batch": "Batch: about half price, can take hours",
+        }},
+        {"variable": "PEPA_PARA_METHOD", "label": "Paragraph rundown", "choices": {
+            "llm": "Written by the model",
+            "extractive": "Taken from the text, at no cost",
+        }},
+        {
+            "variable": "PEPA_ON_EXISTING",
+            "label": "Papers already summarised",
+            "default": "skip",
+            "choices": {
+                "skip": "Skip them",
+                "overwrite": "Summarise them again",
+            },
+        },
+        {"variable": "PEPA_SPEED", "label": "Pace", "choices": {
+            "eco": "Gentle, for a new or low-tier key",
+            "balanced": "Balanced",
+            "turbo": "As fast as the key allows",
+        }},
+        {"variable": "PEPA_CONTEXT_TOKENS", "label": "Longest text the model reads, in tokens", "low": 16384, "high": 2000000},
     ],
     "pepa-review": [
-        {"variable": "PEPAREVIEW_USE_BIBLIO", "label": "Use the bibliography database", "choices": ["yes", "no"]},
+        {"variable": "PEPAREVIEW_USE_BIBLIO", "label": "Use the bibliography database", "choices": {
+            "yes": "Yes",
+            "no": "No",
+        }},
     ],
     "pepa-plan": [
-        {"variable": "PEPAPLAN_MODE", "label": "Run mode", "choices": ["auto", "serial", "parallel", "batch"]},
+        {"variable": "PEPAPLAN_MODE", "label": "How to run", "choices": {
+            "auto": "Auto: the fastest for this many papers",
+            "serial": "One at a time",
+            "parallel": "Several at once",
+            "batch": "Batch: about half price, can take hours",
+        }},
         {"variable": "PEPAPLAN_CONCURRENCY", "label": "Requests at once", "low": 1, "high": 32},
     ],
 }
@@ -98,10 +125,12 @@ def save_choices(app_name, form):
 
 def environment_for(app_name):
     """The settings a job of this app receives. A variable already set in the console's own environment wins."""
+    chosen = load_store().get(app_name, {})
     environment = {}
-    for variable, value in load_store().get(app_name, {}).items():
-        if not os.environ.get(variable):
-            environment[variable] = value
+    for option in OPTIONS.get(app_name, []):
+        value = chosen.get(option["variable"], option.get("default", ""))
+        if value and not os.environ.get(option["variable"]):
+            environment[option["variable"]] = value
     return environment
 
 

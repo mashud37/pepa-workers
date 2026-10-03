@@ -15,7 +15,8 @@
 <header class="top">
   <a class="brand" href="{{ url_for('console.pipeline') }}">pepa</a>
   <nav class="tabs" aria-label="Main">
-    <a href="{{ url_for('console.pipeline') }}"{% if section == "" %} aria-current="page"{% endif %}>Library</a>
+    <a href="{{ url_for('console.pipeline') }}"{% if section == "" %} aria-current="page"{% endif %}>Home</a>
+    <a href="{{ url_for('console.papers_page') }}"{% if section == "papers" %} aria-current="page"{% endif %}>Papers</a>
     <a href="{{ url_for('console.apps_page') }}"{% if section in ["apps", "view", "browse"] %} aria-current="page"{% endif %}>Apps</a>
     <a href="{{ url_for('console.read_page') }}"{% if section == "read" %} aria-current="page"{% endif %}>Search</a>
     <a href="{{ url_for('console.jobs_page') }}"{% if section == "jobs" %} aria-current="page"{% endif %}>Jobs<span class="badge" data-running{% if not running %} hidden{% endif %}><span class="visually-hidden">running: </span>{{ running }}</span></a>

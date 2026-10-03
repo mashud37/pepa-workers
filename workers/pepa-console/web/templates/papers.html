@@ -4,7 +4,7 @@
 {% block content %}
 <nav class="crumbs-nav" aria-label="Breadcrumb">
   <ol>
-    <li><a href="{{ url_for('console.pipeline') }}">Library</a></li>
+    <li><a href="{{ url_for('console.pipeline') }}">Home</a></li>
     <li aria-current="page">Papers</li>
   </ol>
 </nav>
@@ -12,7 +12,7 @@
 <div class="page-head">
   <div class="heading">
     <h1>Papers</h1>
-    <p class="supporting">Papers set aside are skipped when papers are prepared or summarised.</p>
+    <p class="supporting">Tick papers to skip them in a stage. A skipped paper keeps the files it already has.</p>
   </div>
 </div>
 
@@ -39,8 +39,9 @@
   <div class="bulk-bar">
     <label class="check"><input type="checkbox" data-select-all>Select all shown</label>
     <span class="grow"></span>
-    <button class="text" name="action" value="include">Bring back</button>
-    <button class="tonal" name="action" value="exclude">Set aside</button>
+    <button class="text" name="action" value="include">Include again</button>
+    <button class="tonal" name="action" value="skip-prep">Skip preparing</button>
+    <button class="tonal" name="action" value="skip-sum">Skip summarising</button>
   </div>
   <div class="card papers-card">
     <table class="papers-table">
@@ -49,13 +50,13 @@
       </thead>
       <tbody>
         {% for row in listing.rows %}
-        <tr{% if row.excluded %} class="set-aside"{% endif %}>
+        <tr>
           <td><input type="checkbox" name="name" value="{{ row.name }}" aria-label="Select {{ row.name }}"></td>
-          <td class="paper-name" title="{{ row.name }}">{{ row.name }}{% if row.excluded %} <span class="chip">Set aside</span>{% endif %}</td>
+          <td class="paper-name" title="{{ row.name }}">{{ row.name }}</td>
           <td class="num">{{ "{:,}".format(row.pages) }}</td>
-          <td>{% if row.prepared > 1 %}{{ row.prepared }} chapters{% elif row.prepared == 1 %}One file{% else %}Not yet{% endif %}</td>
-          <td>{% if row.summarised %}Yes{% else %}Not yet{% endif %}</td>
-          <td><a class="button text" href="{{ url_for('console.chapters_page', file=row.relative) }}">{% if row.marked %}Chapters marked{% else %}Mark chapters{% endif %}</a></td>
+          <td{% if row.skip_prep %} class="skipped"{% endif %}>{% if row.skip_prep %}<span class="chip">Skipped</span> {% endif %}{% if row.prepared > 1 %}{{ row.prepared }} chapters{% elif row.prepared == 1 %}One file{% else %}Not yet{% endif %}</td>
+          <td{% if row.skip_sum %} class="skipped"{% endif %}>{% if row.skip_sum %}<span class="chip">Skipped</span> {% endif %}{% if row.prepared and row.summarised == row.prepared %}Done{% elif row.summarised %}{{ row.summarised }} of {{ row.prepared }}{% else %}Not yet{% endif %}</td>
+          <td>{% if row.book or row.marked %}<a class="button text" href="{{ url_for('console.chapters_page', file=row.relative) }}">{% if row.marked %}Chapters marked{% else %}Mark chapters{% endif %}</a>{% endif %}</td>
         </tr>
         {% endfor %}
       </tbody>

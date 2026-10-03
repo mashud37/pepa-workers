@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% import "_icons.html" as icon %}
-{% block title %}Library · pepa{% endblock %}
+{% block title %}Home · pepa{% endblock %}
 {% block content %}
 <div class="page-head">
   <div class="heading">
-    <h1>Library</h1>
+    <h1>Home</h1>
     <p class="supporting">The papers the workers read, and how far each stage has got.</p>
   </div>
   <div class="actions">
@@ -49,7 +49,21 @@
     <p class="supporting">The ticked steps run in order, and papers already done are skipped. If a step fails, the steps after it do not run.</p>
     <div class="checklist">
       {% for step in steps %}
-      <label class="check"><input type="checkbox" name="step" value="{{ step.app }} {{ step.command }}"{% if step.missing %} disabled{% else %} checked{% endif %}><span class="grow">{{ step.label }}{% if step.missing == "keys" %}<a class="check-note" href="{{ url_for('console.keys_page') }}">Add a key on the Keys page first.</a>{% elif step.missing == "models" %}<a class="check-note" href="{{ url_for('console.models_page') }}">Choose an embedding model on the Models page first.</a>{% endif %}</span>{% if step.needs %}<span class="chip">API costs</span>{% endif %}</label>
+      <label class="check"><input type="checkbox" name="step" value="{{ step.app }} {{ step.command }}"{% if step.missing %} disabled{% elif not step.needs %} checked{% endif %}{% if step.app == "pepa-sum" %} data-sum-step{% endif %}><span class="grow">{{ step.label }}{% if step.missing == "keys" %}<a class="check-note" href="{{ url_for('console.keys_page') }}">Add a key on the Keys page first.</a>{% elif step.missing == "models" %}<a class="check-note" href="{{ url_for('console.models_page') }}">Choose an embedding model on the Models page first.</a>{% endif %}</span>{% if step.needs %}<span class="chip">API costs</span>{% endif %}</label>
+      {% if step.app == "pepa-sum" and not step.missing %}
+      <div class="step-options" data-sum-options hidden>
+        <label class="field">
+          <span>How to run</span>
+          <select name="sum_mode" data-sum-mode>
+            <option value="auto"{% if sum_mode == "auto" %} selected{% endif %}>Auto: the fastest for this many papers</option>
+            <option value="serial"{% if sum_mode == "serial" %} selected{% endif %}>One paper at a time</option>
+            <option value="parallel"{% if sum_mode == "parallel" %} selected{% endif %}>Several papers at once</option>
+            <option value="batch"{% if sum_mode == "batch" %} selected{% endif %}>Batch: about half price, can take hours</option>
+          </select>
+        </label>
+        <p class="supporting" data-sum-estimate role="status">Working out the cost…</p>
+      </div>
+      {% endif %}
       {% endfor %}
     </div>
     <div class="actions">

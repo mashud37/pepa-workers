@@ -41,12 +41,11 @@ KIND_BY_SUFFIX = {
 
 # Every document one paper can have, where it sits, and the file name built from the paper's stem.
 PAPER_DOCUMENTS = [
-    {"label": "Source PDF", "app": "pepa-prep", "slot": "sources", "pattern": "{stem}.pdf"},
-    {"label": "Source PDF", "app": "pepa-sum", "slot": "sources", "pattern": "{stem}.pdf"},
-    {"label": "Prepared text", "app": "pepa-prep", "slot": "results", "pattern": "text/text_{stem}.md"},
     {"label": "Brief", "app": "pepa-sum", "slot": "results", "pattern": "sum_{stem}.md"},
     {"label": "Rundown", "app": "pepa-sum", "slot": "results", "pattern": "para_{stem}.md"},
     {"label": "Quotes", "app": "pepa-sum", "slot": "results", "pattern": "quote_{stem}.md"},
+    {"label": "Full text", "app": "pepa-prep", "slot": "results", "pattern": "text/text_{stem}.md"},
+    {"label": "PDF", "app": "pepa-prep", "slot": "sources", "pattern": "{stem}.pdf"},
 ]
 
 PAPER_PREFIXES = [
@@ -154,6 +153,45 @@ def related_documents(file_name):
                 "relative": relative,
             })
     return found
+
+
+def paper_view(stem, wanted):
+    """Everything the paper page shows: the paper's documents as tabs, the chosen one, and a book's chapters.
+
+    Args:
+        wanted: the label of the tab asked for; the first tab when it is empty or missing.
+
+    Returns:
+        dict with "stem", "tabs", "chosen", "document", "chapters" and "book", the stem of the book a
+        chapter belongs to; None when the paper has no documents and no chapters.
+    """
+    tabs = related_documents(f"{stem}.md")
+    chapters = []
+    for name in paths.prepared_names(stem):
+        chapter = paper_stem(name)
+        if chapter != stem:
+            chapters.append(chapter)
+    if not tabs and not chapters:
+        return None
+    chosen = tabs[0] if tabs else None
+    for tab in tabs:
+        if tab["label"] == wanted:
+            chosen = tab
+    document = None
+    if chosen:
+        document = document_view(paths.chosen(chosen["app"], chosen["slot"]) / chosen["relative"])
+    return {"stem": stem, "tabs": tabs, "chosen": chosen, "document": document, "chapters": chapters, "book": book_of(stem)}
+
+
+def book_of(stem):
+    """The book a chapter belongs to, or an empty string when the stem is not a book's chapter."""
+    book, _, number = stem.rpartition("_")
+    if not book or not number.isdigit():
+        return ""
+    chapters = [paper_stem(name) for name in paths.prepared_names(book)]
+    if stem not in chapters:
+        return ""
+    return book
 
 
 # ---- Browsing a folder ----

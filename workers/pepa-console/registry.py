@@ -12,6 +12,7 @@ INSTALLED = ROOT.name == "apps"
 KIND_SYMBOL = {
     "safe": "·",
     "heavy": "▶",
+    "destructive": "▶",
     "interactive": "✗",
     "terminal": "✗",
     "service": "◆",
@@ -64,7 +65,6 @@ APPS: list[App] = [
             {"name": "--cite", "type": "bool", "help": "Also fetch citation networks from OpenCitations"},
             {"name": "--force", "type": "bool", "help": "Overwrite existing biblio files"},
         )),
-        Command("split", "interactive", "Mark chapter boundaries by hand"),
         Command("install", "safe", "Check dependencies"),
     ], keys=("OPENALEX_API_KEY",)),
     App("pepa-sum", "Each paper to a brief, a paragraph rundown, and verified quotes", [
@@ -74,11 +74,11 @@ APPS: list[App] = [
             {"name": "--output", "type": "folder", "help": "Folder for the documents (default: output/)"},
             {"name": "--force", "type": "bool", "help": "Redo papers already processed"},
             {"name": "--mode", "type": "choice", "choices": MODES, "help": "Execution mode (default: auto)"},
+            {"name": "--approve-cost", "type": "bool", "help": "Spend past the cost threshold without asking"},
         )),
         Command("clean", "safe", "List failed outputs, delete nothing", default_flags=("-n",), fields=(
             {"name": "--output", "type": "folder", "help": "Output folder to check (default: output/)"},
         )),
-        Command("settings", "interactive", "Choose backend and rundown method"),
         Command("install", "safe", "Create env.yaml, store the key, check dependencies"),
     ], keys=("ANTHROPIC_API_KEY", "PEPA_LLM_API_KEY")),
     App("pepa-read", "Full-text search over prep and sum output, local web UI, literature lists", [
@@ -105,7 +105,9 @@ APPS: list[App] = [
             {"name": "name", "type": "text", "help": "List name"},
             {"name": "--output", "type": "file", "help": "Write to this file instead of the result pane"},
         )),
-        Command("list-delete", "interactive", "Delete a literature list, after confirming"),
+        Command("list-delete", "destructive", "Delete a literature list", default_flags=("--yes",), fields=(
+            {"name": "name", "type": "text", "help": "List name"},
+        )),
         Command("install", "safe", "Check dependencies and source folders"),
     ]),
     App("pepa-review", "Embedding index over the sum corpus; literature review, gaps, and maps", [
@@ -135,7 +137,7 @@ APPS: list[App] = [
             {"name": "--graph-type", "type": "choice", "choices": ("citation", "coupling"), "help": "Network type"},
             {"name": "--format", "type": "choice", "choices": ("html", "graphml"), "help": "Network file format"},
         )),
-        Command("explore", "interactive", "Interactive discovery over the corpus"),
+        Command("explore", "terminal", "Interactive discovery over the corpus"),
         Command("install", "safe", "Set up files and check dependencies"),
     ], keys=("ANTHROPIC_API_KEY", "PEPA_LLM_API_KEY", "GEMINI_API_KEY", "PEPA_EMBED_API_KEY")),
     App("pepa-plan", "Rhetorical-move labelling and learned skeletons to a paragraph outline", [

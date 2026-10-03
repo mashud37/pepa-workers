@@ -127,7 +127,7 @@ class ConsoleApp(App):
             self._log(f"⚠ [yellow]{app_name} {cmd.name}[/] does not finish on its own, "
                       f"run it in a terminal or the web console: [dim]python {app_name}/manage.py {cmd.name}[/]")
             return
-        if cmd.kind == "heavy":
+        if cmd.kind in ("heavy", "destructive"):
             prompt = f"Run {app_name} {cmd.name}? This does real work and may cost money."
             self._pending = (app_name, cmd)
             self.push_screen(Confirm(prompt), self._on_confirm)

@@ -98,14 +98,32 @@ def index_built(index):
     return datetime.fromtimestamp(path.stat().st_mtime).strftime(DAY_FORMAT)
 
 
+def papers_covered(stage):
+    """The paper names a stage wrote files for, counting a book's chapter files once.
+
+    A name ending in an underscore and digits may be a chapter of a longer name, so both are kept.
+    """
+    covered = set()
+    for name in matching_names(stage)["names"]:
+        core = Path(name).name[len(stage["prefix"]):-len(stage["suffix"])]
+        covered.add(core)
+        head, _, tail = core.rpartition("_")
+        if head and tail.isdigit():
+            covered.add(head)
+    return covered
+
+
 def pipeline_summary():
-    """What the pipeline holds now: waiting PDFs, prepared texts, summaries, and both indexes."""
+    """What the pipeline holds now: waiting PDFs, how many are prepared and summarised, and both indexes."""
     waiting = matching_names(PDFS_WAITING)
+    stems = [Path(name).stem for name in waiting["names"]]
+    prepared = papers_covered(PREPARED)
+    summarised = papers_covered(SUMMARISED)
     return {
         "pdfs": len(waiting["names"]),
         "pdfs_capped": waiting["capped"],
-        "prepared": len(matching_names(PREPARED)["names"]),
-        "summarised": len(matching_names(SUMMARISED)["names"]),
+        "prepared": sum(1 for stem in stems if stem in prepared),
+        "summarised": sum(1 for stem in stems if stem in summarised),
         "search_index": index_built(SEARCH_INDEX),
         "review_index": index_built(REVIEW_INDEX),
     }

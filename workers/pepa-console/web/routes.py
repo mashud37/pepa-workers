@@ -26,6 +26,11 @@ MISSING_NOTE = {
     "keys": "Add a key on the Keys page first.",
     "models": "Choose an embedding model on the Models page first.",
 }
+SET_ASIDE_ACTIONS = {
+    "skip-prep": {"apps": ["pepa-prep"], "wanted": True, "message": "{count} paper(s) will be skipped when preparing."},
+    "skip-sum": {"apps": ["pepa-sum"], "wanted": True, "message": "{count} paper(s) will be skipped when summarising."},
+    "include": {"apps": ["pepa-prep", "pepa-sum"], "wanted": False, "message": "{count} paper(s) are back in every stage."},
+}
 PIPELINE_STEPS = [
     {"app": "pepa-prep", "command": "extract", "label": "Prepare PDFs", "needs": ""},
     {"app": "pepa-sum", "command": "summarize", "label": "Summarise", "needs": "generation"},
@@ -35,7 +40,6 @@ PIPELINE_STEPS = [
 
 PDF_APPS = [
     "pepa-prep",
-    "pepa-sum",
 ]
 
 TEXT_SUFFIXES = [
@@ -176,18 +180,18 @@ def favicon():
     return Response(drawing, mimetype="image/svg+xml")
 
 
-# ---- Library ----
+# ---- Home ----
 
 @bp.route("/")
 def pipeline():
-    chains = jobs.list_chains()
-    latest = chains[0] if chains else None
+    latest = jobs.shown_chain()
     summary = folders.pipeline_summary()
     nothing_yet = summary["pdfs"] == 0 and summary["summarised"] == 0
     return render_template(
         "pipeline.html",
         summary=summary,
         steps=pipeline_steps(),
+        sum_mode=options.environment_for("pepa-sum").get("PEPA_MODE", "auto"),
         chain=latest,
         first_run=nothing_yet and not keys.load_store()["keys"],
     )
@@ -202,6 +206,14 @@ def pipeline_steps():
             missing = models.missing_choice(step["app"], step["needs"])
         steps.append({**step, "missing": missing})
     return steps
+
+
+@bp.route("/pipeline/estimate")
+def pipeline_estimate():
+    found = jobs.estimate("pepa-sum", "summarize", ["--estimate"])
+    if found is None:
+        return jsonify({"error": "pepa-sum could not estimate this run."}), 500
+    return jsonify(found)
 
 
 @bp.route("/pipeline/copy", methods=["POST"])
@@ -225,6 +237,9 @@ def pipeline_run():
     for step in steps:
         if step["missing"]:
             return jsonify({"error": f"{step['label']}: {MISSING_NOTE[step['missing']]}"}), 400
+        if step["app"] == "pepa-sum":
+            mode = request.form.get("sum_mode", "auto")
+            step["values"] = {"--mode": mode, "--approve-cost": "on"}
     chain_id = jobs.start_chain(steps)
     return run_panel(jobs.chain_summary(chain_id), url_for("console.chain_log", chain_id=chain_id))
 
@@ -249,13 +264,13 @@ def papers_page():
 @bp.route("/papers/set-aside", methods=["POST"])
 def papers_set_aside():
     names = request.form.getlist("name")
-    wanted = request.form.get("action") == "exclude"
-    if names:
-        paths.set_excluded(names, wanted)
-        verb = "Set aside" if wanted else "Brought back"
-        flash(f"{verb} {len(names)} paper(s).")
-    else:
+    action = SET_ASIDE_ACTIONS.get(request.form.get("action", ""))
+    if not names or action is None:
         flash("Tick at least one paper.")
+    else:
+        for app_name in action["apps"]:
+            paths.set_excluded(names, app_name, action["wanted"])
+        flash(action["message"].format(count=len(names)))
     return redirect(request.form.get("back") or url_for("console.papers_page"))
 
 
@@ -307,7 +322,7 @@ def app_page(name):
     app = find_app(name)
     latest = {}
     for command in app.commands:
-        latest[command.name] = jobs.latest_job(name, command.name)
+        latest[command.name] = jobs.shown_job(name, command.name)
     places = folders.app_folders(name)
     return render_template(
         "app.html",
@@ -453,6 +468,18 @@ def job_input(job_id):
 @bp.route("/jobs/<job_id>/cancel", methods=["POST"])
 def job_cancel(job_id):
     jobs.cancel_job(job_id)
+    return jsonify({"ok": True})
+
+
+@bp.route("/jobs/<job_id>/dismiss", methods=["POST"])
+def job_dismiss(job_id):
+    jobs.dismiss(jobs.JOBS, job_id)
+    return jsonify({"ok": True})
+
+
+@bp.route("/chains/<chain_id>/dismiss", methods=["POST"])
+def chain_dismiss(chain_id):
+    jobs.dismiss(jobs.CHAINS, chain_id)
     return jsonify({"ok": True})
 
 

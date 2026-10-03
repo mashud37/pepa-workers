@@ -128,7 +128,7 @@ button:focus-visible, .button:focus-within, a:focus-visible, summary:focus-visib
 /* ---- Pipeline ---- */
 
 .flow { display: grid; grid-template-columns: repeat(5, 1fr); margin: 0; padding: 0; overflow: hidden; list-style: none; background: var(--surface); border: 1px solid var(--outline); border-radius: 24px; }
-.flow li { position: relative; }
+.flow li { position: relative; z-index: calc(5 - var(--n, 0)); }
 .flow li + li { border-left: 1px solid var(--outline); }
 .flow li:not(:last-child)::after { content: ""; position: absolute; top: 50%; right: -12px; z-index: 1; width: 24px; height: 24px; border: 1px solid var(--outline); border-radius: 50%; background: var(--surface) var(--chevron-right) center / 16px no-repeat; transform: translateY(-50%); }
 .flow a { display: flex; flex-direction: column; gap: 6px; height: 100%; padding: 28px 28px 24px; color: inherit; transition: background 0.15s; }
@@ -300,6 +300,7 @@ input[type=checkbox] { flex: none; width: 18px; height: 18px; margin: 0; accent-
 .run-head .steps { gap: 4px 20px; }
 .run-head .steps li { flex-direction: row; align-items: center; gap: 8px; color: var(--text-secondary); }
 .run-head .elapsed { margin-left: auto; }
+.run-page [data-run-close] { display: none; }
 .log { height: 280px; margin: 0; padding: 16px 20px; overflow: auto; color: var(--text); font: 13px/20px var(--mono); white-space: pre-wrap; }
 .run-page .log { height: calc(100vh - 400px); min-height: 280px; }
 .items { padding: 12px 16px 4px; border-bottom: 1px solid var(--outline); }
@@ -354,6 +355,8 @@ dialog.dialog .actions { justify-content: flex-end; margin-top: 8px; }
 .copy-bar { flex-basis: 100%; height: 4px; overflow: hidden; border-radius: 2px; background: rgba(128, 128, 128, 0.35); }
 .copy-bar span { display: block; width: 0; height: 100%; background: var(--inverse-primary); transition: width 0.2s ease; }
 .check-note { display: block; font-size: 12px; }
+.step-options { display: grid; gap: 8px; margin: 0 0 8px 32px; }
+.step-options[hidden] { display: none; }
 .bulk-bar { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
 .papers-card { overflow-x: auto; padding: 0; }
 .papers-table { width: 100%; border-collapse: collapse; }
@@ -362,7 +365,8 @@ dialog.dialog .actions { justify-content: flex-end; margin-top: 8px; }
 .papers-table tr:last-child td { border-bottom: 0; }
 .papers-table .paper-name { width: 100%; max-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .papers-table .num { text-align: right; }
-.papers-table .set-aside td { color: var(--text-secondary); }
+.papers-table .skipped { color: var(--text-secondary); }
+.papers-table .skipped .chip { height: 22px; margin-right: 6px; padding: 0 8px; }
 .page-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin: 16px 0 96px; padding: 0; list-style: none; }
 .page-tile { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 2px solid transparent; border-radius: 12px; background: var(--surface); cursor: pointer; }
 .page-tile:hover { background: var(--surface-hover); }

@@ -2,6 +2,9 @@
 The web pages read these records; a chain runs several jobs one after another.
 """
 import codecs
+import json
+import os
+import signal
 import subprocess
 import threading
 import time
@@ -20,6 +23,7 @@ STATUS_LABEL = {
 }
 
 STOP_WAIT_SECONDS = 5
+ESTIMATE_SECONDS = 120
 SECONDS_PER_MINUTE = 60
 CLOCK_FORMAT = "%H:%M"
 READ_BYTES = 4096
@@ -85,7 +89,7 @@ def start_job(app_name, command_name, values):
     environment = job_environment(app_name)
     environment.update(ITEM_EVENTS)
     try:
-        process = subprocess.Popen(argv, cwd=str(app.path), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=environment)
+        process = subprocess.Popen(argv, cwd=str(app.path), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=environment, start_new_session=os.name != "nt")
     except OSError as error:
         raise ValueError(f"Could not start {app_name} {command_name}: {error}") from error
 
@@ -104,6 +108,7 @@ def start_job(app_name, command_name, values):
             "exit_code": None,
             "lines": [],
             "partial": "",
+            "dismissed": False,
         }
         PROCESSES[job_id] = process
         watcher = threading.Thread(target=watch_job, args=(job_id,), daemon=True)
@@ -186,8 +191,15 @@ def cancel_job(job_id):
         if job is None or job["status"] != "running":
             return
         job["status"] = "cancelled"
-    process = PROCESSES[job_id]
-    process.terminate()
+    end_process_tree(PROCESSES[job_id])
+
+
+def end_process_tree(process):
+    """End a child and every process it started; on Windows the child is often a launcher for the real Python."""
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], capture_output=True)
+    elif process.poll() is None:
+        os.killpg(process.pid, signal.SIGTERM)
     try:
         process.wait(timeout=STOP_WAIT_SECONDS)
     except subprocess.TimeoutExpired:
@@ -280,12 +292,53 @@ def running_count():
     return len(working)
 
 
+def estimate(app_name, command_name, flags):
+    """Run a command that prints one JSON line and stops at once, and return what it printed, or None."""
+    app = get_app(app_name)
+    argv = build_argv(get_command(app_name, command_name), flags)
+    try:
+        done = subprocess.run(argv, cwd=str(app.path), env=job_environment(app_name), capture_output=True, text=True, encoding="utf-8", timeout=ESTIMATE_SECONDS)
+    except subprocess.TimeoutExpired:
+        return None
+    for line in reversed(done.stdout.splitlines()):
+        if line.startswith("{"):
+            return json.loads(line)
+    return None
+
+
 def latest_job(app_name, command_name):
     """The newest job for one command, running or not, or None."""
     for row in list_jobs():
         if row["app"] == app_name and row["command"] == command_name:
             return row
     return None
+
+
+def shown_job(app_name, command_name):
+    """The newest job for one command that its page still shows: not stopped and not closed."""
+    row = latest_job(app_name, command_name)
+    if row is None or row["status"] == "cancelled" or JOBS[row["id"]]["dismissed"]:
+        return None
+    return row
+
+
+def shown_chain():
+    """The newest pipeline run the home page still shows: not stopped and not closed."""
+    with LOCK:
+        if not CHAINS:
+            return None
+        chain = CHAINS[str(len(CHAINS))]
+        if chain["status"] == "cancelled" or chain["dismissed"]:
+            return None
+        return chain_row(chain)
+
+
+def dismiss(records, record_id):
+    """Close a finished job or pipeline run, so its page stops showing it."""
+    with LOCK:
+        record = records.get(record_id)
+        if record is not None and record["status"] != "running":
+            record["dismissed"] = True
 
 
 def running_service(app_name, command_name):
@@ -306,6 +359,7 @@ def start_chain(steps):
             "app": step["app"],
             "command": step["command"],
             "label": step["label"],
+            "values": step.get("values", {}),
             "job_id": None,
             "status": "waiting",
             "error": "",
@@ -319,6 +373,7 @@ def start_chain(steps):
             "started": time.monotonic(),
             "ended": None,
             "steps": planned,
+            "dismissed": False,
         }
     threading.Thread(target=run_chain, args=(chain_id,), daemon=True).start()
     return chain_id
@@ -333,7 +388,7 @@ def run_chain(chain_id):
                 step["status"] = "skipped"
             continue
         try:
-            job_id = start_job(step["app"], step["command"], {})
+            job_id = start_job(step["app"], step["command"], step["values"])
         except ValueError as error:
             with LOCK:
                 step["status"] = "failed"

@@ -17,6 +17,8 @@ BYTES_PER_MEGABYTE = 1024 * 1024
 THUMBNAIL_WIDTH = 200
 LARGE_WIDTH = 1000
 JPEG_QUALITY = 75
+# A PDF longer than this is offered the chapter marker.
+BOOK_PAGES = 50
 
 # Choices for the length filter: a PDF is shown when it has more pages than this.
 LONGER_THAN = [
@@ -68,17 +70,12 @@ def page_counts(folder, names):
 
 # ---- The library ----
 
-def prepared_files(stem):
-    """How many text files pepa-prep wrote for a PDF: one, one per chapter, or none yet."""
-    folder = paths.chosen("pepa-prep", "results") / "text"
-    if (folder / f"text_{stem}.md").exists():
-        return 1
-    if not folder.is_dir():
-        return 0
+def summarised_files(stem):
+    """How many of a PDF's prepared text files pepa-sum has summarised."""
+    folder = paths.chosen("pepa-sum", "results")
     count = 0
-    for name in folders.names_here(folder):
-        number = name[len(f"text_{stem}_"):-len(".md")]
-        if name.startswith(f"text_{stem}_") and number.isdigit():
+    for name in paths.prepared_names(stem):
+        if (folder / f"sum_{name[len('text_'):]}").exists():
             count += 1
     return count
 
@@ -94,7 +91,6 @@ def paper_rows(wanted, longer_than):
     names = folders.matching_names(folders.PDFS_WAITING)["names"]
     counts = page_counts(folder, names)
     excluded = paths.load_excluded()
-    summaries = paths.chosen("pepa-sum", "results")
     rows = []
     for name in sorted(names, key=str.lower):
         leaf = Path(name).name
@@ -106,10 +102,12 @@ def paper_rows(wanted, longer_than):
             "relative": name,
             "pages": counts[name],
             "size": f"{(folder / name).stat().st_size / BYTES_PER_MEGABYTE:.1f} MB",
-            "prepared": prepared_files(stem),
-            "summarised": (summaries / f"sum_{stem}.md").exists(),
-            "excluded": leaf in excluded,
+            "prepared": len(paths.prepared_names(stem)),
+            "summarised": summarised_files(stem),
+            "skip_prep": leaf in excluded["pepa-prep"],
+            "skip_sum": leaf in excluded["pepa-sum"],
             "marked": marks_file(stem).exists(),
+            "book": counts[name] > BOOK_PAGES,
         })
     return {"rows": rows, "total": len(names)}
 
