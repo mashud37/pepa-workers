@@ -1,14 +1,38 @@
-"""Flask app factory and local dev-server runner for the search UI."""
+"""Create the search UI's Flask app and run it on this machine. Its guard refuses other host names and
+other sites, so no web page reads or changes the library."""
 import threading
 import webbrowser
 from pathlib import Path
+from urllib.parse import urlparse
 
-from flask import Flask
+from flask import Flask, abort, request
 
 import config
 from cli import ui
 
 _ROOT = Path(__file__).resolve().parent
+
+LOCAL_HOSTS = [
+    "127.0.0.1",
+    "localhost",
+]
+CONTENT_POLICY = "default-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'"
+
+
+def check_request():
+    """Refuse requests addressed to another host name, and changes asked for by another site."""
+    if request.host.split(":")[0] not in LOCAL_HOSTS:
+        abort(403)
+    origin = request.headers.get("Origin")
+    if request.method != "GET" and origin and urlparse(origin).netloc != request.host:
+        abort(403)
+
+
+def add_security_headers(response):
+    """Allow only the reader's own script, so text shown from a paper can never run as code."""
+    response.headers.setdefault("Content-Security-Policy", CONTENT_POLICY)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 def create_app() -> Flask:
@@ -23,6 +47,8 @@ def create_app() -> Flask:
     # otherwise leave TEMPLATES_AUTO_RELOAD off and static files cached.
     app.config["TEMPLATES_AUTO_RELOAD"] = True
     app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
+    app.before_request(check_request)
+    app.after_request(add_security_headers)
 
     from web.routes import bp
     app.register_blueprint(bp)

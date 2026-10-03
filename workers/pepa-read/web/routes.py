@@ -31,24 +31,7 @@ _VIEW_PAGE = """<!doctype html>
   <div class="content">{content}</div>
 </div>
 <script src="/static/theme.js"></script>
-<script>
-document.getElementById("back-btn").addEventListener("click", () => {{
-  if (document.referrer && document.referrer.includes(location.host)) {{
-    history.back();
-  }} else {{
-    location.href = "/";
-  }}
-}});
-document.querySelectorAll(".open-btn").forEach((btn) => {{
-  btn.addEventListener("click", async () => {{
-    const status = document.getElementById("open-status");
-    status.textContent = " opening...";
-    const res = await fetch(`/open/${{btn.dataset.id}}?which=${{btn.dataset.which}}`, {{method: "POST"}});
-    const data = await res.json();
-    status.textContent = data.ok ? " opened" : ` failed: ${{data.error}}`;
-  }});
-}});
-</script>
+<script src="/static/view.js"></script>
 </body></html>"""
 
 
@@ -179,7 +162,7 @@ def view(doc_id):
         return f"{path} is indexed but missing on disk, the file may have moved; try reindexing", 404
     try:
         import markdown
-        content = markdown.markdown(text)
+        content = markdown.markdown(text.replace("<", "&lt;"))
     except ImportError:
         content = f"<pre>{escape(text)}</pre>"
     return _VIEW_PAGE.format(
