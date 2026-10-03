@@ -1,5 +1,9 @@
 """Call any server that accepts OpenAI's chat format, such as DeepSeek, Kimi, Qwen, Ollama or vLLM, through OpenAI's own library."""
+import shutil
+import subprocess
 import threading
+import time
+from urllib.parse import urlparse
 
 import openai
 
@@ -9,9 +13,12 @@ TEMPERATURE = 0.2
 TIMEOUT_SECONDS = 600
 RETRIES = 4
 NO_KEY = "no-key"
+CLOUD_RUN_HOST = ".run.app"
+SIGN_IN_SECONDS = 1800
 
 _lock = threading.Lock()
 _clients = {}
+_sign_in = {"token": "", "fetched": 0.0}
 _gate = {"semaphore": None}
 
 
@@ -35,6 +42,26 @@ def calls_in_flight():
         if _gate["semaphore"] is None:
             _gate["semaphore"] = threading.BoundedSemaphore(config.throughput('MAX_CONCURRENCY'))
         return _gate["semaphore"]
+
+
+def cloud_run_headers(base_url):
+    """Google's sign-in for a model on Cloud Run, which admits only your own account; nothing for any other server.
+    The token comes from gcloud and is reused for half an hour, half its lifetime, since fetching one takes seconds."""
+    host = urlparse(base_url).hostname or ""
+    if not host.endswith(CLOUD_RUN_HOST):
+        return {}
+    with _lock:
+        expired = time.monotonic() - _sign_in["fetched"] > SIGN_IN_SECONDS
+        if not _sign_in["token"] or expired:
+            gcloud = shutil.which("gcloud")
+            if gcloud is None:
+                raise SystemExit("A model on Cloud Run needs the gcloud command, signed in with: gcloud auth login")
+            made = subprocess.run([gcloud, "auth", "print-identity-token"], capture_output=True, text=True)
+            if made.returncode != 0:
+                raise SystemExit(f"gcloud could not sign in to Cloud Run: {made.stderr.strip()}")
+            _sign_in["token"] = made.stdout.strip()
+            _sign_in["fetched"] = time.monotonic()
+        return {"X-Serverless-Authorization": f"Bearer {_sign_in['token']}"}
 
 
 def drop_thinking(text):
@@ -68,6 +95,7 @@ def complete(system, prompt, max_tokens):
                 model=connection["model"],
                 messages=messages,
                 max_tokens=max_tokens,
+                extra_headers=cloud_run_headers(connection["base_url"]),
                 temperature=TEMPERATURE,
             )
     except (openai.APIConnectionError, openai.RateLimitError, openai.InternalServerError) as error:

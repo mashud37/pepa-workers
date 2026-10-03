@@ -45,11 +45,12 @@ context length, so start it with `OLLAMA_CONTEXT_LENGTH` set to the same number.
 ## A model in your own cloud
 
 pepa-sum's **deploy** puts Qwen2.5 3B on Google Cloud Run in your own project and points pepa-sum at
-it. It needs the `gcloud` command, signed in.
+it. Only your own Google account can call it: each worker signs in through the `gcloud` command, so
+it must be installed and signed in.
 
 pepa-draft's `cloud/Dockerfile.vllm` runs a larger model, Qwen3 32B, on a Cloud Run GPU. Deploy it
-with an `API_KEY` variable, then enter its address followed by `/v1` and that key as for any other
-server.
+with an `API_KEY` variable and `--no-allow-unauthenticated`, then enter its address followed by
+`/v1` and that key as for any other server.
 
 ## Embeddings
 

@@ -17,7 +17,7 @@ context_tokens: 16384        # N_CTX in the Dockerfile
 
 service:
   name: pepa
-  allow_unauthenticated: true   # the server checks its API key on every request
+  allow_unauthenticated: false  # only your own Google account may call it
   memory: 8Gi                   # GGUF model + 16k-context KV cache
   cpu: 8                        # faster CPU generation at ~equal vCPU-second cost
   max_instances: 1

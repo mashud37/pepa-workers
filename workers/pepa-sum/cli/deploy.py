@@ -102,7 +102,7 @@ def _deploy(manifest, image, project, api_key):
         f"--service-account={account}",
         f"--labels=app={manifest['app']}",
         f"--set-env-vars=API_KEY={api_key}",
-        "--allow-unauthenticated",
+        "--no-allow-unauthenticated",
         f"--memory={service['memory']}",
         f"--cpu={service['cpu']}",
         f"--max-instances={service['max_instances']}",
@@ -125,7 +125,8 @@ def _point_at_service(manifest, url, api_key):
         "MAX_CONCURRENCY": 1,
     }
     if not ui.confirm("Use this service for pepa-sum (writes env.yaml)?"):
-        ui.info(f"address {values['LLM_BASE_URL']}  ·  model {values['LLM_MODEL']}  ·  key {api_key}")
+        ui.info(f"address {values['LLM_BASE_URL']}  ·  model {values['LLM_MODEL']}")
+        ui.info(f"Its key is the service's API_KEY: gcloud run services describe {manifest['service']['name']} --region={manifest['region']} shows it.")
         ui.info("Enter these on the console's Models page, or in env.yaml, to use it later.")
         return
     config.set_values(values)

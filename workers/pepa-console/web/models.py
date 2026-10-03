@@ -3,7 +3,10 @@ Apps left on their own settings keep reading their own file.
 """
 import json
 import os
+import shutil
+import subprocess
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from web import keys
@@ -11,6 +14,7 @@ from web.settings import SETTINGS
 
 MODELS_FILE_NAME = "models.json"
 LIST_TIMEOUT_SECONDS = 8
+CLOUD_RUN_HOST = ".run.app"
 BLANK_GENERATION = {
     "route": "",
     "base_url": "",
@@ -224,6 +228,21 @@ def server_key(app_name):
     return keys.environment_for(store_app).get(variable, "")
 
 
+def cloud_run_token():
+    """Your Google sign-in from gcloud, which a model on Cloud Run asks for before anything else.
+
+    Raises:
+        ValueError: gcloud is missing or not signed in.
+    """
+    gcloud = shutil.which("gcloud")
+    if gcloud is None:
+        raise ValueError("A model on Cloud Run needs the gcloud command, signed in with: gcloud auth login")
+    made = subprocess.run([gcloud, "auth", "print-identity-token"], capture_output=True, text=True)
+    if made.returncode != 0:
+        raise ValueError("gcloud is not signed in. Run: gcloud auth login")
+    return made.stdout.strip()
+
+
 def list_models(app_name, base_url):
     """The model names an OpenAI-compatible server offers, asked from its /models address.
 
@@ -236,6 +255,9 @@ def list_models(app_name, base_url):
     key = server_key(app_name)
     if key:
         headers["Authorization"] = f"Bearer {key}"
+    host = urllib.parse.urlparse(base_url).hostname or ""
+    if host.endswith(CLOUD_RUN_HOST):
+        headers["X-Serverless-Authorization"] = f"Bearer {cloud_run_token()}"
     request = urllib.request.Request(base_url.rstrip("/") + "/models", headers=headers)
     try:
         with urllib.request.urlopen(request, timeout=LIST_TIMEOUT_SECONDS) as reply:
