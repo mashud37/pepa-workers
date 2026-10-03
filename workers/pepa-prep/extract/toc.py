@@ -2,6 +2,7 @@
 import re
 from collections import Counter
 
+from . import pdf
 from .text import norm
 
 _SEARCH_CAP = 40
@@ -326,11 +327,11 @@ def label_offset(doc, entries: list) -> int | None:
     diffs = Counter()
     for e in probes:
         try:
-            hits = doc.get_page_numbers(str(e["no"]), only_one=True)
+            hit = pdf.page_with_label(doc, str(e["no"]))
         except Exception:
             return None
-        if hits:
-            diffs[hits[0] - e["no"]] += 1
+        if hit is not None:
+            diffs[hit - e["no"]] += 1
     if not diffs:
         return None
     off, cnt = diffs.most_common(1)[0]

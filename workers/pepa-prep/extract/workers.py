@@ -1,7 +1,7 @@
 """Per-file extraction workers for straight, book, and OCR routes."""
 from pathlib import Path
 
-from .categorise import import_fitz
+from . import pdf
 from .chapter import detect_chapters, split_into_chapters, write_chapters
 from .ocr import ocr_pages
 from .tables import doc_tables
@@ -15,10 +15,6 @@ from .text import (
     strip_references,
     text_to_elements,
 )
-
-
-def _text_flags(fitz) -> int:
-    return fitz.TEXTFLAGS_DICT & ~fitz.TEXT_PRESERVE_IMAGES
 
 
 def _resolve_chapters(chapters: list, whole: list, cfg: dict, count: int, unit: str) -> dict:
@@ -50,10 +46,12 @@ def extract_straight(path: Path, out_dir: Path, cfg: dict) -> dict:
     Returns:
         {"result": one-line summary, "warnings": list of warning strings}.
     """
-    fitz = import_fitz()
-    with fitz.open(str(path)) as doc:
-        pages = doc_lines(doc, range(doc.page_count), _text_flags(fitz))
-        tables = doc_tables(doc, range(doc.page_count))
+    doc = pdf.open_pdf(path)
+    try:
+        pages = doc_lines(doc, range(pdf.page_count(doc)))
+        tables = doc_tables(path, doc, range(pdf.page_count(doc)))
+    finally:
+        pdf.close_pdf(doc)
     stats = doc_stats(pages)
     md = strip_references(render(segment(pages, stats, drop_keys(pages), tables)))
     dest = out_dir / f"text_{path.stem}.md"
@@ -67,16 +65,18 @@ def extract_book(path: Path, out_dir: Path, cfg: dict) -> dict:
     Returns:
         {"result": one-line summary, "warnings": list of warning strings}.
     """
-    fitz = import_fitz()
-    with fitz.open(str(path)) as doc:
-        page_count = doc.page_count
-        pages = doc_lines(doc, range(page_count), _text_flags(fitz))
+    doc = pdf.open_pdf(path)
+    try:
+        page_count = pdf.page_count(doc)
+        pages = doc_lines(doc, range(page_count))
         dims = doc_dims(doc, range(page_count))
-        tables = doc_tables(doc, range(page_count))
+        tables = doc_tables(path, doc, range(page_count))
         stats = doc_stats(pages)
         dk = drop_keys(pages)
         detected = detect_chapters(doc, pages, dims, stats, cfg)
         bounds, meta = detected["bounds"], detected["meta"]
+    finally:
+        pdf.close_pdf(doc)
     whole = segment(pages, stats, dk, tables)
     if meta["strategy"] in ("outline", "toc") and len(bounds) >= 2:
         starts = [b["page"] for b in bounds]
@@ -101,8 +101,7 @@ def extract_ocr(path: Path, out_dir: Path, cfg: dict, progress=None) -> dict:
     Returns:
         {"result": one-line summary, "warnings": list of warning strings}.
     """
-    fitz = import_fitz()
-    pages = ocr_pages(path, fitz, cfg, progress=progress)
+    pages = ocr_pages(path, cfg, progress=progress)
     elements = text_to_elements(pages)
     threshold = cfg.get("book_page_threshold", 100)
     if len(pages) > threshold:

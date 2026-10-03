@@ -5,7 +5,7 @@ import re
 import statistics
 from pathlib import Path
 
-from . import anchor, shape, toc
+from . import anchor, pdf, shape, toc
 from .text import _is_heading, norm, render, strip_references
 
 _CHAPTER_HEADING_RE = re.compile(
@@ -25,7 +25,7 @@ def _toc_words(cfg: dict) -> set:
 
 def outline_candidates(doc) -> dict:
     try:
-        raw = doc.get_toc(simple=True)
+        raw = pdf.outline(doc)
     except Exception:
         raw = None
     levels: dict = {}
@@ -84,7 +84,7 @@ def detect_chapters(doc, pages: list, dims: list, stats: dict,
     """Locate chapter boundaries as page indices; the strategy drives the output path.
 
     Args:
-        doc: Open PyMuPDF document.
+        doc: Open pypdfium2 document.
         pages: Per-page line blocks from doc_lines().
         dims: Per-page (width, height) from doc_dims().
         stats: {"body", "heads", "lh"} from doc_stats().

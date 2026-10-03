@@ -91,7 +91,6 @@ def _categorise_phase(pdfs: list, out_dir: Path, cfg: dict) -> dict:
         {"groups": {"straight", "book", "ocr"} lists of paths, "skipped": already-done
         count, "unreadable": unreadable count}.
     """
-    fitz = categorise.import_fitz()
     existing = categorise.scan_existing(out_dir)
     groups: dict = {"straight": [], "book": [], "ocr": []}
     skipped = unreadable = 0
@@ -109,7 +108,7 @@ def _categorise_phase(pdfs: list, out_dir: Path, cfg: dict) -> dict:
 
     try:
         with ThreadPoolExecutor(max_workers=n_workers) as pool:
-            futures = {pool.submit(categorise.scan_one, p, fitz): p for p in to_scan}
+            futures = {pool.submit(categorise.scan_one, p): p for p in to_scan}
             for i, fut in enumerate(as_completed(futures), 1):
                 path = futures[fut]
                 ui.info(f"[{i}/{len(to_scan)}] {_trunc(path.name)}")

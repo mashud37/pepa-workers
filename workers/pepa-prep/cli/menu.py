@@ -27,7 +27,7 @@ def _actions() -> list:
          "also download citation networks from OpenCitations",
          lambda cfg: _run_biblio(cfg, cite=True)),
         ("Configure", "set input/output paths and options", config_cmd.main),
-        ("Install / check deps", "verify PyMuPDF, pytesseract, Pillow",
+        ("Install / check deps", "verify pypdfium2, pdfplumber, pytesseract, Pillow",
          lambda cfg: install.run()),
     ]
     if cfg_mod.EVALUATION_SHIPPED:

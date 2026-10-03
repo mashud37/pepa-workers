@@ -17,10 +17,11 @@ def run() -> None:
     ok = True
 
     try:
-        import fitz  # noqa: F401
-        ui.ok("PyMuPDF (fitz)")
+        import pdfplumber  # noqa: F401
+        import pypdfium2  # noqa: F401
+        ui.ok("pypdfium2 + pdfplumber")
     except ImportError:
-        ui.error("PyMuPDF missing, run: pip install PyMuPDF")
+        ui.error("pypdfium2 / pdfplumber missing, run: pip install pypdfium2 pdfplumber")
         ok = False
 
     try:

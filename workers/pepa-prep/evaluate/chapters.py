@@ -6,10 +6,10 @@ import re
 import statistics
 from pathlib import Path
 
-from extract.categorise import import_fitz, route, scan_one
+from extract import pdf
+from extract.categorise import route, scan_one
 from extract.chapter import detect_chapters
 from extract.text import doc_dims, doc_lines, doc_stats
-from extract.workers import _text_flags
 
 _ROOT = Path(__file__).parent.parent
 _EVAL_DIR = _ROOT / "data" / "eval"
@@ -54,19 +54,21 @@ def predict_book(path: Path, cfg: dict) -> dict:
     Returns:
         {"name", "route", "bounds", "meta"}; bounds is [] unless route == "book".
     """
-    fitz = import_fitz()
-    scan = scan_one(path, fitz)
+    scan = scan_one(path)
     if scan is None:
         raise ValueError("unreadable PDF")
     n, fraction = scan["pages"], scan["fraction"]
     r = route(n, fraction, cfg)
     if r != "book":
         return {"name": path.stem, "route": r, "bounds": [], "meta": {"strategy": "none"}}
-    with fitz.open(str(path)) as doc:
-        pages = doc_lines(doc, range(doc.page_count), _text_flags(fitz))
-        dims = doc_dims(doc, range(doc.page_count))
+    doc = pdf.open_pdf(path)
+    try:
+        pages = doc_lines(doc, range(pdf.page_count(doc)))
+        dims = doc_dims(doc, range(pdf.page_count(doc)))
         detected = detect_chapters(doc, pages, dims, doc_stats(pages), cfg)
         bounds, meta = detected["bounds"], detected["meta"]
+    finally:
+        pdf.close_pdf(doc)
     return {"name": path.stem, "route": r, "bounds": bounds, "meta": meta}
 
 

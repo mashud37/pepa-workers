@@ -5,7 +5,7 @@ output align to this exact line order.
 import json
 from pathlib import Path
 
-from extract import categorise
+from extract import categorise, pdf
 from extract.ocr import ocr_pages
 from extract.text import (
     _PAGE_NUM_RE,
@@ -38,14 +38,13 @@ def _block_records(block: list, pi: int, bid: int, lh: float, drop: set) -> list
     } for ln in block if _keep(ln, drop)]
 
 
-def _born_digital(doc, fitz, keep: set | None) -> dict:
+def _born_digital(doc, keep: set | None) -> dict:
     """Extract lines from a born-digital PDF using the production geometry pipeline.
 
     Returns:
         {"meta": {"route", "body", "heads", "lh"}, "lines": extracted line records}.
     """
-    text_flags = fitz.TEXTFLAGS_DICT & ~fitz.TEXT_PRESERVE_IMAGES
-    pages = doc_lines(doc, range(doc.page_count), text_flags)
+    pages = doc_lines(doc, range(pdf.page_count(doc)))
     stats = doc_stats(pages)
     body, heads, lh = stats["body"], stats["heads"], stats["lh"]
     drop = drop_keys(pages)
@@ -62,13 +61,13 @@ def _born_digital(doc, fitz, keep: set | None) -> dict:
     return {"meta": {"route": "geometry", "body": body, "heads": heads, "lh": lh}, "lines": out}
 
 
-def _ocr(path: Path, fitz, cfg: dict, keep: set | None) -> dict:
+def _ocr(path: Path, cfg: dict, keep: set | None) -> dict:
     """Extract lines from a scanned PDF's OCR text.
 
     Returns:
         {"meta": {"route": "ocr"}, "lines": extracted line records}.
     """
-    pages = ocr_pages(path, fitz, cfg)
+    pages = ocr_pages(path, cfg)
     drop = text_drop(pages)
     out: list = []
     for pi, page in enumerate(pages):
@@ -100,16 +99,18 @@ def build(path: Path, cfg: dict, keep: set | None = None) -> dict:
     Header/footer detection and document statistics are always computed over the
     whole document, then output is filtered, so slicing never weakens header removal.
     """
-    fitz = categorise.import_fitz()
-    scan = categorise.scan_one(path, fitz)
+    scan = categorise.scan_one(path)
     if scan is None:
         raise ValueError(f"unreadable PDF: {path.name}")
     pages, fraction = scan["pages"], scan["fraction"]
     if categorise.route(pages, fraction, cfg) == "ocr":
-        extracted = _ocr(path, fitz, cfg, keep)
+        extracted = _ocr(path, cfg, keep)
     else:
-        with fitz.open(str(path)) as doc:
-            extracted = _born_digital(doc, fitz, keep)
+        doc = pdf.open_pdf(path)
+        try:
+            extracted = _born_digital(doc, keep)
+        finally:
+            pdf.close_pdf(doc)
     meta, body = extracted["meta"], extracted["lines"]
     return {"name": path.stem, "route": meta["route"], "meta": meta, "lines": body}
 

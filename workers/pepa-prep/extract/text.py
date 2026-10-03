@@ -5,6 +5,7 @@ import statistics
 import unicodedata
 from collections import Counter
 
+from . import pdf
 from . import tables as tables_mod
 
 _TEXT_THRESHOLD = 40
@@ -62,56 +63,12 @@ def hdr_key(line: str) -> str | None:
     return key if len(key) >= 5 else None
 
 
-def _line_style(spans: list) -> dict:
-    sizes: dict = {}
-    bold = tot = 0
-    for sp in spans:
-        n = len(sp["text"].strip())
-        if not n:
-            continue
-        k = round(sp["size"] * 2) / 2
-        sizes[k] = sizes.get(k, 0) + n
-        tot += n
-        if sp.get("flags", 0) & 16 or "bold" in sp.get("font", "").lower():
-            bold += n
-    size = max(sizes, key=sizes.get) if sizes else 0.0
-    return {"size": size, "bold": tot > 0 and bold / tot > 0.6}
-
-
-def page_lines(page, flags=None) -> list:
-    raw = page.get_text("dict") if flags is None else page.get_text("dict", flags=flags)
-    blocks = []
-    for b in raw["blocks"]:
-        if b.get("type") != 0 or not b.get("lines"):
-            continue
-        lines = []
-        for ln in b["lines"]:
-            spans = ln["spans"]
-            text = "".join(sp["text"] for sp in spans)
-            if not text.strip():
-                continue
-            x0, y0, x1, y1 = ln["bbox"]
-            style = _line_style(spans)
-            lines.append({
-                "text": text,
-                "x0": x0,
-                "y0": y0,
-                "x1": x1,
-                "y1": y1,
-                "size": style["size"],
-                "bold": style["bold"],
-            })
-        if lines:
-            blocks.append(lines)
-    return blocks
-
-
-def doc_lines(doc, page_range, flags=None) -> list:
-    return [page_lines(doc[pno], flags) for pno in page_range]
+def doc_lines(doc, page_range) -> list:
+    return [pdf.page_lines(doc, pno) for pno in page_range]
 
 
 def doc_dims(doc, page_range) -> list:
-    return [(doc[pno].rect.width, doc[pno].rect.height) for pno in page_range]
+    return [pdf.page_size(doc, pno) for pno in page_range]
 
 
 def _line_sizes_and_heights(page: list) -> dict:
