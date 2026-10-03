@@ -11,7 +11,8 @@
     <a class="button text" href="{{ url_for('console.folders_page') }}">{{ icon.folder() }}Link a source folder</a>
     <form method="post" action="{{ url_for('console.pipeline_copy') }}" enctype="multipart/form-data">
       <input type="hidden" name="token" value="{{ token }}">
-      <label class="button tonal file-button">{{ icon.copy_in() }}Copy PDFs in<input type="file" name="pdfs" accept=".pdf" multiple class="visually-hidden" data-autosubmit></label>
+      <label class="button tonal file-button">{{ icon.copy_in() }}Copy PDFs in<input type="file" name="pdfs" accept=".pdf" multiple class="visually-hidden" data-copy></label>
+      <div class="snackbar copy-progress" role="status" data-copy-status hidden><span class="copy-count"></span><span class="copy-name"></span><span class="copy-bar"><span></span></span></div>
     </form>
     <button type="button" class="filled" data-open="run-dialog">{{ icon.play() }}Process papers</button>
   </div>
@@ -30,7 +31,7 @@
 {% endif %}
 
 <ol class="flow">
-  <li><a href="{{ url_for('console.browse_page', name='pepa-prep', slot='sources') }}"><span class="count" data-count="{{ summary.pdfs }}"{% if summary.pdfs_capped %} data-suffix="+"{% endif %}>{{ "{:,}".format(summary.pdfs) }}{% if summary.pdfs_capped %}+{% endif %}</span><span class="label">PDFs</span></a></li>
+  <li><a href="{{ url_for('console.papers_page') }}"><span class="count" data-count="{{ summary.pdfs }}"{% if summary.pdfs_capped %} data-suffix="+"{% endif %}>{{ "{:,}".format(summary.pdfs) }}{% if summary.pdfs_capped %}+{% endif %}</span><span class="label">PDFs</span></a></li>
   <li><a href="{{ url_for('console.browse_page', name='pepa-prep', slot='results', **{'in': 'text'}) }}"><span class="count" data-count="{{ summary.prepared }}">{{ "{:,}".format(summary.prepared) }}</span><span class="label">Prepared</span></a></li>
   <li><a href="{{ url_for('console.browse_page', name='pepa-sum', slot='results', q='sum_') }}"><span class="count" data-count="{{ summary.summarised }}">{{ "{:,}".format(summary.summarised) }}</span><span class="label">Summarised</span></a></li>
   <li><a href="{{ url_for('console.read_page') }}"><span class="count">{{ summary.search_index or "None" }}</span><span class="label">Search index</span></a></li>
@@ -48,7 +49,7 @@
     <p class="supporting">The ticked steps run in order, and papers already done are skipped. If a step fails, the steps after it do not run.</p>
     <div class="checklist">
       {% for step in steps %}
-      <label class="check"><input type="checkbox" name="step" value="{{ step.app }} {{ step.command }}" checked><span class="grow">{{ step.label }}</span>{% if step.paid %}<span class="chip">Paid</span>{% endif %}</label>
+      <label class="check"><input type="checkbox" name="step" value="{{ step.app }} {{ step.command }}"{% if step.missing %} disabled{% else %} checked{% endif %}><span class="grow">{{ step.label }}{% if step.missing == "keys" %}<a class="check-note" href="{{ url_for('console.keys_page') }}">Add a key on the Keys page first.</a>{% elif step.missing == "models" %}<a class="check-note" href="{{ url_for('console.models_page') }}">Choose an embedding model on the Models page first.</a>{% endif %}</span>{% if step.needs %}<span class="chip">API costs</span>{% endif %}</label>
       {% endfor %}
     </div>
     <div class="actions">

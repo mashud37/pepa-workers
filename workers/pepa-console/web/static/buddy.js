@@ -9,7 +9,7 @@ const ACTION_MILLISECONDS = {
   stretch: 900,
 };
 const MOOD_LINES = {
-  running: "On it. The log below shows how far I am.",
+  running: "On it. This panel shows how far I am.",
   ok: "Done! Have a look at what came out.",
   failed: "That one failed. The log says why.",
   cancelled: "Stopped. Finished work is kept.",

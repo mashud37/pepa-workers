@@ -49,7 +49,10 @@ class App:
 
 APPS: list[App] = [
     App("pepa-prep", "PDFs to clean markdown, fully local", [
-        Command("extract", "heavy", "Categorise and extract every PDF in input/ to markdown"),
+        Command("extract", "heavy", "Categorise and extract every PDF in input/ to markdown", fields=(
+            {"name": "--file", "type": "text", "help": "Only the PDF with this file name"},
+            {"name": "--force", "type": "bool", "help": "Prepare again, replacing earlier output"},
+        )),
         Command("validate", "safe", "Grade book chapters, report only", default_flags=("-n",)),
         Command("refine", "safe", "Diagnose chapter files; tick --apply to write the repairs", fields=(
             {"name": "--apply", "type": "bool", "help": "Write the repairs instead of reporting them"},

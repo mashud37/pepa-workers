@@ -126,6 +126,17 @@ LOCAL_HOSTS = [
 
 # What a server deployed with pepa-host can take, handed to the apps that would otherwise send it
 # more: its context window and the requests it answers at once.
+KEY_FOR_ROUTE = {
+    "claude": "ANTHROPIC_API_KEY",
+    "service": "PEPA_LLM_API_KEY",
+    "cloud": "PEPA_LLM_API_KEY",
+    "computer": "",
+}
+KEY_FOR_EMBEDDING = {
+    "gemini": "GEMINI_API_KEY",
+    "openai-compatible": "",
+}
+
 SERVER_LIMITS = {
     "pepa-sum": {"context_tokens": "PEPA_CONTEXT_TOKENS", "concurrency": "PEPA_MAX_CONCURRENCY"},
     "pepa-plan": {"concurrency": "PEPAPLAN_CONCURRENCY"},
@@ -343,6 +354,26 @@ def environment_for(app_name):
         if value and not os.environ.get(variable):
             environment[variable] = value
     return environment
+
+
+def missing_choice(app_name, needs):
+    """The page where a step gets what it still lacks before it can run: "keys", "models", or "" when nothing.
+
+    Args:
+        needs: "generation" for a step that writes with a model, "embedding" for one that embeds.
+    """
+    store = load_store()
+    if needs == "generation":
+        route = store["generation"][app_name]["route"] or "claude"
+        variable = KEY_FOR_ROUTE[route]
+    else:
+        provider = store["embedding"]["provider"]
+        if not provider:
+            return "models"
+        variable = KEY_FOR_EMBEDDING[provider]
+    if not variable or os.environ.get(variable) or variable in keys.environment_for(app_name):
+        return ""
+    return "keys"
 
 
 def page_view():

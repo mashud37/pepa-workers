@@ -23,6 +23,8 @@ STOP_WAIT_SECONDS = 5
 SECONDS_PER_MINUTE = 60
 CLOCK_FORMAT = "%H:%M"
 READ_BYTES = 4096
+# Asks a child to announce each item it starts and finishes, which the run panel lists.
+ITEM_EVENTS = {"PEPA_ITEM_EVENTS": "on"}
 
 JOBS = {}
 CHAINS = {}
@@ -81,6 +83,7 @@ def start_job(app_name, command_name, values):
 
     argv = build_argv(command, form_flags(command, values))
     environment = job_environment(app_name)
+    environment.update(ITEM_EVENTS)
     try:
         process = subprocess.Popen(argv, cwd=str(app.path), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=environment)
     except OSError as error:

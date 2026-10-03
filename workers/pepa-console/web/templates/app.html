@@ -28,7 +28,8 @@
     <form method="post" action="{{ url_for('console.app_copy', name=app_name) }}" enctype="multipart/form-data">
       <input type="hidden" name="token" value="{{ token }}">
       <input type="hidden" name="slot" value="{{ place.slot }}">
-      <label class="button text file-button">{{ icon.copy_in() }}Copy files here<input type="file" name="files" multiple class="visually-hidden" data-autosubmit></label>
+      <label class="button text file-button">{{ icon.copy_in() }}Copy files here<input type="file" name="files" multiple class="visually-hidden" data-copy></label>
+      <div class="snackbar copy-progress" role="status" data-copy-status hidden><span class="copy-count"></span><span class="copy-name"></span><span class="copy-bar"><span></span></span></div>
     </form>
     <button type="button" class="text" data-open="write-{{ place.slot }}">{{ icon.plus() }}Write a file</button>
     {% endif %}
@@ -93,7 +94,7 @@
       {% elif command.kind == "service" %}
       <a class="button tonal" href="{{ url_for('console.read_page') }}">Open Read</a>
       {% else %}
-      <form method="post" action="{{ url_for('console.app_run', name=app.name, command_name=command.name) }}" data-fetch="run" data-slot="run-{{ command.name }}"{% if command.kind == "heavy" %} data-confirm="Run {{ app.name }} {{ command.name }}?" data-confirm-detail="This does real work and may call a paid model."{% endif %}>
+      <form method="post" action="{{ url_for('console.app_run', name=app.name, command_name=command.name) }}" data-fetch="run" data-slot="run-{{ command.name }}"{% if command.kind == "heavy" %} data-confirm="Run {{ app.name }} {{ command.name }}?" data-confirm-detail="This does real work and may incur API costs."{% endif %}>
         <input type="hidden" name="token" value="{{ token }}">
         {% set entries = command.fields | rejectattr("type", "equalto", "bool") | list %}
         {% set switches = command.fields | selectattr("type", "equalto", "bool") | list %}

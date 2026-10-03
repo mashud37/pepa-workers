@@ -5,6 +5,7 @@
 {% set raw_url = url_for('console.app_file', name=app.name, slot=slot, relative=relative) %}
 <nav class="crumbs-nav" aria-label="Breadcrumb">
   <ol>
+    <li><a href="{{ url_for('console.pipeline') }}">Library</a></li>
     <li><a href="{{ url_for('console.app_page', name=app.name) }}">{{ app.name }}</a></li>
     <li><a href="{{ url_for('console.browse_page', name=app.name, slot=slot) }}">{{ place.label }}</a></li>
     {% if folder %}<li><a href="{{ url_for('console.browse_page', name=app.name, slot=slot, **{'in': folder}) }}">{{ folder }}</a></li>{% endif %}

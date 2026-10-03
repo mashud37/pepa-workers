@@ -1,7 +1,7 @@
 """Per-file extraction workers for straight, book, and OCR routes."""
 from pathlib import Path
 
-from . import pdf
+from . import marks, pdf
 from .chapter import detect_chapters, split_into_chapters, write_chapters
 from .ocr import ocr_pages
 from .tables import doc_tables
@@ -56,7 +56,7 @@ def extract_straight(path: Path, out_dir: Path, cfg: dict) -> dict:
     md = strip_references(render(segment(pages, stats, drop_keys(pages), tables)))
     dest = out_dir / f"text_{path.stem}.md"
     dest.write_text(md, encoding="utf-8")
-    return {"result": f"text_{path.stem}.md ({len(md):,} chars)", "warnings": []}
+    return {"result": f"one file, {len(md):,} characters", "warnings": []}
 
 
 def extract_book(path: Path, out_dir: Path, cfg: dict) -> dict:
@@ -73,17 +73,24 @@ def extract_book(path: Path, out_dir: Path, cfg: dict) -> dict:
         tables = doc_tables(path, doc, range(page_count))
         stats = doc_stats(pages)
         dk = drop_keys(pages)
-        detected = detect_chapters(doc, pages, dims, stats, cfg)
-        bounds, meta = detected["bounds"], detected["meta"]
+        marked = marks.marked_starts(path.stem)
+        if marked:
+            bounds = [{"title": "", "page": page - 1} for page in marked]
+            meta = {"strategy": "marked", "notes": []}
+        else:
+            detected = detect_chapters(doc, pages, dims, stats, cfg)
+            bounds, meta = detected["bounds"], detected["meta"]
     finally:
         pdf.close_pdf(doc)
     whole = segment(pages, stats, dk, tables)
-    if meta["strategy"] in ("outline", "toc") and len(bounds) >= 2:
+    if meta["strategy"] in ("outline", "toc", "marked") and len(bounds) >= 2:
         starts = [b["page"] for b in bounds]
         chapters = [segment(pages[a:z], stats, dk, tables[a:z])
                     for a, z in zip(starts, starts[1:] + [page_count])]
+        marks.save_found(path.stem, [start + 1 for start in starts], meta["strategy"])
     else:
         chapters = split_into_chapters(whole)
+        marks.save_found(path.stem, [], meta["strategy"])
     resolved = _resolve_chapters(chapters, whole, cfg, page_count, "pages")
     chapters, warnings = resolved["chapters"], resolved["warnings"]
     warnings = [f"{meta['strategy']}: {w}" for w in meta["notes"]] + warnings
@@ -102,6 +109,12 @@ def extract_ocr(path: Path, out_dir: Path, cfg: dict, progress=None) -> dict:
         {"result": one-line summary, "warnings": list of warning strings}.
     """
     pages = ocr_pages(path, cfg, progress=progress)
+    marked = marks.marked_starts(path.stem)
+    if marked:
+        starts = [page - 1 for page in marked]
+        chapters = [text_to_elements(pages[a:z]) for a, z in zip(starts, starts[1:] + [len(pages)])]
+        marks.save_found(path.stem, marked, "marked")
+        return {"result": write_chapters(path.stem, out_dir, chapters) + " via marked", "warnings": []}
     elements = text_to_elements(pages)
     threshold = cfg.get("book_page_threshold", 100)
     if len(pages) > threshold:
@@ -112,7 +125,7 @@ def extract_ocr(path: Path, out_dir: Path, cfg: dict, progress=None) -> dict:
     md = strip_references(render(elements))
     dest = out_dir / f"text_{path.stem}.md"
     dest.write_text(md, encoding="utf-8")
-    return {"result": f"text_{path.stem}.md ({len(md):,} chars, OCR)", "warnings": []}
+    return {"result": f"one file, {len(md):,} characters, read by OCR", "warnings": []}
 
 
 HANDLERS = {

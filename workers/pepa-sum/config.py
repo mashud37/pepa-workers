@@ -2,6 +2,7 @@
 with precedence: environment variable, then env.yaml, then a built-in
 default.
 """
+import json
 import os
 from pathlib import Path
 
@@ -172,6 +173,14 @@ def llm_connection():
             "or the PEPA_LLM_BASE_URL and PEPA_LLM_MODEL variables."
         )
     return {"base_url": base_url, "api_key": load("LLM_API_KEY"), "model": model}
+
+
+def excluded_names():
+    """The file names the user set aside, read from the list the console names in PEPA_EXCLUDE_FILE."""
+    listed = os.environ.get("PEPA_EXCLUDE_FILE", "")
+    if not listed or not Path(listed).exists():
+        return set()
+    return set(json.loads(Path(listed).read_text(encoding="utf-8")))
 
 
 def _file_values():

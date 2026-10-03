@@ -4,15 +4,9 @@ import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from extract import categorise, workers
+from extract import categorise, marks, workers
 
-from . import ui
-
-_MAX_NAME = 46
-
-
-def _trunc(name: str) -> str:
-    return name if len(name) <= _MAX_NAME else name[: _MAX_NAME - 3] + "..."
+from . import items, ui
 
 
 def _print_plan(src: Path, out_dir: Path, cfg: dict) -> None:
@@ -30,7 +24,7 @@ def _print_plan(src: Path, out_dir: Path, cfg: dict) -> None:
     ui.info(f"Workers:  {cfg['workers']}")
 
 
-def run(cfg: dict) -> None:
+def run(cfg: dict, file: str | None = None, force: bool = False) -> None:
     src = Path(cfg["input_folder"])
     out_dir = Path(cfg["output_folder"]) / "text"
 
@@ -41,10 +35,17 @@ def run(cfg: dict) -> None:
         pdfs = sorted(src.rglob("*.pdf"))
     else:
         pdfs = sorted(src.glob("*.pdf"))
+    excluded = marks.excluded_names()
+    pdfs = [p for p in pdfs if p.name not in excluded]
+    if file:
+        pdfs = [p for p in pdfs if p.name == file]
     if not pdfs:
-        raise SystemExit(f"No PDFs found in {src}")
+        raise SystemExit(f"No PDFs to prepare in {src}")
 
     out_dir.mkdir(parents=True, exist_ok=True)
+    if force:
+        for p in pdfs:
+            _clear_outputs(out_dir, p.stem)
 
     _print_plan(src, out_dir, cfg)
 
@@ -67,6 +68,7 @@ def run(cfg: dict) -> None:
         ui.info("Nothing to extract.")
         return
 
+    items.announce("total", todo)
     # Phases 2-4
     warns = _run_phase({"step_label": "Step 2/4", "display": "straight", "route": "straight"},
                         groups["straight"], out_dir, cfg)
@@ -81,7 +83,17 @@ def run(cfg: dict) -> None:
     if warns:
         ui.warn(f"{len(warns)} file(s) need a look:")
         for name, w in warns:
-            ui.warn(f"  {_trunc(name)}: {w}")
+            ui.warn(f"  {name}: {w}")
+
+
+def _clear_outputs(out_dir: Path, stem: str) -> None:
+    """Delete a PDF's earlier output, one file or numbered chapter files, so it is prepared again."""
+    whole = f"text_{stem}.md"
+    for old in out_dir.glob("text_*.md"):
+        number = old.name[len(f"text_{stem}_"):-len(".md")]
+        chapter = old.name.startswith(f"text_{stem}_") and number.isdigit()
+        if old.name == whole or chapter:
+            old.unlink()
 
 
 def _categorise_phase(pdfs: list, out_dir: Path, cfg: dict) -> dict:
@@ -111,7 +123,7 @@ def _categorise_phase(pdfs: list, out_dir: Path, cfg: dict) -> dict:
             futures = {pool.submit(categorise.scan_one, p): p for p in to_scan}
             for i, fut in enumerate(as_completed(futures), 1):
                 path = futures[fut]
-                ui.info(f"[{i}/{len(to_scan)}] {_trunc(path.name)}")
+                ui.info(f"[{i}/{len(to_scan)}] {path.name}")
                 scan = fut.result()
                 if scan is None:
                     ui.warn("  unreadable, skipping")
@@ -140,22 +152,32 @@ def _run_phase(phase: dict, files: list, out_dir: Path, cfg: dict,
 
     try:
         with ThreadPoolExecutor(max_workers=n_workers) as pool:
-            futures = {pool.submit(handler, p, out_dir, cfg): p for p in files}
-            for done, fut in enumerate(as_completed(futures), 1):
+            futures = {}
+            for position, path in enumerate(files, 1):
+                futures[pool.submit(_extract_one, handler, path, out_dir, cfg, f"[{position}/{n}]")] = path
+            for fut in as_completed(futures):
                 path = futures[fut]
-                name = _trunc(path.name)
                 try:
                     outcome = fut.result()
                     result, warnings = outcome["result"], outcome["warnings"]
-                    ui.ok(f"[{done}/{n}] {name}: {result}")
+                    ui.ok(f"{path.name}: {result}")
+                    items.announce("ok", path.name, result)
                     for w in warnings:
                         ui.warn(f"    {w}")
                         warns.append((path.name, w))
                 except Exception as e:
-                    ui.error(f"[{done}/{n}] {name}: {e}")
+                    ui.error(f"{path.name}: {e}")
+                    items.announce("failed", path.name, str(e))
     except KeyboardInterrupt:
         raise SystemExit("\nInterrupted.")
     return warns
+
+
+def _extract_one(handler, path, out_dir, cfg, counter):
+    """Announce a file the moment a worker picks it up, then extract it."""
+    ui.info(f"{counter} {path.name}")
+    items.announce("start", path.name)
+    return handler(path, out_dir, cfg)
 
 
 def _live(text: str) -> None:
@@ -191,8 +213,9 @@ def _run_ocr_phase(step_label: str, files: list, out_dir: Path, cfg: dict) -> li
 
     warns: list = []
     for i, path in enumerate(files, 1):
-        name = _trunc(path.name)
+        name = path.name
         ui.info(f"[{i}/{n}] {name}: OCR starting…")
+        items.announce("start", name)
 
         try:
             report = functools.partial(_report_progress, i, name, n)
@@ -200,6 +223,7 @@ def _run_ocr_phase(step_label: str, files: list, out_dir: Path, cfg: dict) -> li
             result, warnings = outcome["result"], outcome["warnings"]
             _live_clear()
             ui.ok(f"[{i}/{n}] {name}: {result}")
+            items.announce("ok", name, result)
             for w in warnings:
                 ui.warn(f"    {w}")
                 warns.append((path.name, w))
@@ -209,4 +233,5 @@ def _run_ocr_phase(step_label: str, files: list, out_dir: Path, cfg: dict) -> li
         except Exception as e:
             _live_clear()
             ui.error(f"[{i}/{n}] {name}: {e}")
+            items.announce("failed", name, str(e))
     return warns

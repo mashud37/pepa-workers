@@ -1,2 +1,4 @@
 flask
 markdown
+pillow
+pypdfium2>=5.0

@@ -7,7 +7,7 @@ import time
 from functools import partial
 
 import config
-from cli import ui
+from cli import items, ui
 from cli.progress import _CHECK, _LABEL_W, ProgressSpinner, StepSpinner
 from render import paper_stem
 
@@ -53,6 +53,7 @@ def run(input_dir=None, output_dir=None, force=False, mode=None):
         from extract import extract_signals, read_document, select_passages  # noqa: F401
     except ImportError as e:
         raise SystemExit(f"Missing dependency ({e.name}). Run: pip install -r requirements.txt")
+    _require_backend()
     from extract.signals import ensure_model
     ensure_model()
 
@@ -98,6 +99,18 @@ def run(input_dir=None, output_dir=None, force=False, mode=None):
     return code
 
 
+def _require_backend():
+    """Stop before any paper is read when the chosen backend has no key or no server to call."""
+    if config.load("BACKEND") == "openai-compatible":
+        config.llm_connection()
+        return
+    if not config.load("ANTHROPIC_API_KEY"):
+        raise SystemExit(
+            "No ANTHROPIC_API_KEY. Set it in env.yaml or the ANTHROPIC_API_KEY env "
+            f"var (run: {config.COMMAND} install)."
+        )
+
+
 def _discover_sources(in_dir):
     """Every ingestable paper in in_dir (.pdf, .md/.markdown, or .txt), one per
     stem. When a stem has both a PDF and a text file (e.g. a hand-converted
@@ -112,9 +125,10 @@ def _discover_sources(in_dir):
         candidates = sorted(in_dir.rglob("*"))
     else:
         candidates = sorted(in_dir.iterdir())
+    excluded = config.excluded_names()
     found = {}
     for p in candidates:
-        if not (p.is_file() and p.suffix.lower() in SUFFIXES):
+        if not (p.is_file() and p.suffix.lower() in SUFFIXES) or p.name in excluded:
             continue
         stem = paper_stem(p.name)
         prior = found.get(stem)
@@ -365,6 +379,7 @@ class _Pipeline:
         """Submit papers for extraction until the look-ahead window is full."""
         while self.pending and (len(self.extract_futs) + len(self.build_futs)) < self.window:
             pdf, todo = self.pending.pop(0)
+            items.announce("start", pdf.name)
             self.extract_futs[px.submit(_extract_paper, pdf, todo)] = pdf
 
     def on_extracted(self, fut, tx, sp):
@@ -375,11 +390,13 @@ class _Pipeline:
         except Exception as e:
             self.errors += 1
             sp.log(ui.line("error", f"{_short(pdf.name)} read failed: {e}"))
+            items.announce("failed", pdf.name, f"read failed: {e}")
             sp.advance()
             return
         if read["artifacts"] is None:
             self.errors += 1
             sp.log(ui.line("warn", f"{_short(pdf.name)} no extractable text"))
+            items.announce("failed", pdf.name, "no extractable text")
             sp.advance()
             return
         todo = read["todo"]
@@ -394,11 +411,13 @@ class _Pipeline:
             self.done += 1
             built = " ".join(f"{d}_" for d in todo)
             sp.log(ui.line("ok", f"{_short(pdf.name)} {built}"))
+            items.announce("ok", pdf.name, built)
         except Exception as e:  # per-paper failure: log and continue
             self.errors += 1
             saved = _maybe_log_truncated(self.out_dir, pdf.name, e)
             extra = " (partial saved for eval)" if saved else ""
             sp.log(ui.line("error", f"{_short(pdf.name)} build failed: {e}{extra}"))
+            items.announce("failed", pdf.name, f"build failed: {e}")
         sp.advance()
 
     def run(self, px, tx, sp):
@@ -448,6 +467,7 @@ def _run_parallel(work, out_dir, skipped):
     ui.step(f"Summarising {n} paper(s)")
 
     pipeline = _Pipeline(plans, out_dir, window)
+    items.announce("total", n)
     # Live [i/N] + ETA, lit BEFORE the first blocking wait, advancing once per
     # paper (on a read failure, or when its build finishes) so the screen is never
     # dead while the first papers are still being read/OCR'd.
@@ -749,12 +769,15 @@ def _chars_read(read):
     return f"{len(read['artifacts']['text']):,} chars"
 
 
+def _paper_failed(name, message):
+    """Report a paper that could not be summarised, on screen and in the console's progress list."""
+    ui.error(f"{name}: {message}")
+    items.announce("failed", name, message)
+
+
 def _run_serial(sources, out_dir, force, on_existing):
-    """One paper at a time, but a single look-ahead worker reads and signals the
-    NEXT paper while the current paper's LLM calls are in flight, so the local CPU
-    stage overlaps the network wait and the gap between papers closes. Only two
-    papers' artifacts are ever live (current + the one prefetched), so peak memory
-    stays flat: this is a thread, not extra processes, and cannot over-spawn."""
+    """One paper at a time, while a single look-ahead thread reads the next paper during the
+    current paper's model calls; only two papers are ever held in memory."""
     from concurrent.futures import ThreadPoolExecutor
 
     ui.info(f"on existing: {on_existing}  ·  reading the next paper while the current "
@@ -762,12 +785,14 @@ def _run_serial(sources, out_dir, force, on_existing):
     done = errors = stopped = 0
     planned = _serial_jobs(sources, out_dir, force, on_existing)
     queue = iter(planned["jobs"])
+    items.announce("total", len(planned["jobs"]))
 
     with ThreadPoolExecutor(max_workers=1) as ex:
         pending = _submit_next(queue, out_dir, ex)
         while pending is not None:
             pdf, todo, fut = pending["pdf"], pending["todo"], pending["future"]
             ui.step(pdf.name)
+            items.announce("start", pdf.name)
             kept = [d for d in _DOCS if d not in todo]
             for d in kept:
                 ui.info(f"kept {d}_ (exists)")
@@ -777,19 +802,20 @@ def _run_serial(sources, out_dir, force, on_existing):
             try:
                 read = _spin("reading + signals", fut.result, _chars_read)
             except Exception as e:
-                ui.error(f"{_short(pdf.name)}: {e}")
+                _paper_failed(pdf.name, str(e))
                 errors += 1
                 pending = _submit_next(queue, out_dir, ex)
                 continue
             # Start the next paper's read now, so it runs while this paper's LLM does.
             nxt = _submit_next(queue, out_dir, ex)
             if read["artifacts"] is None:
-                ui.error(f"{_short(pdf.name)}: no extractable text")
+                _paper_failed(pdf.name, "no extractable text")
                 errors += 1
                 pending = nxt
                 continue
             try:
                 _build_docs(pdf, out_dir, todo, read["artifacts"])
+                items.announce("ok", pdf.name, " ".join(f"{d}_" for d in todo))
                 done += 1
             except KeyboardInterrupt:
                 ui.warn("stopped (Ctrl-C): finished documents are saved")
@@ -800,7 +826,7 @@ def _run_serial(sources, out_dir, force, on_existing):
             except Exception as e:
                 saved = _maybe_log_truncated(out_dir, pdf.name, e)
                 extra = f" (partial saved to {saved})" if saved else ""
-                ui.error(f"{pdf.name}: {e}{extra}")
+                _paper_failed(pdf.name, f"{e}{extra}")
                 errors += 1
             pending = nxt
 

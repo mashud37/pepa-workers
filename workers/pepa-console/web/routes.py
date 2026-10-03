@@ -14,18 +14,23 @@ from flask import (
     render_template,
     request,
     send_file,
+    session,
     url_for,
 )
 
 from registry import get_app
-from web import documents, folders, jobs, keys, mascot, models, options, paths
+from web import documents, folders, jobs, keys, mascot, models, options, papers, paths
 from web.settings import SETTINGS
 
+MISSING_NOTE = {
+    "keys": "Add a key on the Keys page first.",
+    "models": "Choose an embedding model on the Models page first.",
+}
 PIPELINE_STEPS = [
-    {"app": "pepa-prep", "command": "extract", "label": "Prepare PDFs", "paid": False},
-    {"app": "pepa-sum", "command": "summarize", "label": "Summarise", "paid": True},
-    {"app": "pepa-read", "command": "index", "label": "Update search index", "paid": False},
-    {"app": "pepa-review", "command": "index", "label": "Update review index", "paid": True},
+    {"app": "pepa-prep", "command": "extract", "label": "Prepare PDFs", "needs": ""},
+    {"app": "pepa-sum", "command": "summarize", "label": "Summarise", "needs": "generation"},
+    {"app": "pepa-read", "command": "index", "label": "Update search index", "needs": ""},
+    {"app": "pepa-review", "command": "index", "label": "Update review index", "needs": "embedding"},
 ]
 
 PDF_APPS = [
@@ -78,12 +83,39 @@ def port_is_open(port):
         return False
 
 
-def copy_message(result):
-    """A short line saying how many files were copied, into which folder, and what was left out."""
-    message = f"Copied {len(result['copied'])} file(s) into {result['folder']}."
-    if result["left_out"]:
-        message += f" Left out {len(result['left_out'])}: already there or not accepted."
-    return message
+def copy_step(results, back_to):
+    """Count one request's copies toward the browser's batch, sent one file per request;
+    after the last file, flash one line per folder and send the browser back to the page.
+
+    Args:
+        results: a copy_into result per folder, or a string saying why nothing was copied there.
+    """
+    number = int(request.form.get("file_number", "1"))
+    count = int(request.form.get("file_count", "1"))
+    tally = {"folders": {}, "notes": []}
+    if number > 1:
+        tally = session.get("copy_tally", tally)
+    for result in results:
+        if isinstance(result, str):
+            if result not in tally["notes"]:
+                tally["notes"].append(result)
+            continue
+        counts = tally["folders"].get(result["folder"], {"copied": 0, "left_out": 0})
+        counts["copied"] += len(result["copied"])
+        counts["left_out"] += len(result["left_out"])
+        tally["folders"][result["folder"]] = counts
+    if number < count:
+        session["copy_tally"] = tally
+        return jsonify({"ok": True})
+    session.pop("copy_tally", None)
+    lines = []
+    for folder, counts in tally["folders"].items():
+        line = f"Copied {counts['copied']} file(s) into {folder}."
+        if counts["left_out"]:
+            line += f" Left out {counts['left_out']}: already there or not accepted."
+        lines.append(line)
+    flash(" ".join(lines + tally["notes"]))
+    return redirect(back_to)
 
 
 def folder_message(app_name, slot):
@@ -155,33 +187,112 @@ def pipeline():
     return render_template(
         "pipeline.html",
         summary=summary,
-        steps=PIPELINE_STEPS,
+        steps=pipeline_steps(),
         chain=latest,
         first_run=nothing_yet and not keys.load_store()["keys"],
     )
 
 
+def pipeline_steps():
+    """The pipeline's steps, each with what it still lacks before it can run."""
+    steps = []
+    for step in PIPELINE_STEPS:
+        missing = ""
+        if step["needs"]:
+            missing = models.missing_choice(step["app"], step["needs"])
+        steps.append({**step, "missing": missing})
+    return steps
+
+
 @bp.route("/pipeline/copy", methods=["POST"])
 def pipeline_copy():
     files = folders.picked_files(request.files.getlist("pdfs"))
-    lines = []
+    results = []
     for app_name in PDF_APPS:
         try:
-            lines.append(copy_message(folders.copy_into(app_name, "sources", files, ".pdf")))
+            results.append(folders.copy_into(app_name, "sources", files, ".pdf"))
         except ValueError as error:
-            lines.append(str(error))
-    flash(" ".join(lines))
-    return redirect(url_for("console.pipeline"))
+            results.append(str(error))
+    return copy_step(results, url_for("console.pipeline"))
 
 
 @bp.route("/pipeline/run", methods=["POST"])
 def pipeline_run():
     ticked = request.form.getlist("step")
-    steps = [step for step in PIPELINE_STEPS if f"{step['app']} {step['command']}" in ticked]
+    steps = [step for step in pipeline_steps() if f"{step['app']} {step['command']}" in ticked]
     if not steps:
         return jsonify({"error": "Tick at least one step."}), 400
+    for step in steps:
+        if step["missing"]:
+            return jsonify({"error": f"{step['label']}: {MISSING_NOTE[step['missing']]}"}), 400
     chain_id = jobs.start_chain(steps)
     return run_panel(jobs.chain_summary(chain_id), url_for("console.chain_log", chain_id=chain_id))
+
+
+# ---- Papers ----
+
+@bp.route("/papers")
+def papers_page():
+    wanted = request.args.get("q", "")
+    longer = request.args.get("longer", "0")
+    longer_than = int(longer) if longer.isdigit() else 0
+    listing = papers.paper_rows(wanted, longer_than)
+    return render_template(
+        "papers.html",
+        listing=listing,
+        wanted=wanted,
+        longer_than=longer_than,
+        lengths=papers.LONGER_THAN,
+    )
+
+
+@bp.route("/papers/set-aside", methods=["POST"])
+def papers_set_aside():
+    names = request.form.getlist("name")
+    wanted = request.form.get("action") == "exclude"
+    if names:
+        paths.set_excluded(names, wanted)
+        verb = "Set aside" if wanted else "Brought back"
+        flash(f"{verb} {len(names)} paper(s).")
+    else:
+        flash("Tick at least one paper.")
+    return redirect(request.form.get("back") or url_for("console.papers_page"))
+
+
+@bp.route("/papers/chapters")
+def chapters_page():
+    relative = request.args.get("file", "")
+    if papers.source_path(relative) is None:
+        abort(404)
+    return render_template("chapters.html", book=papers.chapter_view(relative))
+
+
+@bp.route("/papers/chapters", methods=["POST"])
+def chapters_save():
+    relative = request.form.get("file", "")
+    path = papers.source_path(relative)
+    if path is None:
+        abort(404)
+    try:
+        papers.save_marks(relative, request.form.getlist("start"))
+    except ValueError as error:
+        flash(str(error))
+        return redirect(url_for("console.chapters_page", file=relative))
+    job_id = jobs.start_job("pepa-prep", "extract", {"--file": path.name, "--force": "on"})
+    return redirect(url_for("console.job_page", job_id=job_id))
+
+
+@bp.route("/papers/page")
+def paper_page_image():
+    relative = request.args.get("file", "")
+    number = request.args.get("n", "")
+    width = papers.LARGE_WIDTH if request.args.get("size") == "large" else papers.THUMBNAIL_WIDTH
+    if papers.source_path(relative) is None or not number.isdigit():
+        abort(404)
+    image = papers.page_image(relative, int(number), width)
+    if image is None:
+        abort(404)
+    return Response(image, mimetype="image/jpeg", headers={"Cache-Control": "private, max-age=3600"})
 
 
 # ---- Apps ----
@@ -235,10 +346,10 @@ def app_copy(name):
     find_app(name)
     files = folders.picked_files(request.files.getlist("files"))
     try:
-        flash(copy_message(folders.copy_into(name, request.form.get("slot", ""), files, "")))
+        result = folders.copy_into(name, request.form.get("slot", ""), files, "")
     except ValueError as error:
-        flash(str(error))
-    return redirect(url_for("console.app_page", name=name))
+        result = str(error)
+    return copy_step([result], url_for("console.app_page", name=name))
 
 
 @bp.route("/apps/<name>/write", methods=["POST"])

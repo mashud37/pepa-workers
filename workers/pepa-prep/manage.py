@@ -12,7 +12,9 @@ if cfg_mod.EVALUATION_SHIPPED:
 
 
 def _add_pipeline_parsers(sub) -> None:
-    sub.add_parser("extract", help="Categorise and extract PDFs to markdown")
+    ex = sub.add_parser("extract", help="Categorise and extract PDFs to markdown")
+    ex.add_argument("--file", metavar="NAME", help="Only the PDF with this file name")
+    ex.add_argument("-f", "--force", action="store_true", help="Prepare again, replacing earlier output")
     v = sub.add_parser("validate", help="Grade book chapters, quarantine junk, renumber")
     v.add_argument("-n", "--dry-run", action="store_true", help="Report only, move nothing")
     sp = sub.add_parser("split", help="Manually correct chapter boundaries in any book")
@@ -66,7 +68,7 @@ def _run_biblio(cfg, args) -> None:
 
 def _dispatch(args, cfg) -> None:
     handlers = {
-        "extract": lambda: extract_cmd.run(cfg),
+        "extract": lambda: extract_cmd.run(cfg, file=args.file, force=args.force),
         "split": lambda: split_cmd.run(cfg, file=args.file),
         "validate": lambda: validate_cmd.run(cfg, dry=args.dry_run),
         "install": lambda: install.run(),

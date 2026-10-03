@@ -42,6 +42,7 @@ OPEN_COMMAND = {
 }
 
 FOLDERS_FILE_NAME = "folders.json"
+EXCLUDED_FILE_NAME = "excluded.json"
 DRIVE_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 MAX_ENTRIES = 500
 
@@ -80,6 +81,33 @@ def save_store(store):
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(".tmp")
     temporary.write_text(json.dumps(store, indent=2), encoding="utf-8")
+    os.replace(temporary, path)
+
+
+def excluded_file():
+    """Where the names of the PDFs set aside are kept, a list every job that reads PDFs skips."""
+    return SETTINGS["keys_file"].parent / EXCLUDED_FILE_NAME
+
+
+def load_excluded():
+    """The file names set aside, as a set."""
+    path = excluded_file()
+    if not path.exists():
+        return set()
+    return set(json.loads(path.read_text(encoding="utf-8")))
+
+
+def set_excluded(names, wanted):
+    """Set these file names aside, or bring them back when wanted is false."""
+    excluded = load_excluded()
+    if wanted:
+        excluded.update(names)
+    else:
+        excluded.difference_update(names)
+    path = excluded_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(sorted(excluded), indent=2), encoding="utf-8")
     os.replace(temporary, path)
 
 
@@ -196,7 +224,10 @@ def set_subfolders(app_name, slot, wanted):
 
 def environment_for(app_name):
     """The folder variables a job of this app receives, so the child writes where the user chose."""
-    environment = {"PEPA_PROJECT": str(project_folder())}
+    environment = {
+        "PEPA_PROJECT": str(project_folder()),
+        "PEPA_EXCLUDE_FILE": str(excluded_file()),
+    }
     for place in PLACES:
         if place["app"] == app_name:
             environment[place["variable"]] = str(chosen(app_name, place["slot"]))

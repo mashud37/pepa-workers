@@ -12,7 +12,15 @@
       <button class="text danger">Stop</button>
     </form>
   </div>
-  <pre class="log" data-lines><span class="pending" data-pending></span></pre>
+  <div class="items" data-items hidden>
+    <div class="items-head"><span class="items-count" data-items-count></span><span class="items-bar"><span data-items-bar></span></span></div>
+    <ul class="item-list" data-items-running></ul>
+    <ul class="item-list" data-items-finished></ul>
+  </div>
+  <details class="log-details" data-log-details open>
+    <summary>Log</summary>
+    <pre class="log" data-lines><span class="pending" data-pending></span></pre>
+  </details>
   <form class="answer" method="post" data-fetch="answer" hidden>
     <input type="hidden" name="token" value="{{ token }}">
     <input type="text" name="text" autocomplete="off" aria-label="Answer" placeholder="Answer, then press Enter">

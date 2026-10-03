@@ -25,6 +25,7 @@ const MENU_STEPS = {
   ArrowUp: -1,
 };
 const openedMenu = {menu: null, anchor: null, pick: null};
+const ITEM_PREFIX = "pepa-item: ";
 
 const AFTER_SEND = {
   run: showRun,
@@ -66,10 +67,76 @@ document.addEventListener("click", function (event) {
 });
 
 document.addEventListener("change", function (event) {
-  if (event.target.matches("[data-autosubmit]")) {
-    event.target.form.requestSubmit();
+  if (event.target.matches("[data-select-all]")) {
+    for (const box of event.target.form.querySelectorAll('input[name="name"]')) {
+      box.checked = event.target.checked;
+    }
+  }
+  if (event.target.closest("[data-marker]")) {
+    countMarks(event.target.closest("[data-marker]"));
+  }
+  if (event.target.matches("[data-copy]")) {
+    copyOneByOne(event.target);
   }
 });
+
+function countMarks(form) {
+  const ticked = form.querySelectorAll('input[name="start"]:checked').length;
+  let text = `${ticked} chapter starts`;
+  if (ticked === 0) {
+    text = "No chapter starts: the book is prepared as one file";
+  }
+  form.querySelector("[data-marker-count]").textContent = text;
+}
+
+const marker = document.querySelector("[data-marker]");
+if (marker) {
+  countMarks(marker);
+  marker.querySelector("[data-marker-clear]").addEventListener("click", function () {
+    for (const box of marker.querySelectorAll('input[name="start"]')) {
+      box.checked = false;
+    }
+    countMarks(marker);
+  });
+  marker.addEventListener("click", function (event) {
+    const zoom = event.target.closest("[data-zoom]");
+    if (zoom) {
+      event.preventDefault();
+      const dialog = document.getElementById("zoom");
+      dialog.querySelector("[data-zoom-image]").src = zoom.dataset.zoom;
+      dialog.showModal();
+    }
+  });
+}
+
+async function copyOneByOne(input) {
+  const form = input.form;
+  const status = form.querySelector("[data-copy-status]");
+  const count = status.querySelector(".copy-count");
+  const name = status.querySelector(".copy-name");
+  const bar = status.querySelector(".copy-bar span");
+  const files = Array.from(input.files);
+  input.disabled = true;
+  status.hidden = false;
+  for (let index = 0; index < files.length; index++) {
+    const file = files[index];
+    count.textContent = `Copying ${index + 1} of ${files.length}`;
+    name.textContent = file.name;
+    bar.style.width = `${(100 * index) / files.length}%`;
+    const body = new FormData(form);
+    body.append(input.name, file);
+    body.append("file_number", index + 1);
+    body.append("file_count", files.length);
+    const reply = await fetch(form.action, {method: "POST", body: body});
+    if (!reply.ok) {
+      count.textContent = `Stopped at ${index + 1} of ${files.length}: the console refused this file (${reply.status}).`;
+      input.disabled = false;
+      return;
+    }
+  }
+  bar.style.width = "100%";
+  window.location.reload();
+}
 
 for (const panel of document.querySelectorAll(".run")) {
   followRun(panel);
@@ -253,10 +320,11 @@ async function followRun(panel) {
     }
 
     const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 40;
-    if (data.lines.length > 0) {
+    const shown = takeItemEvents(panel, data.lines);
+    if (shown.length > 0) {
       const chunk = document.createElement("span");
       chunk.className = "fresh";
-      chunk.textContent = data.lines.join("\n") + "\n";
+      chunk.textContent = shown.join("\n") + "\n";
       log.insertBefore(chunk, pending);
     }
     pending.textContent = data.partial;
@@ -271,6 +339,72 @@ async function followRun(panel) {
     }
     await wait(Number(panel.dataset.poll));
   }
+}
+
+function takeItemEvents(panel, lines) {
+  const shown = [];
+  for (const line of lines) {
+    if (line.startsWith(ITEM_PREFIX)) {
+      const parts = line.slice(ITEM_PREFIX.length).split(" | ");
+      showItem(panel, parts[0], parts[1], parts.slice(2).join(" | "));
+    } else {
+      shown.push(line);
+    }
+  }
+  return shown;
+}
+
+function showItem(panel, state, name, detail) {
+  const box = panel.querySelector("[data-items]");
+  const running = box.querySelector("[data-items-running]");
+  const finished = box.querySelector("[data-items-finished]");
+  if (state === "total") {
+    box.hidden = false;
+    panel.querySelector("[data-log-details]").open = false;
+    box.dataset.total = name;
+    box.dataset.finished = 0;
+    box.dataset.failed = 0;
+    running.replaceChildren();
+    finished.replaceChildren();
+    countItems(box);
+    return;
+  }
+  let row = box.querySelector(`li[data-name="${CSS.escape(name)}"]`);
+  if (!row) {
+    row = document.createElement("li");
+    row.dataset.name = name;
+    row.title = name;
+    row.innerHTML = '<span class="item-icon" aria-hidden="true"></span><span class="item-name"></span><span class="item-detail"></span>';
+    row.querySelector(".item-name").textContent = name;
+  }
+  row.className = "item item-" + (state === "start" ? "running" : state);
+  if (state === "start") {
+    running.append(row);
+    return;
+  }
+  row.querySelector(".item-detail").textContent = detail;
+  finished.prepend(row);
+  box.dataset.finished = Number(box.dataset.finished) + 1;
+  if (state === "failed") {
+    box.dataset.failed = Number(box.dataset.failed) + 1;
+  }
+  countItems(box);
+}
+
+function countItems(box) {
+  const total = Number(box.dataset.total);
+  const finished = Number(box.dataset.finished);
+  const failed = Number(box.dataset.failed);
+  let text = `${finished} of ${total} done`;
+  if (failed > 0) {
+    text += ` · ${failed} failed`;
+  }
+  box.querySelector("[data-items-count]").textContent = text;
+  let share = 0;
+  if (total > 0) {
+    share = (100 * finished) / total;
+  }
+  box.querySelector("[data-items-bar]").style.width = `${share}%`;
 }
 
 function showState(panel, data) {

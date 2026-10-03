@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icon %}
+{% block title %}Chapters · {{ book.name }} · pepa{% endblock %}
+{% block content %}
+<nav class="crumbs-nav" aria-label="Breadcrumb">
+  <ol>
+    <li><a href="{{ url_for('console.pipeline') }}">Library</a></li>
+    <li><a href="{{ url_for('console.papers_page') }}">Papers</a></li>
+    <li aria-current="page">{{ book.name }}</li>
+  </ol>
+</nav>
+
+<div class="page-head">
+  <div class="heading">
+    <h1>Mark chapters</h1>
+    <p class="supporting">Tick the first page of every chapter, then prepare the book again. {% if book.source == "found" %}The ticks show the chapters pepa-prep found.{% elif book.source == "marked" %}The ticks show your marks.{% endif %}</p>
+  </div>
+</div>
+
+<form method="post" action="{{ url_for('console.chapters_save') }}" class="marker" data-marker>
+  <input type="hidden" name="token" value="{{ token }}">
+  <input type="hidden" name="file" value="{{ book.relative }}">
+  <ol class="page-grid">
+    {% for number in range(1, book.pages + 1) %}
+    <li>
+      <label class="page-tile">
+        <input type="checkbox" name="start" value="{{ number }}"{% if number in book.starts %} checked{% endif %} aria-label="Chapter starts on page {{ number }}">
+        <img src="{{ url_for('console.paper_page_image', file=book.relative, n=number) }}" alt="" loading="lazy" width="200" height="283">
+        <span class="page-number">Page {{ number }}</span>
+        <button type="button" class="button icon zoom" data-zoom="{{ url_for('console.paper_page_image', file=book.relative, n=number, size='large') }}" aria-label="Enlarge page {{ number }}">{{ icon.open_new() }}</button>
+      </label>
+    </li>
+    {% endfor %}
+  </ol>
+  <div class="marker-bar">
+    <span class="grow" data-marker-count role="status"></span>
+    <button type="button" class="text" data-marker-clear>Clear all</button>
+    <button class="filled">{{ icon.play() }}Save and prepare again</button>
+  </div>
+</form>
+
+<dialog id="zoom" class="dialog zoom-dialog" aria-label="Page">
+  <img alt="" data-zoom-image>
+  <div class="actions"><button type="button" class="text" data-close>Close</button></div>
+</dialog>
+{% endblock %}
