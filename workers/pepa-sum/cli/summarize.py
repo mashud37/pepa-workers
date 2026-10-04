@@ -7,7 +7,7 @@ import time
 from functools import partial
 
 import config
-from cli import items, ui
+from cli import batches, items, ui
 from cli.progress import _CHECK, _LABEL_W, ProgressSpinner, StepSpinner
 from render import paper_stem
 
@@ -47,7 +47,7 @@ def _pin_threads():
         os.environ[var] = "1"
 
 
-def run(input_dir=None, output_dir=None, force=False, mode=None, approve_cost=False):
+def run(input_dir=None, output_dir=None, force=False, mode=None, approve_cost=None):
     _pin_threads()  # parent sets them so spawned workers inherit before numpy imports
     try:
         from extract import extract_signals, read_document, select_passages  # noqa: F401
@@ -73,6 +73,9 @@ def run(input_dir=None, output_dir=None, force=False, mode=None, approve_cost=Fa
     if config.scan_subfolders():
         where += " (including sub-folders)"
     ui.info(f"{len(sources)} paper(s) in {where}")
+    waiting = len(batches.pending_names())
+    if waiting:
+        ui.info(f"{waiting} more are waiting in a batch at Anthropic; {config.COMMAND} batches collects them")
     ui.info(f"backend: {config.load('BACKEND')}  ·  model: {config.model_name()}  ·  "
             f"paragraph rundown: {config.load('PARA_METHOD')}")
 
@@ -98,15 +101,17 @@ def run(input_dir=None, output_dir=None, force=False, mode=None, approve_cost=Fa
     return code
 
 
-def print_estimate(input_dir=None, output_dir=None, force=False, mode=None):
-    """Print, as one JSON line, how many papers a run would do, its estimated cost, and each mode's time."""
+def print_estimate(input_dir=None, output_dir=None, force=False, mode=None, more=0):
+    """Print, as one JSON line, how many papers a run would do, its estimated cost, and each mode's time.
+    `more` counts papers not yet in the input folder, such as PDFs still to be prepared.
+    """
     import json
 
     in_dir = input_dir or config.INPUT_DIR
     out_dir = output_dir or config.OUTPUT_DIR
     sources = _discover_sources(in_dir) if in_dir.is_dir() else []
     work = _plan_work(sources, out_dir, force, config.load('ON_EXISTING'))["work"]
-    n = len(work)
+    n = len(work) + more
     cost = {}
     for name in _estimate(n):
         cost[name] = _estimated_cost(n, name)
@@ -146,10 +151,13 @@ def _discover_sources(in_dir):
         candidates = sorted(in_dir.rglob("*"))
     else:
         candidates = sorted(in_dir.iterdir())
-    excluded = config.excluded_names()
+    excluded = config.excluded_names() | batches.pending_names()
+    only = config.only_names()
     found = {}
     for p in candidates:
         if not (p.is_file() and p.suffix.lower() in SUFFIXES) or p.name in excluded:
+            continue
+        if only is not None and p.name not in only:
             continue
         stem = paper_stem(p.name)
         prior = found.get(stem)
@@ -313,11 +321,14 @@ def _extract_to_spool(plans, spool, n):
                     read = fut.result()
                 except Exception as e:
                     failures.append(f"[read] {_short(pdf.name)}: {e}")
+                    items.announce("failed", pdf.name, f"read failed: {e}")
                 else:
                     if read["path"] is None:
                         failures.append(f"[read] {_short(pdf.name)}: no extractable text")
+                        items.announce("failed", pdf.name, "no extractable text")
                     else:
                         spooled.append((pdf, read["todo"], read["path"]))
+                        items.announce("sent", pdf.name, "read and sent in the batch")
                 sp.advance()
     finally:
         sp.done(f"{len(spooled)}/{n} read"
@@ -680,7 +691,7 @@ def _build_batch_requests(spooled, out_dir):
     return {"requests": requests, "plans": plans}
 
 
-def _assemble_batch(plans, batch_out, out_dir):
+def assemble_batch(plans, batch_out, out_dir):
     """Write every paper's documents from the finished batch.
 
     Returns:
@@ -725,7 +736,7 @@ def _run_batch(work, out_dir, skipped):
         return 0
 
     spool = Path(tempfile.mkdtemp(prefix="pepa_extract_"))
-    done = 0
+    items.announce("total", n)
     try:
         read = _extract_to_spool(plans_in, spool, n)
         spooled, errors = read["spooled"], read["errors"]
@@ -743,26 +754,17 @@ def _run_batch(work, out_dir, skipped):
             ui.ok(f"{done} processed, {skipped} skipped, {errors} failed")
             return 1 if errors else 0
 
-        ui.step(f"Submitting {len(requests)} request(s) to the Message Batches API")
-        ui.info("most batches finish within ~1h (max 24h)  ·  Ctrl-C cancels the batch")
-        batch_out = anthropic_client.run_batch(requests, on_progress=_batch_progress)
-
-        assembled = _assemble_batch(plans, batch_out, out_dir)
-        done = assembled["done"]
-        errors += assembled["errors"]
+        ui.step(f"Sending {len(requests)} request(s) to the Message Batches API")
+        batch_ids = anthropic_client.submit_batch(requests)
+        ticket = batches.new_ticket(batch_ids, plans, out_dir, len(requests))
     finally:
         shutil.rmtree(spool, ignore_errors=True)
 
     ui.step("Done")
-    ui.ok(f"{done} processed, {skipped} skipped, {errors} failed")
+    ui.ok(f"Batch {ticket['id']} sent: {ticket['papers']} paper(s), {skipped} skipped, {errors} failed")
+    ui.info("Most batches finish within an hour, at most 24 hours. The summaries are written when "
+            f"you check: {config.COMMAND} batches, or the console's Library.")
     return 1 if errors else 0
-
-
-def _batch_progress(status):
-    """Print one heartbeat line per poll of the running batch."""
-    c = status.request_counts
-    ui.info(f"batch {status.processing_status}: {c.succeeded} ok · "
-            f"{c.errored} err · {c.processing} processing")
 
 
 # ---- Serial mode ----
@@ -945,11 +947,18 @@ def _estimated_cost(n, mode):
 
 
 def _preflight_cost_check(work, mode, approved, threshold=COST_CONFIRM_THRESHOLD):
-    """Show the estimated cost; above the threshold, go on only when the run was approved or the user says yes."""
+    """Show the estimated cost and stop above the approved amount; above the threshold, go on only when
+    the run was approved or the user says yes. `approved` is None, or the most the user agreed to spend.
+    """
     cost = _estimated_cost(len(work), mode)
     if not work or cost is None:
         return
     model = config.load('ANTHROPIC_MODEL')
+    if approved is not None and cost > approved:
+        raise SystemExit(
+            f"Stopped before spending: {len(work)} papers would cost about ${cost:.2f}, more than the "
+            f"${approved:.2f} approved. Open Process papers again for the new estimate."
+        )
     if cost <= threshold:
         ui.info(f"Est. cost ~${cost:.2f} ({model})")
         return

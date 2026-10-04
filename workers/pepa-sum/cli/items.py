@@ -10,7 +10,7 @@ LOCK = threading.Lock()
 
 
 def announce(state, name="", detail=""):
-    """One event: "total" with the count as name, then "start", "ok" or "failed" per item."""
+    """One event: "total" with the count as name, then "start", "progress", "ok", "sent" or "failed" per item."""
     if not ON:
         return
     with LOCK:

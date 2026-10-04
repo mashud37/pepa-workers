@@ -13,7 +13,15 @@ PROJECT = os.environ.get("PEPA_PROJECT")
 DATA_ROOT = Path(PROJECT) / "pepa-sum" if PROJECT else ROOT
 INSTALLED = ROOT.parent.name == "apps"
 COMMAND = "pepa-sum" if INSTALLED else "python manage.py"
-INPUT_DIR = Path(os.environ.get("PEPA_INPUT_DIR", str(DATA_ROOT / "input")))
+OWN_INPUT_DIR = DATA_ROOT / "input"
+PREPARED_TEXT_DIR = DATA_ROOT.parent / "pepa-prep" / "output" / "text"
+OWN_INPUT_FILES = []
+if OWN_INPUT_DIR.is_dir():
+    OWN_INPUT_FILES = [path for path in OWN_INPUT_DIR.iterdir() if not path.name.startswith(".")]
+DEFAULT_INPUT_DIR = OWN_INPUT_DIR
+if PREPARED_TEXT_DIR.is_dir() and not OWN_INPUT_FILES:
+    DEFAULT_INPUT_DIR = PREPARED_TEXT_DIR
+INPUT_DIR = Path(os.environ.get("PEPA_INPUT_DIR", str(DEFAULT_INPUT_DIR)))
 OUTPUT_DIR = Path(os.environ.get("PEPA_OUTPUT_DIR", str(DATA_ROOT / "output")))
 DATA_DIR = DATA_ROOT / "data"
 ENV_FILE = DATA_ROOT / "env.yaml"
@@ -38,7 +46,6 @@ _ENV_OVERRIDE = {
     "SPEED": "PEPA_SPEED",
     "LOCAL_WORKERS": "PEPA_LOCAL_WORKERS",
     "LOCAL_BATCH": "PEPA_LOCAL_BATCH",
-    "BATCH_POLL": "PEPA_BATCH_POLL",
     "OCR": "PEPA_OCR",
     "OCR_DPI": "PEPA_OCR_DPI",
 }
@@ -183,6 +190,14 @@ def excluded_names():
     return set(json.loads(Path(listed).read_text(encoding="utf-8")))
 
 
+def only_names():
+    """The only file names to work on, read from the list the console names in PEPA_ONLY_FILE, or None for all."""
+    listed = os.environ.get("PEPA_ONLY_FILE", "")
+    if not listed or not Path(listed).exists():
+        return None
+    return set(json.loads(Path(listed).read_text(encoding="utf-8")))
+
+
 def _file_values():
     if ENV_FILE.exists():
         return yaml.safe_load(ENV_FILE.read_text(encoding="utf-8")) or {}
@@ -313,11 +328,6 @@ def local_batch():
     paper pool comfortably fed."""
     default = max(throughput('PAPER_WORKERS') * 4, 24)
     return _clamped_int("LOCAL_BATCH", default, 4, 2000)
-
-
-def batch_poll_seconds():
-    """How often to poll a running Message Batch for completion."""
-    return _clamped_int("BATCH_POLL", 30, 5, 300)
 
 
 def set_values(updates):

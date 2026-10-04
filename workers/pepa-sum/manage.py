@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 import config
-from cli import cleanup, install, menu, settings, show_config, summarize, ui
+from cli import batches, cleanup, install, menu, settings, show_config, summarize, ui
 
 
 def main():
@@ -26,7 +26,13 @@ def main():
     s.add_argument("--mode", choices=["auto", "serial", "parallel", "batch"],
                    help="Execution mode (default: auto, chosen by estimated time)")
     s.add_argument("--estimate", action="store_true", help="Print the papers to do, the estimated cost and each mode's time as JSON, then stop")
-    s.add_argument("--approve-cost", action="store_true", help="Spend past the cost threshold without asking")
+    s.add_argument("--more", type=int, default=0, help="With --estimate, count this many papers more than the input folder holds")
+    s.add_argument("--approve-cost", nargs="?", type=float, const=float("inf"), default=None, metavar="DOLLARS", help="Spend without asking; with an amount, stop before spending if the estimate is higher")
+
+    b = sub.add_parser("batches", help="Check batches sent to Anthropic and write the papers of those that ended")
+    b.add_argument("--cancel", metavar="BATCH", help="Ask Anthropic to stop this batch; answered requests are still written")
+    b.add_argument("--forget", metavar="BATCH", help="Remove a collected batch from the list")
+    b.add_argument("--json", action="store_true", help="Print the batches as one JSON line")
 
     c = sub.add_parser("clean", help="Delete failed outputs (sum_ files missing the template) + their pairs")
     c.add_argument("-o", "--output", type=Path, help="Output folder to clean")
@@ -44,10 +50,12 @@ def main():
         return menu.main()
     if args.command == "summarize" and args.estimate:
         return summarize.print_estimate(input_dir=args.input, output_dir=args.output,
-                                        force=args.force, mode=args.mode)
+                                        force=args.force, mode=args.mode, more=args.more)
     if args.command == "summarize":
         return summarize.run(input_dir=args.input, output_dir=args.output,
                              force=args.force, mode=args.mode, approve_cost=args.approve_cost)
+    if args.command == "batches":
+        return batches.run(cancel=args.cancel, forget=args.forget, as_json=args.json)
     if args.command == "clean":
         return cleanup.run(output_dir=args.output, dry_run=args.dry_run, force=args.force)
     if args.command == "settings":

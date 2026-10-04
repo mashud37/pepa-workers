@@ -12,6 +12,16 @@ _RETRYABLE = (429, 500, 502, 503, 529)
 _MAX_ATTEMPTS = 5
 DEFAULT_MAX_TOKENS = 2000
 
+# Models that still take a sampling temperature; newer ones refuse one and run on their default.
+TEMPERATURE = 0.2
+TEMPERATURE_MODELS = (
+    "claude-haiku-4-5",
+    "claude-sonnet-4-5",
+    "claude-sonnet-4-6",
+    "claude-opus-4-5",
+    "claude-opus-4-6",
+)
+
 # API ceiling is 100k requests per batch; stay under it.
 _BATCH_MAX_REQUESTS = 90000
 # API caps total request size at 256 MB. sum_ prompts embed the full paper text,
@@ -45,6 +55,13 @@ class Truncated(Exception):
     def __init__(self, text):
         super().__init__("output stopped at the max_tokens limit")
         self.text = text
+
+
+def _sampling(model):
+    """The temperature to send for this model, as request fields; empty for a model that refuses one."""
+    if model.startswith(TEMPERATURE_MODELS):
+        return {"temperature": TEMPERATURE}
+    return {}
 
 
 def _estimate_tokens(text):
@@ -159,9 +176,9 @@ def complete(system, prompt, max_tokens=DEFAULT_MAX_TOKENS, flag_truncation=Fals
                 msg = client.messages.create(
                     model=config.load('ANTHROPIC_MODEL'),
                     max_tokens=max_tokens,
-                    temperature=0.2,
                     system=system,
                     messages=[{"role": "user", "content": prompt}],
+                    extra_body=_sampling(config.load('ANTHROPIC_MODEL')),
                 )
             u = getattr(msg, "usage", None)
             if u is not None:
@@ -198,33 +215,23 @@ def complete(system, prompt, max_tokens=DEFAULT_MAX_TOKENS, flag_truncation=Fals
 
 
 # Message Batches API: same model and request shape as complete() above
-# (model, max_tokens, temperature=0.2, system, single user message), so a paper
+# (model, max_tokens, the model's temperature, system, single user message), so a paper
 # summarised via a batch is drawn from the identical model and configuration as
 # the live path, only the transport differs. 50% cheaper, asynchronous.
 
 
-def run_batch(requests, on_progress=None):
-    """Run many LLM calls through the Messages Batches API.
+def submit_batch(requests):
+    """Send many LLM calls to the Messages Batches API and return at once, without waiting.
 
     Args:
         requests: list of {custom_id, system, prompt, max_tokens}.
-        on_progress: called with each poll's status while the batch runs.
 
     Returns:
-        `results`, {custom_id: text} for every request that succeeded (failed or
-        expired ones are simply absent, so the caller treats a missing id as a
-        per-paper failure retried next run), and `truncated`, the set of
-        custom_ids whose output stopped at the max_tokens limit (present in
-        results but cut off).
-
-    Polls until the batch ends; on Ctrl-C the in-flight batch is cancelled to
-    stop spend, then the interrupt propagates.
+        The ids of the batches sent; a very large set is split into several.
     """
     client = _client()
     model = config.load('ANTHROPIC_MODEL')
-    poll = config.batch_poll_seconds()
-    results = {}
-    truncated = set()
+    batch_ids = []
     for sub in _sub_batches(requests, _BATCH_MAX_REQUESTS, _BATCH_MAX_BYTES):
         batch = client.messages.batches.create(requests=[
             {
@@ -232,36 +239,35 @@ def run_batch(requests, on_progress=None):
                 "params": {
                     "model": model,
                     "max_tokens": r["max_tokens"],
-                    "temperature": 0.2,
                     "system": r["system"],
                     "messages": [{"role": "user", "content": r["prompt"]}],
-                },
+                } | _sampling(model),
             }
             for r in sub
         ])
-        _wait_for_batch(client, batch.id, poll, on_progress)
-        collected = _collect_batch(client, batch.id)
-        results.update(collected["results"])
-        truncated |= collected["truncated"]
-    return {"results": results, "truncated": truncated}
+        batch_ids.append(batch.id)
+    return batch_ids
 
 
-def _wait_for_batch(client, batch_id, poll, on_progress):
-    """Poll until the batch ends, cancelling it if the user interrupts."""
-    try:
-        while True:
-            status = client.messages.batches.retrieve(batch_id)
-            if on_progress:
-                on_progress(status)
-            if status.processing_status == "ended":
-                return
-            time.sleep(poll)
-    except KeyboardInterrupt:
-        try:
-            client.messages.batches.cancel(batch_id)
-        except Exception:
-            pass
-        raise
+def batch_status(batch_id):
+    """Where one batch stands: its `state` (in_progress, canceling or ended) and its request `counts`."""
+    status = _client().messages.batches.retrieve(batch_id)
+    counts = status.request_counts
+    return {
+        "state": status.processing_status,
+        "counts": {
+            "processing": counts.processing,
+            "succeeded": counts.succeeded,
+            "errored": counts.errored,
+            "canceled": counts.canceled,
+            "expired": counts.expired,
+        },
+    }
+
+
+def cancel_batch(batch_id):
+    """Ask Anthropic to stop a batch; requests already answered stay collectable."""
+    _client().messages.batches.cancel(batch_id)
 
 
 def _record_usage(msg):
@@ -275,8 +281,9 @@ def _record_usage(msg):
         _usage["calls"] += 1
 
 
-def _collect_batch(client, batch_id):
-    """The finished batch's succeeded `results`, and the `truncated` ids cut off at max_tokens."""
+def collect_batch(batch_id):
+    """The ended batch's succeeded `results`, and the `truncated` ids cut off at max_tokens."""
+    client = _client()
     results = {}
     truncated = set()
     for res in client.messages.batches.results(batch_id):

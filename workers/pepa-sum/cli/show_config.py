@@ -28,8 +28,6 @@ def run():
             f"max {config.throughput('MAX_CONCURRENCY')} LLM calls in flight  ·  "
             f"{config.throughput('MAX_WORKERS')} rundown workers")
     ui.info(f"look-ahead   read up to {config.local_batch()} papers ahead (parallel mode)")
-    if config.load('BACKEND') == "anthropic":
-        ui.info(f"batch poll   every {config.batch_poll_seconds()}s (batch mode)")
 
     ui.step("Cost")
     if backend == "anthropic":
