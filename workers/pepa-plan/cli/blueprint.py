@@ -12,6 +12,9 @@ def run():
             "Blueprints need a built library: run 'Build skeletons' first "
             "(it produces skeletons.json and sequences.json)."
         )
+    if config.BLUEPRINTS_FILE.exists() and config.BLUEPRINTS_FILE.stat().st_mtime >= config.SKELETONS_FILE.stat().st_mtime:
+        ui.ok("The blueprints are newer than the skeleton library; nothing to do.")
+        return 0
 
     library = blueprint_build.build_blueprints()
     blueprint_build.save(library)

@@ -19,6 +19,9 @@ def _build_parser():
                     help="Use a random sample of N para files")
     ab.add_argument("--mode", default=None, choices=("auto", "serial", "parallel", "batch"),
                     help="Labelling execution mode (default: auto, picks by est. time)")
+    ab.add_argument("--estimate", action="store_true", help="Print the papers to label, each mode's time and the cost as JSON, then stop")
+    ab.add_argument("--more", type=int, default=0, help="With --estimate, count this many papers more than the corpus holds")
+    ab.add_argument("--approve-cost", nargs="?", type=float, const=float("inf"), default=None, metavar="DOLLARS", help="Spend without asking; with an amount, stop before spending if the estimate is higher")
 
     sub.add_parser("blueprint", help="Build within-section paragraph-progression blueprints")
 
@@ -56,9 +59,12 @@ def main():
 
     if args.command is None:
         return menu.main()
-    if args.command == "abstract":
+    if args.command == "abstract" and args.estimate:
+        from skeleton import build
+        build.print_estimate(limit=args.limit, sample=args.sample, mode=args.mode, more=args.more)
+    elif args.command == "abstract":
         from cli import abstract
-        abstract.run(limit=args.limit, sample=args.sample, mode=args.mode)
+        abstract.run(limit=args.limit, sample=args.sample, mode=args.mode, approved=args.approve_cost)
     elif args.command == "blueprint":
         from cli import blueprint
         blueprint.run()

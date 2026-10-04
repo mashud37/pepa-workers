@@ -11,48 +11,52 @@ import config
 from backends import anthropic_client, llm, prompt
 from cli import ui
 from cli.progress import StepSpinner
-from corpus.load import para_files
+from corpus.load import paper_count, para_files
 from corpus.parse_para import parse as parse_para
 from skeleton import examples, moves
 
 COST_WARNING_THRESHOLD = 10.0
 SYNTH_CHAR_BUDGET = 600_000
+CHARS_PER_TOKEN = 4
+CHARS_PER_SENTENCE = 236
+TYPICAL_SENTENCES = 36
+SYNTH_PROMPT_TOKENS = 2_000
+SYNTH_OUTPUT_TOKENS = 4_000
+BLUEPRINT_CALLS_AT_MOST = 30
+BLUEPRINT_INPUT_TOKENS = 7_000
+BLUEPRINT_OUTPUT_TOKENS = 1_500
 
 
-def build(limit=None, sample=None, mode=None):
-    files = para_files()
-    if not files:
-        raise SystemExit(
-            "No para_*.md files found in corpus.\n"
-            "Run pepa-sum to generate paragraph rundowns first."
-        )
-    if sample and sample < len(files):
-        files = random.sample(files, sample)
-    if limit:
-        files = files[:limit]
-
-    sp = StepSpinner("Parsing corpus")
-    sp.start()
-    try:
-        parsed = [(entry["base"], parse_para(entry["path"])) for entry in files]
-        parsed = [(base, sentences) for base, sentences in parsed if sentences]
-    finally:
-        sp.done(f"{len(parsed)} papers")
-    if not parsed:
+def build(limit=None, sample=None, mode=None, approved=None):
+    """Label the papers added since the last run, then synthesise the library from every labelled paper.
+    `approved` is None, or the most the user agreed to spend. Returns None when there is nothing new.
+    """
+    known = labelled_before()
+    found = papers_to_label(limit, sample, known)
+    parsed = parse_papers(found["files"])
+    if not parsed and config.SKELETONS_FILE.exists():
+        ui.ok(f"All {len(known)} papers were labelled before; the library is up to date.")
+        return None
+    if not parsed and not known:
         raise SystemExit("No paragraphs parsed from the corpus para_ files.")
 
     anthropic_client.reset_usage()
     chosen = _select_mode(len(parsed), mode)
-    _show_plan(len(parsed), chosen, mode)
-    _preflight_cost_check(parsed, chosen)
+    new_sequences = []
+    if parsed:
+        _show_plan(len(parsed), chosen, mode)
+        _preflight_cost_check([len(sentences) for _base, sentences in parsed], chosen, approved)
+        if chosen == "batch":
+            new_sequences = _label_batch(parsed)
+        elif chosen == "serial":
+            new_sequences = _label_serial(parsed)
+        else:
+            new_sequences = _label_parallel(parsed)
 
-    if chosen == "batch":
-        sequences = _label_batch(parsed)
-    elif chosen == "serial":
-        sequences = _label_serial(parsed)
-    else:
-        sequences = _label_parallel(parsed)
-
+    sequences = new_sequences
+    for base, sequence in known.items():
+        if base in found["bases"]:
+            sequences.append(sequence)
     _checkpoint_sequences(sequences)
     skeletons = synthesise(sequences)
     _report_cost()
@@ -61,6 +65,78 @@ def build(limit=None, sample=None, mode=None):
         "n_papers": len(sequences),
         "skeletons": skeletons,
     }
+
+
+def labelled_before():
+    """The move sequences an earlier run labelled, keyed by paper, so a new run labels only papers added since."""
+    if not config.SEQUENCES_FILE.exists():
+        return {}
+    known = {}
+    for sequence in json.loads(config.SEQUENCES_FILE.read_text(encoding="utf-8")):
+        known[sequence["base"]] = sequence
+    return known
+
+
+def papers_to_label(limit, sample, known):
+    """The corpus files of every paper not labelled before, cut to the sample or limit asked for.
+
+    Returns:
+        dict with "files", the corpus entries to label, and "bases", every paper in the corpus.
+    """
+    files = para_files()
+    if not files:
+        raise SystemExit(
+            "No para_*.md files found in corpus.\n"
+            "Run pepa-sum to generate paragraph rundowns first."
+        )
+    new_files = [entry for entry in files if entry["base"] not in known]
+    if sample and sample < len(new_files):
+        new_files = random.sample(new_files, sample)
+    if limit:
+        new_files = new_files[:limit]
+    return {"files": new_files, "bases": {entry["base"] for entry in files}}
+
+
+def parse_papers(files):
+    """Each file's paper name and its paragraph sentences, leaving out files with none."""
+    sp = StepSpinner("Parsing corpus")
+    sp.start()
+    parsed = []
+    try:
+        for entry in files:
+            sentences = parse_para(entry["path"])
+            if sentences:
+                parsed.append((entry["base"], sentences))
+    finally:
+        sp.done(f"{len(parsed)} new papers")
+    return parsed
+
+
+def print_estimate(limit=None, sample=None, mode=None, more=0):
+    """Print, as one JSON line, how many papers a run would label, each mode's time, and the cost at list price.
+    `more` counts papers not in the corpus yet, such as those still to be summarised.
+    """
+    known = labelled_before()
+    files = []
+    if paper_count() > 0:
+        files = papers_to_label(limit, sample, known)["files"]
+    sentence_counts = [max(1, entry["path"].stat().st_size // CHARS_PER_SENTENCE) for entry in files]
+    sentence_counts += [TYPICAL_SENTENCES] * more
+    up_to_date = not sentence_counts and config.SKELETONS_FILE.exists()
+    n = len(sentence_counts)
+    seconds = _estimate(max(n, 1))
+    cost = {}
+    for name in seconds:
+        cost[name] = 0.0 if up_to_date else run_cost(sentence_counts, name)
+    print(json.dumps({
+        "papers": n,
+        "labelled": len(known),
+        "model": config.model_names()["fast"],
+        "auto": _select_mode(n, mode) if n else "serial",
+        "seconds": seconds,
+        "cost": cost,
+        "blueprints": 0.0 if up_to_date else blueprint_cost(),
+    }))
 
 
 # ---- Mode selection ----
@@ -108,31 +184,56 @@ def _show_plan(n, chosen, override):
         ui.info("(fastest estimate)")
 
 
-def _preflight_cost_check(parsed, chosen, threshold=COST_WARNING_THRESHOLD):
-    if not parsed or config.load()["backend"] != "anthropic":
-        return
-    model = config.load()["anthropic_model"]
-    price = config.price_per_mtok(model)
-    if price is None:
-        return
-    p_in, p_out = price
-    total_in = total_out = 0
-    for _base, sentences in parsed:
-        n = len(sentences)
-        total_in += 500 + 20 * n
-        total_out += 16 * n + 64
-    cost = total_in / 1e6 * p_in + total_out / 1e6 * p_out
+def run_cost(sentence_counts, chosen):
+    """List-price dollars for labelling papers with these sentence counts and the one synthesis call, or None without a price."""
+    if config.load()["backend"] != "anthropic":
+        return None
+    names = config.model_names()
+    fast = config.price_per_mtok(names["fast"])
+    quality = config.price_per_mtok(names["quality"])
+    if fast is None or quality is None:
+        return None
+    label_in = label_out = 0
+    for count in sentence_counts:
+        label_in += 500 + 20 * count
+        label_out += 16 * count + 64
+    labelling = label_in / 1e6 * fast[0] + label_out / 1e6 * fast[1]
     if chosen == "batch":
-        cost *= 0.5
-    if cost > threshold:
-        ui.warn(
-            f"Estimated cost: ~${cost:.2f}  "
-            f"({total_in / 1e6:.2f}M in + {total_out / 1e6:.2f}M out · {model})"
+        labelling *= 0.5
+    synthesis_in = SYNTH_PROMPT_TOKENS + SYNTH_CHAR_BUDGET / CHARS_PER_TOKEN
+    synthesis = synthesis_in / 1e6 * quality[0] + SYNTH_OUTPUT_TOKENS / 1e6 * quality[1]
+    return labelling + synthesis
+
+
+def blueprint_cost():
+    """List-price dollars for the most the blueprint calls after a new library can spend, or None without a price."""
+    quality = config.price_per_mtok(config.model_names()["quality"])
+    if config.load()["backend"] != "anthropic" or quality is None:
+        return None
+    one_call = BLUEPRINT_INPUT_TOKENS / 1e6 * quality[0] + BLUEPRINT_OUTPUT_TOKENS / 1e6 * quality[1]
+    return BLUEPRINT_CALLS_AT_MOST * one_call
+
+
+def _preflight_cost_check(sentence_counts, chosen, approved, threshold=COST_WARNING_THRESHOLD):
+    """Show the estimated cost and stop above the approved amount; above the threshold, go on only when
+    the run was approved or the user says yes."""
+    cost = run_cost(sentence_counts, chosen)
+    if cost is None:
+        return
+    model = config.model_names()["fast"]
+    if approved is not None and cost > approved:
+        raise SystemExit(
+            f"Stopped before spending: {len(sentence_counts)} papers would cost about ${cost:.2f}, more than the "
+            f"${approved:.2f} approved. Open Process papers again for the new estimate."
         )
-        if not ui.confirm("Cost exceeds threshold, proceed?", default_yes=False):
-            raise SystemExit("Stopped before spending.")
-    else:
+    if cost <= threshold:
         ui.info(f"Est. cost ~${cost:.2f}")
+        return
+    ui.warn(f"Estimated cost: ~${cost:.2f} ({model})")
+    if approved is not None:
+        return
+    if not ui.confirm("Cost exceeds threshold, proceed?", default_yes=False):
+        raise SystemExit("Stopped before spending.")
 
 
 # ---- Labelling paths ----

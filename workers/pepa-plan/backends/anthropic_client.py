@@ -12,6 +12,16 @@ _RETRYABLE = (429, 500, 502, 503, 529)
 _MAX_ATTEMPTS = 5
 _DEFAULT_MAX_TOKENS = 4000
 
+# Models that still take a sampling temperature; newer ones refuse one and run on their default.
+TEMPERATURE = 0.3
+TEMPERATURE_MODELS = (
+    "claude-haiku-4-5",
+    "claude-sonnet-4-5",
+    "claude-sonnet-4-6",
+    "claude-opus-4-5",
+    "claude-opus-4-6",
+)
+
 _lock = threading.Lock()
 _cached = {"key": None, "client": None}
 
@@ -30,6 +40,13 @@ _usage = {}
 # differs. 50% cheaper, asynchronous.
 _BATCH_MAX_REQUESTS = 90000
 _BATCH_MAX_BYTES = 180_000_000
+
+
+def _sampling(model):
+    """The temperature to send for this model, as request fields; empty for a model that refuses one."""
+    if model.startswith(TEMPERATURE_MODELS):
+        return {"temperature": TEMPERATURE}
+    return {}
 
 
 def usage_snapshot():
@@ -126,9 +143,9 @@ def complete(system, prompt, max_tokens=_DEFAULT_MAX_TOKENS, model=None):
                 msg = client.messages.create(
                     model=model,
                     max_tokens=max_tokens,
-                    temperature=0.3,
                     system=system,
                     messages=[{"role": "user", "content": prompt}],
+                    extra_body=_sampling(model),
                 )
             _tally(model, msg)
             return "".join(
@@ -184,10 +201,9 @@ def _submit_sub_batch(client, sub, default_model):
             "params": {
                 "model": r.get("model", default_model),
                 "max_tokens": r["max_tokens"],
-                "temperature": 0.3,
                 "system": r["system"],
                 "messages": [{"role": "user", "content": r["prompt"]}],
-            },
+            } | _sampling(r.get("model", default_model)),
         }
         for r in sub
     ])

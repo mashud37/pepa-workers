@@ -7,7 +7,7 @@ from corpus.load import paper_count
 from skeleton import build as skeleton_build
 
 
-def run(limit=None, sample=None, mode=None):
+def run(limit=None, sample=None, mode=None, approved=None):
     ui.header("Build skeleton library")
 
     ui.step("Scanning corpus")
@@ -33,7 +33,9 @@ def run(limit=None, sample=None, mode=None):
     if sample:
         ui.info(f"sample: {sample} papers (random)")
 
-    library = skeleton_build.build(limit=limit, sample=sample, mode=mode)
+    library = skeleton_build.build(limit=limit, sample=sample, mode=mode, approved=approved)
+    if library is None:
+        return 0
     skeleton_build.save(library)
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
