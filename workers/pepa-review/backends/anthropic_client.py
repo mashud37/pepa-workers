@@ -6,6 +6,23 @@ import config
 _RETRYABLE = (429, 500, 502, 503, 529)
 DEFAULT_MAX_TOKENS = 4000
 
+# Models that still take a sampling temperature; newer ones refuse one and run on their default.
+TEMPERATURE = 0.3
+TEMPERATURE_MODELS = (
+    "claude-haiku-4-5",
+    "claude-sonnet-4-5",
+    "claude-sonnet-4-6",
+    "claude-opus-4-5",
+    "claude-opus-4-6",
+)
+
+
+def _sampling(model):
+    """The temperature to send for this model, as request fields; empty for a model that refuses one."""
+    if model.startswith(TEMPERATURE_MODELS):
+        return {"temperature": TEMPERATURE}
+    return {}
+
 
 def complete(system, prompt, max_tokens=DEFAULT_MAX_TOKENS, model=None):
     try:
@@ -27,9 +44,9 @@ def complete(system, prompt, max_tokens=DEFAULT_MAX_TOKENS, model=None):
             msg = client.messages.create(
                 model=_model,
                 max_tokens=max_tokens,
-                temperature=0.3,
                 system=system,
                 messages=[{"role": "user", "content": prompt}],
+                extra_body=_sampling(_model),
             )
             return "".join(
                 b.text for b in msg.content if getattr(b, "type", None) == "text"

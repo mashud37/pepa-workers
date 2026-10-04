@@ -124,7 +124,7 @@ def _gather(bases, records_by_base):
 def _parse_md_fallback(md_path):
     idx = json.loads(config.INDEX_FILE.read_text(encoding="utf-8"))
     by_line = {
-        _norm(f"{r.get('authors', '')} — {r.get('title', '')}"): r["base"]
+        _norm(f"{r.get('authors', '')} - {r.get('title', '')}"): r["base"]
         for r in idx["records"]
     }
     text = md_path.read_text(encoding="utf-8")
@@ -142,4 +142,4 @@ def _parse_md_fallback(md_path):
 
 
 def _norm(s):
-    return re.sub(r"\s+", " ", s).strip().lower().rstrip(".")
+    return re.sub(r"\s+", " ", s.replace("\u2014", "-")).strip().lower().rstrip(".")

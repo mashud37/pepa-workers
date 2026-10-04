@@ -545,7 +545,7 @@ def _dedupe(records):
 
 
 def _work_key(authors, title):
-    return f"{(authors or '').strip().lower()} — {(title or '').strip().lower()}"
+    return f"{(authors or '').strip().lower()} - {(title or '').strip().lower()}"
 
 
 def _parse_map_threads(path):
@@ -571,7 +571,7 @@ def _parse_map_threads(path):
         if cur_name and line.startswith("**"):
             in_works = False
         if cur_name and in_works:
-            m = re.match(r"^-\s+(.*?)\s+—\s+(.*)$", line)
+            m = re.match(r"^-\s+(.*?)\s+[-\u2014]\s+(.*)$", line)
             if m:
                 cur_keys.append(_work_key(m.group(1), m.group(2)))
     if cur_name:
@@ -586,7 +586,7 @@ def _write_review(text, selected, sig=None, outline_stem="review"):
     out = config.OUTPUT_DIR / f"review_{outline_stem}_{ts}.md"
     rows = []
     for w in selected:
-        line = f"- {w['authors']} — {w['title']}"
+        line = f"- {w['authors']} - {w['title']}"
         if sig and w["base"] in sig and sig[w["base"]].get("year"):
             s = sig[w["base"]]
             line += f" ({s['year']} · {s['cited_by_count']} cites)"

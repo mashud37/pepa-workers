@@ -271,7 +271,7 @@ def _write_map(sections, outliers, meta):
 
 
 def _work_line(r):
-    return f"- {r.get('authors', '')} — {r.get('title', '')}"
+    return f"- {r.get('authors', '')} - {r.get('title', '')}"
 
 
 def _render_section(i, s):
@@ -299,7 +299,7 @@ def _write_sidecar(sections, outliers, meta):
     """Machine-readable sibling of the .md map: thread -> index `base` ids.
 
     Lets the thread-level map (cli/thread_map.py) pull a thread's works back out of
-    the index without fuzzy-matching the rendered 'authors — title' lines.
+    the index without fuzzy-matching the rendered 'authors - title' lines.
     """
     out = config.OUTPUT_DIR / f"{meta['stem']}_{meta['ts']}.json"
     payload = {
