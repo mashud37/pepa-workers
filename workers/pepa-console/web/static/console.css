@@ -304,9 +304,9 @@ input[type=checkbox] { flex: none; width: 18px; height: 18px; margin: 0; accent-
 .log { height: 280px; margin: 0; padding: 16px 20px; overflow: auto; color: var(--text); font: 13px/20px var(--mono); white-space: pre-wrap; }
 .run-page .log { height: calc(100vh - 400px); min-height: 280px; }
 .items { padding: 12px 16px 4px; border-bottom: 1px solid var(--outline); }
-.items-head { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
-.items-count { flex: none; font-weight: 500; }
-.items-bar { flex: 1; height: 4px; overflow: hidden; border-radius: 2px; background: var(--outline); }
+.items-head { display: grid; gap: 8px; margin-bottom: 8px; }
+.items-count { font-weight: 500; }
+.items-bar { display: block; height: 4px; overflow: hidden; border-radius: 2px; background: var(--outline); }
 .items-bar span { display: block; width: 0; height: 100%; background: var(--primary); transition: width 0.3s ease; }
 .item-list { margin: 0; padding: 0; list-style: none; }
 .item-list:empty { display: none; }
@@ -316,6 +316,8 @@ input[type=checkbox] { flex: none; width: 18px; height: 18px; margin: 0; accent-
 .item-running .item-icon { border: 2px solid var(--outline); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.9s linear infinite; }
 .item-ok .item-icon { color: var(--success); }
 .item-ok .item-icon::before { content: "\2713"; }
+.item-sent .item-icon { color: var(--text-secondary); }
+.item-sent .item-icon::before { content: "→"; }
 .item-failed .item-icon { color: var(--error); }
 .item-failed .item-icon::before { content: "\2715"; }
 .item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -357,11 +359,33 @@ dialog.dialog .actions { justify-content: flex-end; margin-top: 8px; }
 .check-note { display: block; font-size: 12px; }
 .step-options { display: grid; gap: 8px; margin: 0 0 8px 32px; }
 .step-options[hidden] { display: none; }
-.bulk-bar { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.step-settings summary { cursor: pointer; color: var(--text-secondary); font-size: 13px; }
+.step-settings[open] { display: grid; gap: 8px; }
+.only-line { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
+.run-now { margin: 0; padding: 8px 24px; overflow: hidden; border-bottom: 1px solid var(--outline); color: var(--text-secondary); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.run-now[hidden] { display: none; }
+.batches { display: grid; gap: 12px; margin: 16px 0 24px; }
+.batches:empty { display: none; }
+.batch-card { display: grid; gap: 12px; padding: 20px 24px; }
+.batch-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; }
+.batch-head h2 { font-size: 18px; }
+.drop-hint { display: none; }
+.drop-zone { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; padding: 16px 20px; border: 2px dashed var(--outline-strong); border-radius: 16px; color: var(--text-secondary); cursor: pointer; }
+.drop-zone:hover { border-color: var(--primary); color: var(--primary); }
+.dropping .drop-hint { display: flex; position: fixed; inset: 16px; z-index: 50; align-items: center; justify-content: center; border: 3px dashed var(--primary); border-radius: 24px; background: color-mix(in srgb, var(--surface) 85%, transparent); color: var(--primary); font-size: 22px; font-weight: 500; pointer-events: none; }
+.item-read { margin-left: 8px; }
+.only-line[hidden] { display: none; }
+.ticked-count { min-width: 9ch; font-variant-numeric: tabular-nums; }
+.process-label { display: inline-block; min-width: 9.5em; text-align: left; }
+.section-note { margin: -4px 0 12px; }
+.bulk-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
 .papers-card { overflow-x: auto; padding: 0; }
 .papers-table { width: 100%; border-collapse: collapse; }
 .papers-table th, .papers-table td { padding: 8px 12px; border-bottom: 1px solid var(--outline); text-align: left; white-space: nowrap; }
 .papers-table th { color: var(--text-secondary); font-size: 13px; font-weight: 500; }
+.sort-link { color: inherit; }
+.sort-link:hover { color: var(--primary); }
+th[aria-sort="ascending"] .sort-link, th[aria-sort="descending"] .sort-link { color: var(--text); }
 .papers-table tr:last-child td { border-bottom: 0; }
 .papers-table .paper-name { width: 100%; max-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .papers-table .num { text-align: right; }
@@ -371,6 +395,11 @@ dialog.dialog .actions { justify-content: flex-end; margin-top: 8px; }
 .page-tile { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 2px solid transparent; border-radius: 12px; background: var(--surface); cursor: pointer; }
 .page-tile:hover { background: var(--surface-hover); }
 .page-tile:has(input:checked) { border-color: var(--primary); background: var(--primary-container); }
+.page-cell { display: flex; flex-direction: column; gap: 4px; }
+.page-cell:has(input[name="skip"]:checked) .page-tile { opacity: 0.4; }
+.leave-out { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 4px; border-radius: 8px; color: var(--text-secondary); font-size: 12px; cursor: pointer; user-select: none; }
+.leave-out:hover { background: var(--surface-hover); }
+.leave-out:has(input:checked) { color: var(--error); }
 .page-tile img { width: 100%; height: auto; aspect-ratio: 200 / 283; object-fit: contain; border: 1px solid var(--outline); border-radius: 4px; background: #fff; }
 .page-tile input { position: absolute; top: 14px; left: 14px; width: 20px; height: 20px; }
 .page-tile .page-number { color: var(--text-secondary); font-size: 12px; text-align: center; }
@@ -452,7 +481,7 @@ dialog.dialog .actions { justify-content: flex-end; margin-top: 8px; }
 @view-transition { navigation: auto; }
 .tabs a[aria-current="page"] { view-transition-name: current-tab; }
 .buddy-button { view-transition-name: buddy; }
-::view-transition-group(current-tab) { animation-duration: 0.32s; animation-timing-function: var(--ease); }
+::view-transition-group(current-tab) { animation-duration: var(--tab-slide, 0.32s); animation-timing-function: var(--ease); }
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.16s; }
 
 /* A page settles in from below, its cards and rows one after another. */

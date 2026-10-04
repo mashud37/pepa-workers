@@ -12,6 +12,7 @@ from datetime import datetime
 
 from registry import get_app, get_command
 from runner import build_argv, job_environment
+from web import paths
 
 STATUS_LABEL = {
     "running": "Running",
@@ -60,6 +61,8 @@ def form_flags(command, values):
             continue
         if field["type"] == "int" and not raw.isdigit():
             raise ValueError(f"{name} must be a whole number.")
+        if field["type"] == "dollars" and not raw.replace(".", "", 1).isdigit():
+            raise ValueError(f"{name} must be an amount in dollars, like 2.50.")
         if field["type"] == "choice" and raw not in field["choices"]:
             raise ValueError(f"{name} must be one of {', '.join(field['choices'])}.")
         if name.startswith("-"):
@@ -69,11 +72,12 @@ def form_flags(command, values):
     return positionals + flags
 
 
-def start_job(app_name, command_name, values):
+def start_job(app_name, command_name, values, extra_environment=None):
     """Start one child command in the background and return its job id.
 
     Args:
         values: submitted form fields, keyed by flag or positional name.
+        extra_environment: variables for this run only, such as the list of papers it works on.
 
     Raises:
         ValueError: the command is unknown, runs only in a terminal, or the form is invalid.
@@ -88,6 +92,7 @@ def start_job(app_name, command_name, values):
     argv = build_argv(command, form_flags(command, values))
     environment = job_environment(app_name)
     environment.update(ITEM_EVENTS)
+    environment.update(extra_environment or {})
     try:
         process = subprocess.Popen(argv, cwd=str(app.path), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=environment, start_new_session=os.name != "nt")
     except OSError as error:
@@ -292,12 +297,14 @@ def running_count():
     return len(working)
 
 
-def estimate(app_name, command_name, flags):
-    """Run a command that prints one JSON line and stops at once, and return what it printed, or None."""
+def json_reply(app_name, command_name, flags, extra_environment=None):
+    """Run a command that prints one JSON line and stops soon after, and return what it printed, or None."""
     app = get_app(app_name)
     argv = build_argv(get_command(app_name, command_name), flags)
+    environment = job_environment(app_name)
+    environment.update(extra_environment or {})
     try:
-        done = subprocess.run(argv, cwd=str(app.path), env=job_environment(app_name), capture_output=True, text=True, encoding="utf-8", timeout=ESTIMATE_SECONDS)
+        done = subprocess.run(argv, cwd=str(app.path), env=environment, capture_output=True, text=True, encoding="utf-8", timeout=ESTIMATE_SECONDS)
     except subprocess.TimeoutExpired:
         return None
     for line in reversed(done.stdout.splitlines()):
@@ -360,6 +367,7 @@ def start_chain(steps):
             "command": step["command"],
             "label": step["label"],
             "values": step.get("values", {}),
+            "only": step.get("only"),
             "job_id": None,
             "status": "waiting",
             "error": "",
@@ -387,8 +395,11 @@ def run_chain(chain_id):
             with LOCK:
                 step["status"] = "skipped"
             continue
+        extra = {}
+        if step["only"] is not None:
+            extra["PEPA_ONLY_FILE"] = str(paths.only_list_for(step["app"], step["only"], f"chain{chain_id}"))
         try:
-            job_id = start_job(step["app"], step["command"], step["values"])
+            job_id = start_job(step["app"], step["command"], step["values"], extra)
         except ValueError as error:
             with LOCK:
                 step["status"] = "failed"

@@ -1,5 +1,5 @@
 """List the library's PDFs with page counts and progress, keep the chapter starts a user marks, and draw pages as images.
-The Papers and Chapters pages show these.
+The Library and Chapters pages show these.
 """
 import io
 import json
@@ -9,16 +9,15 @@ from pathlib import Path
 
 import pypdfium2 as pdfium
 
-from web import folders, paths
+from web import batches, folders, paths
 from web.settings import SETTINGS
 
 PAGE_COUNTS_FILE_NAME = "page-counts.json"
-BYTES_PER_MEGABYTE = 1024 * 1024
 THUMBNAIL_WIDTH = 200
 LARGE_WIDTH = 1000
 JPEG_QUALITY = 75
-# A PDF longer than this is offered the chapter marker.
-BOOK_PAGES = 50
+PAGE_SIZE = 100
+SAVE_COUNTS_EVERY = 200
 
 # Choices for the length filter: a PDF is shown when it has more pages than this.
 LONGER_THAN = [
@@ -29,8 +28,19 @@ LONGER_THAN = [
     400,
 ]
 
+# The columns the paper list sorts by; a leading "-" in the request turns the order round.
+SORT_COLUMNS = [
+    "name",
+    "pages",
+    "prepared",
+    "summarised",
+]
+
 # PDFium allows one call at a time in a process, and the console answers requests on several threads.
 LOCK = threading.Lock()
+
+# Whether page counting is running in the background, so a second visit does not start another.
+COUNTING = {"running": False}
 
 
 # ---- Page counts ----
@@ -47,69 +57,178 @@ def count_pages(path):
     return count
 
 
-def page_counts(folder, names):
-    """The page count of every PDF named, read once and kept until the file changes."""
-    store = SETTINGS["keys_file"].parent / PAGE_COUNTS_FILE_NAME
-    known = {}
-    if store.exists():
-        known = json.loads(store.read_text(encoding="utf-8"))
-    counts = {}
-    changed = False
-    for name in names:
-        details = (folder / name).stat()
-        stamp = f"{details.st_size}:{details.st_mtime}"
-        if known.get(name, {}).get("stamp") != stamp:
-            known[name] = {"stamp": stamp, "pages": count_pages(folder / name)}
-            changed = True
-        counts[name] = known[name]["pages"]
-    if changed:
-        store.parent.mkdir(parents=True, exist_ok=True)
-        store.write_text(json.dumps(known), encoding="utf-8")
-    return counts
+def counts_file():
+    return SETTINGS["keys_file"].parent / PAGE_COUNTS_FILE_NAME
+
+
+def load_counts():
+    """Every page count kept so far, as {relative name: {"stamp", "pages"}}."""
+    if not counts_file().exists():
+        return {}
+    return json.loads(counts_file().read_text(encoding="utf-8"))
+
+
+def count_in_background(folder, names):
+    """Start counting the pages of PDFs that are new or changed, unless a count is already running."""
+    with LOCK:
+        if COUNTING["running"]:
+            return
+        COUNTING["running"] = True
+    threading.Thread(target=count_missing, args=(folder, names), daemon=True).start()
+
+
+def count_missing(folder, names):
+    """Count the pages of every PDF not counted since it last changed, saving as it goes."""
+    known = load_counts()
+    counted = 0
+    try:
+        for name in names:
+            path = folder / name
+            if not path.is_file():
+                continue
+            details = path.stat()
+            stamp = f"{details.st_size}:{details.st_mtime}"
+            if known.get(name, {}).get("stamp") == stamp:
+                continue
+            known[name] = {"stamp": stamp, "pages": count_pages(path)}
+            counted += 1
+            if counted % SAVE_COUNTS_EVERY == 0:
+                paths.write_json(counts_file(), known)
+        if counted:
+            paths.write_json(counts_file(), known)
+    finally:
+        COUNTING["running"] = False
 
 
 # ---- The library ----
 
-def summarised_files(stem):
-    """How many of a PDF's prepared text files pepa-sum has summarised."""
-    folder = paths.chosen("pepa-sum", "results")
-    count = 0
-    for name in paths.prepared_names(stem):
-        if (folder / f"sum_{name[len('text_'):]}").exists():
-            count += 1
-    return count
+def progress_by_stem(stems):
+    """How many text files pepa-prep wrote for each PDF and how many of those pepa-sum summarised,
+    from one look at each output folder."""
+    progress = {}
+    for stem in stems:
+        progress[stem] = {"prepared": 0, "summarised": 0}
+    text_folder = paths.chosen("pepa-prep", "results") / "text"
+    summary_folder = paths.chosen("pepa-sum", "results")
+    summaries = set()
+    if summary_folder.is_dir():
+        summaries = set(os.listdir(summary_folder))
+    if not text_folder.is_dir():
+        return progress
+    for name in os.listdir(text_folder):
+        if not (name.startswith("text_") and name.endswith(".md")):
+            continue
+        core = name[len("text_"):-len(".md")]
+        head, _, tail = core.rpartition("_")
+        stem = core
+        if core not in progress and head in progress and tail.isdigit():
+            stem = head
+        if stem not in progress:
+            continue
+        progress[stem]["prepared"] += 1
+        if f"sum_{core}.md" in summaries:
+            progress[stem]["summarised"] += 1
+    return progress
 
 
-def paper_rows(wanted, longer_than):
-    """A row for every PDF waiting to be prepared that matches the name filter and is longer than the page filter.
+def sort_key(column, row, progress):
+    """What one row sorts by for a column: its name, its pages (uncounted last), or its prepared or summarised files."""
+    stem = Path(row["relative"]).stem
+    if column == "pages":
+        return -1 if row["pages"] is None else row["pages"]
+    if column in ("prepared", "summarised"):
+        return progress[stem][column]
+    return Path(row["relative"]).name.lower()
+
+
+def paper_rows(wanted, longer_than, page, sort="name"):
+    """One page of rows for the PDFs waiting to be prepared that match the name and length filters.
 
     Returns:
-        dict with "rows", each with name, relative path, pages, size, prepared and summarised
-        state and whether it is set aside, and "total", the number of PDFs before filtering.
+        dict with "rows", each with name, relative path, pages (None while not counted), prepared
+        and summarised counts and whether it is set aside; "total", the PDFs before filtering;
+        "shown", the PDFs after filtering; "page" and "pages"; and "counting", the PDFs not counted yet.
     """
     folder = paths.chosen("pepa-prep", "sources")
-    names = folders.matching_names(folders.PDFS_WAITING)["names"]
-    counts = page_counts(folder, names)
+    present = folders.matching_names(folders.PDFS_WAITING)["names"]
+    removed = paths.load_removed()
+    names = sorted(set(present) | set(removed), key=str.lower)
+    known = load_counts()
+    uncounted = [name for name in present if name not in known]
+    count_in_background(folder, present)
+    matching = []
+    for name in names:
+        pages = known.get(name, {}).get("pages")
+        if name not in present:
+            pages = removed[name]["pages"]
+        if wanted.lower() not in Path(name).name.lower():
+            continue
+        if longer_than and (pages is None or pages <= longer_than):
+            continue
+        matching.append({"relative": name, "pages": pages})
+    column = sort.lstrip("-")
+    if column in ("prepared", "summarised"):
+        everything = progress_by_stem([Path(row["relative"]).stem for row in matching])
+    else:
+        everything = {}
+    matching.sort(key=lambda row: sort_key(column, row, everything), reverse=sort.startswith("-"))
+    page_count = max(1, (len(matching) + PAGE_SIZE - 1) // PAGE_SIZE)
+    page = min(max(1, page), page_count)
+    shown = matching[(page - 1) * PAGE_SIZE:page * PAGE_SIZE]
+    progress = progress_by_stem([Path(row["relative"]).stem for row in shown])
+    waiting = batches.waiting_stems()
     excluded = paths.load_excluded()
     rows = []
-    for name in sorted(names, key=str.lower):
-        leaf = Path(name).name
-        stem = Path(name).stem
-        if wanted.lower() not in leaf.lower() or counts[name] <= longer_than:
-            continue
+    for row in shown:
+        leaf = Path(row["relative"]).name
+        stem = Path(row["relative"]).stem
         rows.append({
             "name": leaf,
-            "relative": name,
-            "pages": counts[name],
-            "size": f"{(folder / name).stat().st_size / BYTES_PER_MEGABYTE:.1f} MB",
-            "prepared": len(paths.prepared_names(stem)),
-            "summarised": summarised_files(stem),
+            "relative": row["relative"],
+            "pages": row["pages"],
+            "prepared": progress[stem]["prepared"],
+            "summarised": progress[stem]["summarised"],
             "skip_prep": leaf in excluded["pepa-prep"],
             "skip_sum": leaf in excluded["pepa-sum"],
+            "in_batch": stem in waiting or any(name.startswith(stem + "_") for name in waiting),
             "marked": marks_file(stem).exists(),
-            "book": counts[name] > BOOK_PAGES,
+            "removed": row["relative"] not in present,
         })
-    return {"rows": rows, "total": len(names)}
+    return {
+        "rows": rows,
+        "total": len(names),
+        "shown": len(matching),
+        "page": page,
+        "pages": page_count,
+        "counting": len(uncounted),
+    }
+
+
+def remove_copies(names):
+    """Delete the PDF copies of papers already prepared, remembering their page counts so the Library keeps them.
+
+    Returns:
+        dict with "removed", how many copies went, and "kept", the names not prepared yet.
+
+    Raises:
+        ValueError: the PDFs are in a folder the user linked rather than pepa-prep's own.
+    """
+    if not paths.own_pdf_folder():
+        raise ValueError("These PDFs sit in a folder you linked; the console never deletes from it.")
+    folder = paths.chosen("pepa-prep", "sources")
+    removed = paths.load_removed()
+    kept = []
+    for name in names:
+        path = folder / name
+        if not path.is_file() or Path(name).name != name:
+            continue
+        if not paths.prepared_names(path.stem):
+            kept.append(name)
+            continue
+        removed[name] = {"pages": count_pages(path)}
+        path.unlink()
+    paths.write_json(paths.removed_file(), removed)
+    return {"removed": len(names) - len(kept), "kept": kept}
 
 
 # ---- Chapter starts ----
@@ -138,35 +257,55 @@ def chapter_view(relative):
     stem = path.stem
     found_file = paths.project_folder() / "pepa-prep" / "data" / "found" / f"{stem}.json"
     starts = []
+    skips = []
     source = "none"
     if marks_file(stem).exists():
-        starts = json.loads(marks_file(stem).read_text(encoding="utf-8"))["starts"]
+        marked = json.loads(marks_file(stem).read_text(encoding="utf-8"))
+        starts = marked.get("starts", [])
+        skips = marked.get("skip", [])
         source = "marked"
     elif found_file.exists():
         starts = json.loads(found_file.read_text(encoding="utf-8"))["starts"]
         source = "found"
-    return {"name": path.name, "relative": relative, "pages": count_pages(path), "starts": starts, "source": source}
+    return {
+        "name": path.name,
+        "relative": relative,
+        "pages": count_pages(path),
+        "starts": starts,
+        "skips": skips,
+        "source": source,
+    }
 
 
-def save_marks(relative, starts):
-    """Keep the chapter starts the user marked, as PDF pages from 1; no starts removes the marks.
+def page_numbers(values, pages):
+    """The page numbers given as form values, sorted and checked against the PDF's length.
 
     Raises:
-        ValueError: a start is not a page of this PDF.
+        ValueError: a number is not a page of this PDF.
     """
-    path = source_path(relative)
-    pages = count_pages(path)
-    numbers = sorted({int(start) for start in starts if start.isdigit()})
+    numbers = sorted({int(value) for value in values if value.isdigit()})
     for number in numbers:
         if number < 1 or number > pages:
             raise ValueError(f"Page {number} is not in this PDF.")
+    return numbers
+
+
+def save_marks(relative, starts, skips):
+    """Keep the chapter starts and left-out pages the user marked, as PDF pages from 1; none removes the marks.
+
+    Raises:
+        ValueError: a page is not in this PDF.
+    """
+    path = source_path(relative)
+    pages = count_pages(path)
+    marked = {"starts": page_numbers(starts, pages), "skip": page_numbers(skips, pages)}
     target = marks_file(path.stem)
-    if not numbers:
+    if not marked["starts"] and not marked["skip"]:
         target.unlink(missing_ok=True)
         return
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = target.with_suffix(".tmp")
-    temporary.write_text(json.dumps({"starts": numbers}), encoding="utf-8")
+    temporary.write_text(json.dumps(marked), encoding="utf-8")
     os.replace(temporary, target)
 
 

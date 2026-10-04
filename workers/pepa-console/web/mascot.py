@@ -79,6 +79,8 @@ TIPS = {
         "Press Process papers and I read everything new. Papers already done are skipped.",
         "Each number opens what is behind it.",
         "Copy PDFs in, or link a folder you already keep papers in.",
+        "Tick papers to process only those, or to skip them in a stage.",
+        "Mark chapters splits a book where you say.",
     ],
     "apps": [
         "Every app works on its own. Open one to see what it can do.",

@@ -72,7 +72,7 @@
     <a class="chip chip-link" href="{{ url_for('console.keys_page') }}">{% if assigned %}Key: {{ assigned | join(", ") }}{% else %}No key chosen{% endif %}</a>
     {% endif %}
     <a class="button tonal" href="{{ url_for('console.guide_page', name=app.name) }}">How it works</a>
-    {% if app.name == "pepa-prep" %}<a class="button filled" href="{{ url_for('console.papers_page', longer=50) }}">Mark chapters</a>{% endif %}
+    {% if app.name == "pepa-prep" %}<a class="button filled" href="{{ url_for('console.library') }}#papers">Mark chapters</a>{% endif %}
   </div>
 </div>
 
@@ -141,16 +141,7 @@
   <input type="hidden" name="token" value="{{ token }}">
   <div class="fields">
     {% for field in settings %}
-    <label class="field"><span>{{ field.label }}</span>
-      {% if field.choices %}
-      <select name="{{ field.variable }}">
-        <option value="">Default</option>
-        {% for value, label in field.choices.items() %}<option value="{{ value }}"{% if value == field.value %} selected{% endif %}>{{ label }}</option>{% endfor %}
-      </select>
-      {% else %}
-      <input type="number" name="{{ field.variable }}" min="{{ field.low }}" max="{{ field.high }}" value="{{ field.value }}" placeholder="Default">
-      {% endif %}
-    </label>
+    {% include "_setting.html" %}
     {% endfor %}
   </div>
   <div class="form-actions"><button class="filled">Save</button></div>

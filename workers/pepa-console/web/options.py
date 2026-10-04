@@ -11,6 +11,7 @@ OPTIONS_FILE_NAME = "options.json"
 # Each app's settings: the environment variable it arrives in, its label, and either its choices,
 # each value with the words shown for it, or the lowest and highest number it accepts. A setting
 # with a "default" sends that value when nothing was chosen, so a console run never stops to ask.
+# A "main" setting shows beside its stage in the Library's Process dialog; the rest sit under Settings.
 OPTIONS = {
     "pepa-prep": [
         {"variable": "PEPAPREP_BOOK_PAGES", "label": "Treat a PDF as a book from this many pages", "low": 20, "high": 2000},
@@ -19,12 +20,18 @@ OPTIONS = {
         {"variable": "PEPAPREP_MAX_CHAPTERS", "label": "Most chapters a book can have", "low": 1, "high": 500},
     ],
     "pepa-sum": [
-        {"variable": "PEPA_MODE", "label": "How to run", "choices": {
-            "auto": "Auto: the fastest for this many papers",
-            "serial": "One paper at a time",
-            "parallel": "Several papers at once",
-            "batch": "Batch: about half price, can take hours",
-        }},
+        {
+            "variable": "PEPA_MODE",
+            "label": "How to run",
+            "main": True,
+            "default": "auto",
+            "choices": {
+                "auto": "Auto: the fastest for this many papers",
+                "serial": "One paper at a time",
+                "parallel": "Several papers at once",
+                "batch": "Batch: about half price, can take hours",
+            },
+        },
         {"variable": "PEPA_PARA_METHOD", "label": "Paragraph rundown", "choices": {
             "llm": "Written by the model",
             "extractive": "Taken from the text, at no cost",
@@ -52,12 +59,18 @@ OPTIONS = {
         }},
     ],
     "pepa-plan": [
-        {"variable": "PEPAPLAN_MODE", "label": "How to run", "choices": {
-            "auto": "Auto: the fastest for this many papers",
-            "serial": "One at a time",
-            "parallel": "Several at once",
-            "batch": "Batch: about half price, can take hours",
-        }},
+        {
+            "variable": "PEPAPLAN_MODE",
+            "label": "How to run",
+            "main": True,
+            "default": "auto",
+            "choices": {
+                "auto": "Auto: the fastest for this many papers",
+                "serial": "One at a time",
+                "parallel": "Several at once",
+                "batch": "Batch: about half price, can take hours",
+            },
+        },
         {"variable": "PEPAPLAN_CONCURRENCY", "label": "Requests at once", "low": 1, "high": 32},
     ],
 }

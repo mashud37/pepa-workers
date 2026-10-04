@@ -41,6 +41,20 @@ document.addEventListener("submit", function (event) {
     return;
   }
   form.dataset.confirmed = "";
+  if (form.hasAttribute("data-collect-ticked")) {
+    for (const name of tickedNames()) {
+      const input = document.createElement("input");
+      input.type = "hidden";
+      input.name = "name";
+      input.value = name;
+      form.append(input);
+    }
+  }
+  if (form.hasAttribute("data-batch-action")) {
+    event.preventDefault();
+    loadBatches(new FormData(form));
+    return;
+  }
   if (form.dataset.fetch) {
     event.preventDefault();
     sendForm(form);
@@ -80,63 +94,180 @@ document.addEventListener("change", function (event) {
     countMarks(event.target.closest("[data-marker]"));
   }
   if (event.target.matches("[data-copy]")) {
-    copyOneByOne(event.target);
+    copyOneByOne(event.target, Array.from(event.target.files));
   }
 });
 
 const runDialog = document.getElementById("run-dialog");
-if (runDialog && runDialog.querySelector("[data-sum-step]")) {
+if (runDialog && runDialog.querySelector("[data-estimate-url]")) {
   const form = runDialog.querySelector("form");
-  document.querySelector('[data-open="run-dialog"]').addEventListener("click", function () {
+  document.querySelector("[data-process-all]").addEventListener("click", function () {
+    setOnly(form, tickedNames(), "ticked");
     loadEstimate(form);
   });
-  form.addEventListener("change", function () {
-    showEstimate(form);
+  form.querySelector("[data-only-clear]").addEventListener("click", function () {
+    setOnly(form, [], "");
+    loadEstimate(form);
   });
+  form.addEventListener("change", function (event) {
+    if (event.target.name === "step") {
+      loadEstimate(form);
+      return;
+    }
+    showEstimates(form);
+  });
+}
+
+function tickedNames() {
+  const names = [];
+  for (const box of document.querySelectorAll('[data-paper-list] input[name="name"]:checked')) {
+    names.push(box.value);
+  }
+  return names;
+}
+
+function showTicked() {
+  const count = tickedNames().length;
+  const note = document.querySelector("[data-ticked-count]");
+  if (!note) {
+    return;
+  }
+  note.textContent = `${count} ticked`;
+  const removeForm = document.getElementById("remove-copies");
+  if (removeForm) {
+    removeForm.dataset.confirm = count === 1 ? "Remove this PDF copy?" : `Remove ${count} PDF copies?`;
+  }
+  for (const button of document.querySelectorAll("[data-paper-list] .bulk-bar button")) {
+    button.disabled = count === 0;
+  }
+  document.querySelector("[data-process-label]").textContent = count ? `Process ${count} ticked` : "Process papers";
+}
+
+document.addEventListener("change", function (event) {
+  if (event.target.closest("[data-paper-list]")) {
+    showTicked();
+  }
+});
+
+function setOnly(form, names, which) {
+  const holder = form.querySelector("[data-only-names]");
+  holder.replaceChildren();
+  for (const name of names) {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = "only";
+    input.value = name;
+    holder.append(input);
+  }
+  form.querySelector("[data-only-line]").hidden = names.length === 0;
+  const papers = names.length === 1 ? `the ${which} paper` : `the ${names.length} ${which} papers`;
+  form.querySelector("[data-only-count]").textContent = `Prepares and summarises only ${papers}.`;
 }
 
 async function loadEstimate(form) {
-  const line = form.querySelector("[data-sum-estimate]");
-  line.textContent = "Working out the cost…";
   delete form.dataset.estimate;
-  try {
-    const response = await fetch(form.action.replace("/run", "/estimate"));
-    const data = await response.json();
-    if (response.ok) {
-      form.dataset.estimate = JSON.stringify(data);
-    }
-  } catch (error) {
-    line.textContent = "The cost could not be worked out.";
+  const asked = String(Number(form.dataset.asked || 0) + 1);
+  form.dataset.asked = asked;
+  for (const line of form.querySelectorAll("[data-estimate-line]")) {
+    line.textContent = "Working out the cost…";
   }
-  showEstimate(form);
-}
-
-function showEstimate(form) {
-  const ticked = form.querySelector("[data-sum-step]").checked;
-  const options = form.querySelector("[data-sum-options]");
-  options.hidden = !ticked;
-  delete form.dataset.confirm;
-  if (!ticked || !form.dataset.estimate) {
+  showEstimates(form);
+  if (!form.querySelector("[data-estimate-step]:checked")) {
     return;
   }
-  const data = JSON.parse(form.dataset.estimate);
-  const select = form.querySelector("[data-sum-mode]");
-  select.querySelector('option[value="batch"]').hidden = !("batch" in data.seconds);
-  let mode = select.value;
-  if (mode === "auto") {
+  let text = "";
+  try {
+    const response = await fetch(form.dataset.estimateUrl, {method: "POST", body: new FormData(form)});
+    const data = await response.json();
+    if (form.dataset.asked !== asked) {
+      return;
+    }
+    if (response.ok) {
+      form.dataset.estimate = JSON.stringify(data);
+    } else {
+      text = data.error;
+    }
+  } catch (error) {
+    text = "The cost could not be worked out.";
+  }
+  if (text) {
+    for (const line of form.querySelectorAll("[data-estimate-line]")) {
+      line.textContent = text;
+    }
+  }
+  showEstimates(form);
+}
+
+const ESTIMATE_WORDS = {
+  "pepa-sum": {line: "to summarise", ask: "summarise", done: "nothing to summarise: every paper is done or skipped", first: "prepared"},
+  "pepa-plan": {line: "to learn writing patterns from", ask: "learn writing patterns from", done: "nothing new to learn from", first: "summarised"},
+};
+
+function showEstimates(form) {
+  delete form.dataset.confirm;
+  const data = form.dataset.estimate ? JSON.parse(form.dataset.estimate) : {};
+  const asks = [];
+  let total = 0;
+  let priced = false;
+  for (const box of form.querySelectorAll("[data-estimate-step]")) {
+    const app = box.dataset.estimateStep;
+    const options = form.querySelector(`[data-step-options="${app}"]`);
+    if (!options) {
+      continue;
+    }
+    options.hidden = !box.checked;
+    options.querySelector("[data-limit]").value = "";
+    if (!box.checked || !data[app]) {
+      continue;
+    }
+    const shown = describeEstimate(app, data[app], options);
+    options.querySelector("[data-estimate-line]").textContent = shown.text;
+    if (shown.papers === 0) {
+      continue;
+    }
+    asks.push(shown.ask);
+    if (shown.limit !== null) {
+      options.querySelector("[data-limit]").value = (Math.ceil(shown.limit * 100) / 100).toFixed(2);
+      total += shown.cost;
+      priced = true;
+    }
+  }
+  if (asks.length === 0) {
+    return;
+  }
+  const question = asks.join(" and ");
+  form.dataset.confirm = question.charAt(0).toUpperCase() + question.slice(1) + "?";
+  form.dataset.confirmDetail = priced ? `About $${total.toFixed(2)} at list price, billed to your key.` : "Billed to your key.";
+  form.dataset.confirmButton = "Run";
+}
+
+function describeEstimate(app, data, options) {
+  const words = ESTIMATE_WORDS[app];
+  if (data.papers === 0) {
+    const text = words.done.charAt(0).toUpperCase() + words.done.slice(1) + ".";
+    return {text: text, papers: 0, ask: "", cost: 0, limit: null};
+  }
+  const select = options.querySelector("[data-mode]");
+  let mode = select ? select.value : "";
+  if (select) {
+    select.querySelector('option[value="batch"]').hidden = !("batch" in data.seconds);
+  }
+  if (mode === "" || mode === "auto") {
     mode = data.auto;
   }
-  const cost = data.cost[mode];
-  let text = `${data.papers} paper${data.papers === 1 ? "" : "s"} to summarise with ${data.model}, ${roughTime(data.seconds[mode])}`;
-  let detail = "Billed to your key.";
-  if (cost !== null && cost !== undefined) {
-    text += `, about $${cost.toFixed(2)} at list price`;
-    detail = `About $${cost.toFixed(2)} at list price, billed to your key.`;
+  const count = `${data.papers.toLocaleString()} paper${data.papers === 1 ? "" : "s"}`;
+  let text = `${count} ${words.line} with ${data.model}`;
+  if (data.more > 0) {
+    text += ` (${data.more.toLocaleString()} of them ${words.first} first)`;
   }
-  form.querySelector("[data-sum-estimate]").textContent = text + ".";
-  form.dataset.confirm = `Summarise ${data.papers} paper${data.papers === 1 ? "" : "s"}?`;
-  form.dataset.confirmDetail = detail;
-  form.dataset.confirmButton = "Run";
+  text += `, ${roughTime(data.seconds[mode])}`;
+  const limit = data.cost[mode];
+  if (limit === null || limit === undefined) {
+    return {text: text + ".", papers: data.papers, ask: `${words.ask} ${count}`, cost: 0, limit: null};
+  }
+  const cost = limit + (data.blueprints || 0);
+  text += `, about $${cost.toFixed(2)} at list price`;
+  return {text: text + ".", papers: data.papers, ask: `${words.ask} ${count}`, cost: cost, limit: limit};
 }
 
 function roughTime(seconds) {
@@ -149,23 +280,45 @@ function roughTime(seconds) {
 
 function countMarks(form) {
   const ticked = form.querySelectorAll('input[name="start"]:checked').length;
-  let text = `${ticked} chapter starts`;
+  const left = form.querySelectorAll('input[name="skip"]:checked').length;
+  let text = `${ticked} chapter start${ticked === 1 ? "" : "s"}`;
   if (ticked === 0) {
     text = "No chapter starts: the book is prepared as one file";
   }
+  if (left > 0) {
+    text += ` · ${left} page${left === 1 ? "" : "s"} left out`;
+  }
   form.querySelector("[data-marker-count]").textContent = text;
+}
+
+function leaveOutRange(form, box, shift) {
+  const boxes = Array.from(form.querySelectorAll('input[name="skip"]'));
+  const last = form.dataset.lastSkip;
+  form.dataset.lastSkip = boxes.indexOf(box);
+  if (!shift || last === undefined) {
+    return;
+  }
+  const from = Math.min(Number(last), boxes.indexOf(box));
+  const to = Math.max(Number(last), boxes.indexOf(box));
+  for (let index = from; index <= to; index++) {
+    boxes[index].checked = box.checked;
+  }
 }
 
 const marker = document.querySelector("[data-marker]");
 if (marker) {
   countMarks(marker);
   marker.querySelector("[data-marker-clear]").addEventListener("click", function () {
-    for (const box of marker.querySelectorAll('input[name="start"]')) {
+    for (const box of marker.querySelectorAll('input[name="start"], input[name="skip"]')) {
       box.checked = false;
     }
     countMarks(marker);
   });
   marker.addEventListener("click", function (event) {
+    if (event.target.matches('input[name="skip"]')) {
+      leaveOutRange(marker, event.target, event.shiftKey);
+      countMarks(marker);
+    }
     const zoom = event.target.closest("[data-zoom]");
     if (zoom) {
       event.preventDefault();
@@ -176,13 +329,12 @@ if (marker) {
   });
 }
 
-async function copyOneByOne(input) {
+async function copyOneByOne(input, files) {
   const form = input.form;
   const status = form.querySelector("[data-copy-status]");
   const count = status.querySelector(".copy-count");
   const name = status.querySelector(".copy-name");
   const bar = status.querySelector(".copy-bar span");
-  const files = Array.from(input.files);
   input.disabled = true;
   status.hidden = false;
   for (let index = 0; index < files.length; index++) {
@@ -202,7 +354,68 @@ async function copyOneByOne(input) {
     }
   }
   bar.style.width = "100%";
+  if (input.hasAttribute("data-process-after")) {
+    rememberToProcess(files.map(function (file) { return file.name; }));
+  }
   window.location.reload();
+}
+
+// ---- Dropping PDFs on the Library ----
+
+const PROCESS_KEY = "pepa-process-next";
+
+function rememberToProcess(names) {
+  try {
+    sessionStorage.setItem(PROCESS_KEY, JSON.stringify(names));
+  } catch (error) {
+    return;
+  }
+}
+
+function takeNamesToProcess() {
+  try {
+    const names = JSON.parse(sessionStorage.getItem(PROCESS_KEY) || "[]");
+    sessionStorage.removeItem(PROCESS_KEY);
+    return names;
+  } catch (error) {
+    return [];
+  }
+}
+
+const dropInput = document.querySelector("[data-process-after]");
+if (dropInput) {
+  document.addEventListener("dragover", function (event) {
+    event.preventDefault();
+    document.body.classList.add("dropping");
+  });
+  document.addEventListener("dragleave", function (event) {
+    if (event.relatedTarget === null) {
+      document.body.classList.remove("dropping");
+    }
+  });
+  document.addEventListener("drop", function (event) {
+    event.preventDefault();
+    document.body.classList.remove("dropping");
+    const pdfs = Array.from(event.dataTransfer.files).filter(function (file) {
+      return file.name.toLowerCase().endsWith(".pdf");
+    });
+    if (pdfs.length === 0) {
+      showMessage("Only PDFs can be added here.");
+      return;
+    }
+    copyOneByOne(dropInput, pdfs);
+  });
+  const waiting = takeNamesToProcess();
+  if (waiting.length > 0 && runDialog) {
+    const form = runDialog.querySelector("form");
+    setOnly(form, waiting, "new");
+    const summarise = form.querySelector('[data-estimate-step="pepa-sum"]');
+    if (summarise && !summarise.disabled) {
+      summarise.checked = true;
+    }
+    runDialog.showModal();
+    loadEstimate(form);
+  }
 }
 
 for (const panel of document.querySelectorAll(".run")) {
@@ -395,6 +608,10 @@ async function followRun(panel) {
 
     const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 40;
     const shown = takeItemEvents(panel, data.lines);
+    if (next === 0) {
+      markPace(panel);
+    }
+    showNow(panel, data, shown);
     if (shown.length > 0) {
       const chunk = document.createElement("span");
       chunk.className = "fresh";
@@ -412,6 +629,29 @@ async function followRun(panel) {
       return;
     }
     await wait(Number(panel.dataset.poll));
+  }
+}
+
+function markPace(panel) {
+  const box = panel.querySelector("[data-items]");
+  box.dataset.markTime = Date.now();
+  box.dataset.markFinished = box.dataset.finished || 0;
+}
+
+const LEADING_SYMBOLS = /^[\s▶✓✗⚠·─]+/;
+
+function showNow(panel, data, shown) {
+  const now = panel.querySelector("[data-now]");
+  let latest = "";
+  for (const line of shown.concat([data.partial])) {
+    const plain = line.replace(LEADING_SYMBOLS, "").trim();
+    if (plain) {
+      latest = plain;
+    }
+  }
+  now.hidden = data.status !== "running";
+  if (latest) {
+    now.textContent = latest;
   }
 }
 
@@ -436,6 +676,8 @@ function showItem(panel, state, name, detail) {
     box.hidden = false;
     panel.querySelector("[data-log-details]").open = false;
     box.dataset.total = name;
+    box.dataset.markTime = Date.now();
+    box.dataset.markFinished = 0;
     box.dataset.finished = 0;
     box.dataset.failed = 0;
     running.replaceChildren();
@@ -444,6 +686,12 @@ function showItem(panel, state, name, detail) {
     return;
   }
   let row = box.querySelector(`li[data-name="${CSS.escape(name)}"]`);
+  if (state === "progress") {
+    if (row) {
+      row.querySelector(".item-detail").textContent = detail;
+    }
+    return;
+  }
   if (!row) {
     row = document.createElement("li");
     row.dataset.name = name;
@@ -457,12 +705,27 @@ function showItem(panel, state, name, detail) {
     return;
   }
   row.querySelector(".item-detail").textContent = detail;
+  addReadLink(panel, row, state, name);
   finished.prepend(row);
   box.dataset.finished = Number(box.dataset.finished) + 1;
   if (state === "failed") {
     box.dataset.failed = Number(box.dataset.failed) + 1;
   }
   countItems(box);
+}
+
+function addReadLink(panel, row, state, name) {
+  const pattern = panel.dataset.readUrl;
+  const isSummary = name.startsWith("text_") && name.endsWith(".md");
+  if (!pattern || state !== "ok" || !isSummary || row.querySelector(".item-read")) {
+    return;
+  }
+  const core = name.slice("text_".length, -".md".length);
+  const link = document.createElement("a");
+  link.className = "button text item-read";
+  link.href = pattern.replace("sum_NAME.md", encodeURIComponent(`sum_${core}.md`));
+  link.textContent = "Read";
+  row.append(link);
 }
 
 function countItems(box) {
@@ -472,6 +735,11 @@ function countItems(box) {
   let text = `${finished} of ${total} done`;
   if (failed > 0) {
     text += ` · ${failed} failed`;
+  }
+  const sinceMark = finished - Number(box.dataset.markFinished || 0);
+  if (box.dataset.markTime && sinceMark > 0 && finished < total) {
+    const perItem = (Date.now() - Number(box.dataset.markTime)) / 1000 / sinceMark;
+    text += ` · ${roughTime(perItem * (total - finished))} left`;
   }
   box.querySelector("[data-items-count]").textContent = text;
   let share = 0;
@@ -505,9 +773,17 @@ function showState(panel, data) {
   }
   panel.querySelector("[data-elapsed]").textContent = data.elapsed;
 
+  let stepEnded = before === "running" && data.status !== "running";
   const stepDots = panel.querySelectorAll("[data-steps] .dot");
   for (let index = 0; index < stepDots.length; index++) {
+    if (stepDots[index].dataset.status === "running" && data.steps[index].status !== "running") {
+      stepEnded = true;
+    }
     showDot(stepDots[index], data.steps[index].status);
+  }
+  if (stepEnded) {
+    refreshCounts();
+    loadBatches();
   }
 
   const row = panel.closest("details");
@@ -597,6 +873,76 @@ async function countUp(element) {
     const progress = 1 - Math.pow(1 - frame / frames, 3);
     element.textContent = Math.round(target * progress).toLocaleString("en") + suffix;
     await wait(28);
+  }
+}
+
+// ---- Batches at Anthropic ----
+
+const BATCH_CHECK_MS = 5 * 60 * 1000;
+const batchesBox = document.getElementById("batches");
+
+async function loadBatches(body) {
+  if (!batchesBox) {
+    return;
+  }
+  const options = body ? {method: "POST", body: body} : {};
+  try {
+    const response = await fetch(batchesBox.dataset.batchesUrl, options);
+    if (!response.ok) {
+      return;
+    }
+    const before = batchesBox.querySelectorAll('[data-batch-state="collected"]').length;
+    batchesBox.innerHTML = await response.text();
+    const after = batchesBox.querySelectorAll('[data-batch-state="collected"]').length;
+    if (after > before) {
+      refreshCounts();
+    }
+  } catch (error) {
+    return;
+  }
+}
+
+if (batchesBox) {
+  if (batchesBox.hasAttribute("data-has-batches")) {
+    loadBatches();
+  }
+  setInterval(function () {
+    if (batchesBox.querySelector('[data-batch-state="open"]')) {
+      loadBatches();
+    }
+  }, BATCH_CHECK_MS);
+  batchesBox.addEventListener("click", function (event) {
+    const check = event.target.closest("[data-batch-check]");
+    if (check) {
+      check.textContent = "Checking…";
+      loadBatches();
+    }
+  });
+}
+
+async function refreshCounts() {
+  const flow = document.querySelector(".flow");
+  if (!flow) {
+    return;
+  }
+  try {
+    const response = await fetch(window.location.href);
+    const page = new DOMParser().parseFromString(await response.text(), "text/html");
+    const fresh = page.querySelector(".flow");
+    if (fresh) {
+      flow.innerHTML = fresh.innerHTML;
+    }
+    const rows = document.querySelector("[data-paper-list] tbody");
+    const freshRows = page.querySelector("[data-paper-list] tbody");
+    if (rows && freshRows) {
+      const ticked = tickedNames();
+      rows.innerHTML = freshRows.innerHTML;
+      for (const box of rows.querySelectorAll('input[name="name"]')) {
+        box.checked = ticked.includes(box.value);
+      }
+    }
+  } catch (error) {
+    return;
   }
 }
 
@@ -711,10 +1057,18 @@ function openMenu(anchor, groups, chosen, pick) {
     }
   }
   const box = (anchor.closest(".combo") || anchor).getBoundingClientRect();
-  menu.style.left = box.left + window.scrollX + "px";
-  menu.style.top = box.bottom + window.scrollY + 4 + "px";
   menu.style.minWidth = box.width + "px";
-  document.body.append(menu);
+  const dialog = anchor.closest("dialog");
+  if (dialog) {
+    const frame = dialog.getBoundingClientRect();
+    menu.style.left = box.left - frame.left - dialog.clientLeft + dialog.scrollLeft + "px";
+    menu.style.top = box.bottom - frame.top - dialog.clientTop + dialog.scrollTop + 4 + "px";
+    dialog.append(menu);
+  } else {
+    menu.style.left = box.left + window.scrollX + "px";
+    menu.style.top = box.bottom + window.scrollY + 4 + "px";
+    document.body.append(menu);
+  }
   anchor.setAttribute("aria-expanded", "true");
   openedMenu.menu = menu;
   openedMenu.anchor = anchor;

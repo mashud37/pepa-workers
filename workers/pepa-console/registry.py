@@ -74,7 +74,11 @@ APPS: list[App] = [
             {"name": "--output", "type": "folder", "help": "Folder for the documents (default: output/)"},
             {"name": "--force", "type": "bool", "help": "Redo papers already processed"},
             {"name": "--mode", "type": "choice", "choices": MODES, "help": "Execution mode (default: auto)"},
-            {"name": "--approve-cost", "type": "bool", "help": "Spend past the cost threshold without asking"},
+            {"name": "--approve-cost", "type": "dollars", "help": "Spend up to this many dollars without asking"},
+        )),
+        Command("batches", "safe", "Check batches sent to Anthropic and write the papers of those that ended", fields=(
+            {"name": "--cancel", "type": "text", "help": "Batch to stop; answered requests are still written"},
+            {"name": "--forget", "type": "text", "help": "Collected batch to remove from the list"},
         )),
         Command("clean", "safe", "List failed outputs, delete nothing", default_flags=("-n",), fields=(
             {"name": "--output", "type": "folder", "help": "Output folder to check (default: output/)"},
@@ -147,6 +151,7 @@ APPS: list[App] = [
             {"name": "--limit", "type": "int", "help": "Use only the first N para files"},
             {"name": "--sample", "type": "int", "help": "Use a random sample of N para files"},
             {"name": "--mode", "type": "choice", "choices": MODES, "help": "Labelling mode (default: auto)"},
+            {"name": "--approve-cost", "type": "dollars", "help": "Spend up to this many dollars without asking"},
         )),
         Command("blueprint", "heavy", "Build paragraph-progression blueprints"),
         Command("outline", "heavy", "Generate a paragraph-by-paragraph outline", no_input=True, fields=(

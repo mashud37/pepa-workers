@@ -5,7 +5,7 @@
 <div class="page-head">
   <div class="heading">
     <h1>Folders</h1>
-    <p class="supporting">Where each app reads and writes. A folder you link is marked read only: nothing in it is ever written, moved or renamed, so your own library stays as it is. Files are copied only into an app's own folders, from its page. A library that keeps each paper in a folder of its own needs sub-folder scanning, offered on the row as soon as there is something down there to find.</p>
+    <p class="supporting">Where each worker reads and writes. A folder you link is only ever read: nothing in it is written, moved or renamed.</p>
   </div>
 </div>
 
@@ -34,6 +34,7 @@
     <span class="name">{{ row.label }}</span>
     <span class="role">{% if row.role == "reads" %}Reads{% else %}Writes{% endif %}</span>
     <span class="supporting mono">{{ row.path }}</span>
+    {% if not row.is_default %}<span class="chip">Linked by you</span>{% elif row.from_app != app.name %}<span class="chip">{{ row.from_app }}'s output</span>{% else %}<span class="chip">Its own folder</span>{% endif %}
     {% if row.read_only %}<span class="chip">Read only</span>{% endif %}
     {% if row.deep %}<span class="chip">With sub-folders</span>{% endif %}
     {% if not row.exists %}<span class="chip missing">Not there yet</span>{% endif %}

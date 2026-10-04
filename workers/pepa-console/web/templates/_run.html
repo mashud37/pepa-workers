@@ -1,4 +1,4 @@
-<div class="run" data-log="{{ log_url }}" data-poll="{{ poll_ms }}">
+<div class="run" data-log="{{ log_url }}" data-poll="{{ poll_ms }}" data-read-url="{{ url_for('console.view_page', name='pepa-sum', slot='results', relative='sum_NAME.md') }}">
   <div class="run-head">
     <span class="status status-{{ run.status }}" data-status>{{ run.label }}</span>
     {% if run.steps %}
@@ -13,6 +13,7 @@
     </form>
     <button type="button" class="text" data-run-close="{{ log_url[:-4] }}/dismiss"{% if run.status == "running" %} hidden{% endif %}>Close</button>
   </div>
+  <p class="run-now" data-now role="status" hidden></p>
   <div class="items" data-items hidden>
     <div class="items-head"><span class="items-count" data-items-count></span><span class="items-bar"><span data-items-bar></span></span></div>
     <ul class="item-list" data-items-running></ul>

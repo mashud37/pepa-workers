@@ -2,6 +2,7 @@
 jobs, or key store, then renders a template, answers with JSON, or redirects.
 """
 import socket
+import threading
 from pathlib import Path
 
 from flask import (
@@ -19,7 +20,7 @@ from flask import (
 )
 
 from registry import get_app
-from web import documents, folders, jobs, keys, mascot, models, options, papers, paths
+from web import batches, documents, folders, jobs, keys, mascot, models, options, papers, paths
 from web.settings import SETTINGS
 
 MISSING_NOTE = {
@@ -31,11 +32,33 @@ SET_ASIDE_ACTIONS = {
     "skip-sum": {"apps": ["pepa-sum"], "wanted": True, "message": "{count} paper(s) will be skipped when summarising."},
     "include": {"apps": ["pepa-prep", "pepa-sum"], "wanted": False, "message": "{count} paper(s) are back in every stage."},
 }
+# The Library's stages in the order a run takes them. An estimated stage shows its cost before it runs.
 PIPELINE_STEPS = [
-    {"app": "pepa-prep", "command": "extract", "label": "Prepare PDFs", "needs": ""},
-    {"app": "pepa-sum", "command": "summarize", "label": "Summarise", "needs": "generation"},
-    {"app": "pepa-read", "command": "index", "label": "Update search index", "needs": ""},
-    {"app": "pepa-review", "command": "index", "label": "Update review index", "needs": "embedding"},
+    {"app": "pepa-prep", "command": "extract", "label": "Prepare PDFs", "needs": "", "estimated": False},
+    {"app": "pepa-sum", "command": "summarize", "label": "Summarise", "needs": "generation", "estimated": True},
+    {"app": "pepa-read", "command": "index", "label": "Update search index", "needs": "", "estimated": False},
+    {"app": "pepa-review", "command": "index", "label": "Update review index", "needs": "embedding", "estimated": False},
+    {"app": "pepa-plan", "command": "abstract", "label": "Learn writing patterns", "needs": "generation", "estimated": True},
+]
+
+# A stage that brings a second command along in the same run.
+FOLLOW_UPS = {
+    "pepa-plan abstract": {"app": "pepa-plan", "command": "blueprint", "label": "Writing blueprints"},
+}
+
+# The Batches card's buttons and the pepa-sum flag each one sends.
+BATCH_ACTIONS = {
+    "cancel": "--cancel",
+    "forget": "--forget",
+}
+
+# One check of the batches at a time, so the timer and a button never collect the same batch twice.
+BATCH_CHECK = threading.Lock()
+
+# The stages that can work on only the papers ticked in the Library.
+ONLY_APPS = [
+    "pepa-prep",
+    "pepa-sum",
 ]
 
 PDF_APPS = [
@@ -180,44 +203,99 @@ def favicon():
     return Response(drawing, mimetype="image/svg+xml")
 
 
-# ---- Home ----
+# ---- Library ----
 
 @bp.route("/")
-def pipeline():
-    latest = jobs.shown_chain()
+def library():
+    wanted = request.args.get("q", "")
+    longer = request.args.get("longer", "0")
+    page = request.args.get("page", "1")
+    sort = request.args.get("sort", "name")
+    if sort.lstrip("-") not in papers.SORT_COLUMNS:
+        sort = "name"
+    longer_than = int(longer) if longer.isdigit() else 0
     summary = folders.pipeline_summary()
     nothing_yet = summary["pdfs"] == 0 and summary["summarised"] == 0
     return render_template(
-        "pipeline.html",
+        "library.html",
         summary=summary,
         steps=pipeline_steps(),
-        sum_mode=options.environment_for("pepa-sum").get("PEPA_MODE", "auto"),
-        chain=latest,
+        chain=jobs.shown_chain(),
         first_run=nothing_yet and not keys.load_store()["keys"],
+        listing=papers.paper_rows(wanted, longer_than, int(page) if page.isdigit() else 1, sort),
+        sort=sort,
+        has_batches=batches.any_kept(),
+        own_pdfs=paths.own_pdf_folder(),
+        wanted=wanted,
+        longer_than=longer_than,
+        lengths=papers.LONGER_THAN,
     )
 
 
 def pipeline_steps():
-    """The pipeline's steps, each with what it still lacks before it can run."""
+    """The Library's stages, each with what it still lacks before it can run and its settings."""
     steps = []
     for step in PIPELINE_STEPS:
         missing = ""
         if step["needs"]:
             missing = models.missing_choice(step["app"], step["needs"])
-        steps.append({**step, "missing": missing})
+        steps.append({**step, "missing": missing, "settings": options.card_view(step["app"])})
     return steps
 
 
-@bp.route("/pipeline/estimate")
-def pipeline_estimate():
-    found = jobs.estimate("pepa-sum", "summarize", ["--estimate"])
-    if found is None:
-        return jsonify({"error": "pepa-sum could not estimate this run."}), 500
+@bp.route("/papers")
+def papers_page():  # lint-style: ignore MD001
+    return redirect(url_for("console.library", **request.args) + "#papers")
+
+
+@bp.route("/library/estimate", methods=["POST"])
+def library_estimate():
+    """What the ticked paid stages would cost, each counting the papers the stages before it add."""
+    ticked = request.form.getlist("step")
+    only = request.form.getlist("only")
+    found = {}
+    sum_more = 0
+    if "pepa-sum summarize" in ticked:
+        extra = {}
+        if only:
+            extra["PEPA_ONLY_FILE"] = str(paths.only_list_for("pepa-sum", only, "estimate"))
+        if "pepa-prep extract" in ticked:
+            sum_more = folders.unprepared_count(only)
+        found["pepa-sum"] = jobs.json_reply("pepa-sum", "summarize", ["--estimate", "--more", str(sum_more)], extra)
+    if "pepa-plan abstract" in ticked:
+        plan_more = 0
+        if found.get("pepa-sum"):
+            plan_more = found["pepa-sum"]["papers"]
+        found["pepa-plan"] = jobs.json_reply("pepa-plan", "abstract", ["--estimate", "--more", str(plan_more)])
+    for app_name, estimate in found.items():
+        if estimate is None:
+            return jsonify({"error": f"{app_name} could not estimate this run."}), 500
+    if found.get("pepa-sum"):
+        found["pepa-sum"]["more"] = sum_more
     return jsonify(found)
 
 
-@bp.route("/pipeline/copy", methods=["POST"])
-def pipeline_copy():
+@bp.route("/library/batches", methods=["GET", "POST"])
+def library_batches():
+    """The Batches card, after asking Anthropic about every open batch; a post can also cancel or forget one."""
+    flags = ["--json"]
+    action = request.form.get("action", "")
+    if request.method == "POST" and action in BATCH_ACTIONS:
+        flags += [BATCH_ACTIONS[action], request.form.get("batch", "")]
+    if not BATCH_CHECK.acquire(blocking=False):
+        return jsonify({"error": "Already checking."}), 409
+    try:
+        found = jobs.json_reply("pepa-sum", "batches", flags)
+    finally:
+        BATCH_CHECK.release()
+    if found is None:
+        return jsonify({"error": "pepa-sum could not check its batches."}), 500
+    tickets = [batches.card_row(ticket) for ticket in found["tickets"]]
+    return render_template("_batches.html", tickets=tickets)
+
+
+@bp.route("/library/copy", methods=["POST"])
+def library_copy():
     files = folders.picked_files(request.files.getlist("pdfs"))
     results = []
     for app_name in PDF_APPS:
@@ -225,40 +303,35 @@ def pipeline_copy():
             results.append(folders.copy_into(app_name, "sources", files, ".pdf"))
         except ValueError as error:
             results.append(str(error))
-    return copy_step(results, url_for("console.pipeline"))
+    return copy_step(results, url_for("console.library"))
 
 
-@bp.route("/pipeline/run", methods=["POST"])
-def pipeline_run():
+@bp.route("/library/run", methods=["POST"])
+def library_run():
     ticked = request.form.getlist("step")
-    steps = [step for step in pipeline_steps() if f"{step['app']} {step['command']}" in ticked]
-    if not steps:
+    only = request.form.getlist("only") or None
+    chosen = [step for step in pipeline_steps() if f"{step['app']} {step['command']}" in ticked]
+    if not chosen:
         return jsonify({"error": "Tick at least one step."}), 400
-    for step in steps:
+    steps = []
+    for step in chosen:
         if step["missing"]:
             return jsonify({"error": f"{step['label']}: {MISSING_NOTE[step['missing']]}"}), 400
-        if step["app"] == "pepa-sum":
-            mode = request.form.get("sum_mode", "auto")
-            step["values"] = {"--mode": mode, "--approve-cost": "on"}
+        if step["settings"]:
+            try:
+                options.save_choices(step["app"], request.form)
+            except ValueError as error:
+                return jsonify({"error": str(error)}), 400
+        if step["app"] in ONLY_APPS:
+            step["only"] = only
+        if step["estimated"]:
+            step["values"] = {"--approve-cost": request.form.get(f"limit {step['app']}", "")}
+        steps.append(step)
+        follow_up = FOLLOW_UPS.get(f"{step['app']} {step['command']}")
+        if follow_up:
+            steps.append(follow_up)
     chain_id = jobs.start_chain(steps)
     return run_panel(jobs.chain_summary(chain_id), url_for("console.chain_log", chain_id=chain_id))
-
-
-# ---- Papers ----
-
-@bp.route("/papers")
-def papers_page():
-    wanted = request.args.get("q", "")
-    longer = request.args.get("longer", "0")
-    longer_than = int(longer) if longer.isdigit() else 0
-    listing = papers.paper_rows(wanted, longer_than)
-    return render_template(
-        "papers.html",
-        listing=listing,
-        wanted=wanted,
-        longer_than=longer_than,
-        lengths=papers.LONGER_THAN,
-    )
 
 
 @bp.route("/papers/set-aside", methods=["POST"])
@@ -271,7 +344,25 @@ def papers_set_aside():
         for app_name in action["apps"]:
             paths.set_excluded(names, app_name, action["wanted"])
         flash(action["message"].format(count=len(names)))
-    return redirect(request.form.get("back") or url_for("console.papers_page"))
+    return redirect(request.form.get("back") or url_for("console.library"))
+
+
+@bp.route("/papers/remove-copies", methods=["POST"])
+def papers_remove_copies():
+    names = request.form.getlist("name")
+    if not names:
+        flash("Tick at least one paper.")
+        return redirect(request.form.get("back") or url_for("console.library"))
+    try:
+        outcome = papers.remove_copies(names)
+    except ValueError as error:
+        flash(str(error))
+        return redirect(request.form.get("back") or url_for("console.library"))
+    message = f"Removed {outcome['removed']} PDF cop{'y' if outcome['removed'] == 1 else 'ies'}."
+    if outcome["kept"]:
+        message += f" Kept {len(outcome['kept'])}: not prepared yet."
+    flash(message)
+    return redirect(request.form.get("back") or url_for("console.library"))
 
 
 @bp.route("/papers/chapters")
@@ -289,7 +380,7 @@ def chapters_save():
     if path is None:
         abort(404)
     try:
-        papers.save_marks(relative, request.form.getlist("start"))
+        papers.save_marks(relative, request.form.getlist("start"), request.form.getlist("skip"))
     except ValueError as error:
         flash(str(error))
         return redirect(url_for("console.chapters_page", file=relative))

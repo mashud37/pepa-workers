@@ -67,6 +67,11 @@ def files_below(folder):
     return {"names": names, "capped": capped}
 
 
+def leaf_name(name):
+    """The file name at the end of a relative path; plain string work, as the library can hold many thousands."""
+    return name.replace("\\", "/").rpartition("/")[2]
+
+
 def matching_names(stage):
     """Names of the files in a stage's folder that carry the stage's prefix and suffix.
 
@@ -84,7 +89,7 @@ def matching_names(stage):
         found = {"names": names_here(folder), "capped": False}
     wanted = []
     for name in found["names"]:
-        leaf = Path(name).name
+        leaf = leaf_name(name)
         if leaf.startswith(stage["prefix"]) and leaf.endswith(stage["suffix"]):
             wanted.append(name)
     return {"names": wanted, "capped": found["capped"]}
@@ -105,7 +110,7 @@ def papers_covered(stage):
     """
     covered = set()
     for name in matching_names(stage)["names"]:
-        core = Path(name).name[len(stage["prefix"]):-len(stage["suffix"])]
+        core = leaf_name(name)[len(stage["prefix"]):-len(stage["suffix"])]
         covered.add(core)
         head, _, tail = core.rpartition("_")
         if head and tail.isdigit():
@@ -116,17 +121,34 @@ def papers_covered(stage):
 def pipeline_summary():
     """What the pipeline holds now: waiting PDFs, how many are prepared and summarised, and both indexes."""
     waiting = matching_names(PDFS_WAITING)
-    stems = [Path(name).stem for name in waiting["names"]]
+    removed = [name for name in paths.load_removed() if name not in waiting["names"]]
+    stems = [Path(name).stem for name in waiting["names"] + removed]
     prepared = papers_covered(PREPARED)
     summarised = papers_covered(SUMMARISED)
     return {
-        "pdfs": len(waiting["names"]),
+        "pdfs": len(waiting["names"]) + len(removed),
         "pdfs_capped": waiting["capped"],
         "prepared": sum(1 for stem in stems if stem in prepared),
         "summarised": sum(1 for stem in stems if stem in summarised),
         "search_index": index_built(SEARCH_INDEX),
         "review_index": index_built(REVIEW_INDEX),
     }
+
+
+def unprepared_count(only=None):
+    """How many waiting PDFs a run would prepare and then summarise: not prepared yet, skipped by neither stage,
+    and among the only names given, when there are any."""
+    waiting = matching_names(PDFS_WAITING)["names"]
+    if only:
+        waiting = [name for name in waiting if Path(name).name in only]
+    prepared = papers_covered(PREPARED)
+    excluded = paths.load_excluded()
+    skipped = set(excluded["pepa-prep"]) | set(excluded["pepa-sum"])
+    count = 0
+    for name in waiting:
+        if Path(name).stem not in prepared and Path(name).name not in skipped:
+            count += 1
+    return count
 
 
 # ---- App folders ----

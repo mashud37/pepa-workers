@@ -1,0 +1,35 @@
+{% for ticket in tickets %}
+<div class="card batch-card" data-batch-state="{{ ticket.state }}">
+  {% if ticket.state == "open" %}
+  <div class="batch-head">
+    <h2>Batch at Anthropic</h2>
+    <span class="meta">{{ ticket.papers }} paper{% if ticket.papers != 1 %}s{% endif %} · sent {{ ticket.sent }}</span>
+  </div>
+  <div class="items-head"><span class="items-count">{{ "{:,}".format(ticket.answered) }} of {{ "{:,}".format(ticket.requests) }} requests answered</span><span class="items-bar"><span style="width: {{ ticket.share }}%"></span></span></div>
+  <p class="supporting">Most batches finish within an hour, and every batch by {{ ticket.latest }}. The summaries are written here as soon as it ends; closing the console loses nothing.</p>
+  <div class="actions">
+    <button type="button" class="text" data-batch-check>Check now</button>
+    <form method="post" data-batch-action data-confirm="Cancel this batch?" data-confirm-detail="Anthropic stops the requests not yet answered. Summaries already answered are still written." data-confirm-button="Cancel batch">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="action" value="cancel">
+      <input type="hidden" name="batch" value="{{ ticket.id }}">
+      <button class="text danger">Cancel batch</button>
+    </form>
+  </div>
+  {% else %}
+  <div class="batch-head">
+    <h2>Batch collected</h2>
+    <span class="meta">{{ ticket.papers }} paper{% if ticket.papers != 1 %}s{% endif %} · sent {{ ticket.sent }}</span>
+  </div>
+  <p class="supporting">{{ ticket.result.done }} written{% if ticket.result.failed %}, {{ ticket.result.failed }} failed: Summarise tries those again next time{% endif %}.</p>
+  <div class="actions">
+    <form method="post" data-batch-action>
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="action" value="forget">
+      <input type="hidden" name="batch" value="{{ ticket.id }}">
+      <button class="text">Close</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endfor %}

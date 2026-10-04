@@ -1,0 +1,10 @@
+<label class="field"><span>{{ field.label }}</span>
+  {% if field.choices %}
+  <select name="{{ field.variable }}"{% if field.main %} data-mode{% endif %}>
+    {% if not field.default %}<option value="">Default</option>{% endif %}
+    {% for value, label in field.choices.items() %}<option value="{{ value }}"{% if value == (field.value or field.default) %} selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
+  {% else %}
+  <input type="number" name="{{ field.variable }}" min="{{ field.low }}" max="{{ field.high }}" value="{{ field.value }}" placeholder="Default">
+  {% endif %}
+</label>

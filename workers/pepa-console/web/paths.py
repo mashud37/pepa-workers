@@ -43,6 +43,7 @@ OPEN_COMMAND = {
 
 FOLDERS_FILE_NAME = "folders.json"
 EXCLUDED_FILE_NAME = "excluded.json"
+REMOVED_FILE_NAME = "removed-pdfs.json"
 EXCLUDING_APPS = [
     "pepa-prep",
     "pepa-sum",
@@ -93,6 +94,24 @@ def excluded_file():
     return SETTINGS["keys_file"].parent / EXCLUDED_FILE_NAME
 
 
+def removed_file():
+    """Where the PDF copies removed after preparing are remembered, so their papers stay in the Library."""
+    return SETTINGS["keys_file"].parent / REMOVED_FILE_NAME
+
+
+def load_removed():
+    """Every PDF copy removed after preparing, as {file name: {"pages"}}."""
+    if not removed_file().exists():
+        return {}
+    return json.loads(removed_file().read_text(encoding="utf-8"))
+
+
+def own_pdf_folder():
+    """True when the PDFs to prepare sit in pepa-prep's own folder, holding copies the console made."""
+    place = find_place("pepa-prep", "sources")
+    return owned_by_app(place, chosen("pepa-prep", "sources"))
+
+
 def load_excluded():
     """The PDF names set aside, keyed by the app whose stage skips them."""
     lists = {app_name: [] for app_name in EXCLUDING_APPS}
@@ -126,6 +145,32 @@ def prepared_names(stem):
             if entry.name == f"text_{stem}.md" or chapter:
                 names.append(entry.name)
     return sorted(names)
+
+
+def prepared_names_of(stems):
+    """The text files pepa-prep wrote for any of these PDFs, from one look at its output folder."""
+    folder = chosen("pepa-prep", "results") / "text"
+    if not folder.is_dir():
+        return []
+    names = []
+    for name in os.listdir(folder):
+        core = name[len("text_"):-len(".md")]
+        head, _, tail = core.rpartition("_")
+        if not (name.startswith("text_") and name.endswith(".md")):
+            continue
+        if core in stems or (head in stems and tail.isdigit()):
+            names.append(name)
+    return names
+
+
+def only_list_for(app_name, pdf_names, run_name):
+    """Write the only file names one app works on in a run and return where; pepa-sum works on the text files of those PDFs."""
+    names = set(pdf_names)
+    if app_name == "pepa-sum":
+        names.update(prepared_names_of({Path(name).stem for name in pdf_names}))
+    path = excluded_file().with_name(f"only-{run_name}-{app_name}.json")
+    write_json(path, sorted(names))
+    return path
 
 
 def exclude_list_for(app_name):
@@ -334,6 +379,7 @@ def page_rows():
             "variable": place["variable"],
             "path": str(folder),
             "is_default": is_default,
+            "from_app": place["default"].split("/")[0] if is_default else "",
             "read_only": place["role"] == "reads" and not is_default,
             "exists": folder.is_dir(),
             "can_scan": can_scan_subfolders(place["app"], place["slot"]),

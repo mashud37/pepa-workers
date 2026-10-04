@@ -1,20 +1,20 @@
 {% extends "base.html" %}
 {% import "_icons.html" as icon %}
-{% block title %}Home · pepa{% endblock %}
+{% block title %}Library · pepa{% endblock %}
 {% block content %}
 <div class="page-head">
   <div class="heading">
-    <h1>Home</h1>
-    <p class="supporting">The papers the workers read, and how far each stage has got.</p>
+    <h1>Library</h1>
+    <p class="supporting">Your papers and how far each stage has got. Drop PDFs here to add them.</p>
   </div>
   <div class="actions">
     <a class="button text" href="{{ url_for('console.folders_page') }}">{{ icon.folder() }}Link a source folder</a>
-    <form method="post" action="{{ url_for('console.pipeline_copy') }}" enctype="multipart/form-data">
+    <form method="post" action="{{ url_for('console.library_copy') }}" enctype="multipart/form-data">
       <input type="hidden" name="token" value="{{ token }}">
-      <label class="button tonal file-button">{{ icon.copy_in() }}Copy PDFs in<input type="file" name="pdfs" accept=".pdf" multiple class="visually-hidden" data-copy></label>
+      <label class="button tonal file-button">{{ icon.copy_in() }}Copy PDFs in<input type="file" id="copy-pdfs" name="pdfs" accept=".pdf" multiple class="visually-hidden" data-copy data-process-after></label>
       <div class="snackbar copy-progress" role="status" data-copy-status hidden><span class="copy-count"></span><span class="copy-name"></span><span class="copy-bar"><span></span></span></div>
     </form>
-    <button type="button" class="filled" data-open="run-dialog">{{ icon.play() }}Process papers</button>
+    <button type="button" class="filled" data-open="run-dialog" data-process-all>{{ icon.play() }}<span class="process-label" data-process-label>Process papers</span></button>
   </div>
 </div>
 
@@ -31,37 +31,129 @@
 {% endif %}
 
 <ol class="flow">
-  <li><a href="{{ url_for('console.papers_page') }}"><span class="count" data-count="{{ summary.pdfs }}"{% if summary.pdfs_capped %} data-suffix="+"{% endif %}>{{ "{:,}".format(summary.pdfs) }}{% if summary.pdfs_capped %}+{% endif %}</span><span class="label">PDFs</span></a></li>
+  <li><a href="#papers"><span class="count" data-count="{{ summary.pdfs }}"{% if summary.pdfs_capped %} data-suffix="+"{% endif %}>{{ "{:,}".format(summary.pdfs) }}{% if summary.pdfs_capped %}+{% endif %}</span><span class="label">PDFs</span></a></li>
   <li><a href="{{ url_for('console.browse_page', name='pepa-prep', slot='results', **{'in': 'text'}) }}"><span class="count" data-count="{{ summary.prepared }}">{{ "{:,}".format(summary.prepared) }}</span><span class="label">Prepared</span></a></li>
   <li><a href="{{ url_for('console.browse_page', name='pepa-sum', slot='results', q='sum_') }}"><span class="count" data-count="{{ summary.summarised }}">{{ "{:,}".format(summary.summarised) }}</span><span class="label">Summarised</span></a></li>
   <li><a href="{{ url_for('console.read_page') }}"><span class="count">{{ summary.search_index or "None" }}</span><span class="label">Search index</span></a></li>
   <li><a href="{{ url_for('console.app_page', name='pepa-review') }}"><span class="count">{{ summary.review_index or "None" }}</span><span class="label">Review index</span></a></li>
 </ol>
 
+<section class="batches" id="batches" aria-label="Batches at Anthropic" data-batches-url="{{ url_for('console.library_batches') }}"{% if has_batches %} data-has-batches{% endif %}></section>
+
+<div class="drop-hint" aria-hidden="true"><span>Drop PDFs to add and process them</span></div>
+
 <div class="run-slot pipeline-run" id="pipeline-run">
   {% if chain %}{% with run = chain, log_url = url_for('console.chain_log', chain_id=chain.id) %}{% include "_run.html" %}{% endwith %}{% endif %}
 </div>
 
+<h2 class="section-title" id="papers">Papers</h2>
+<p class="supporting section-note">Tick papers to process only those, to skip them in a stage, or to remove their PDF copies.</p>
+<label class="drop-zone" for="copy-pdfs">{{ icon.copy_in() }}<span>Drop PDFs here, or anywhere on this page, to add them and process just those. Or click to choose them.</span></label>
+<form class="filter" method="get" action="{{ url_for('console.library') }}#papers" role="search">
+  <label class="field grow">
+    <span>Find by name</span>
+    <input type="search" name="q" value="{{ wanted }}" placeholder="Part of a file name">
+  </label>
+  <label class="field">
+    <span>Length</span>
+    <select name="longer">
+      {% for pages in lengths %}<option value="{{ pages }}"{% if pages == longer_than %} selected{% endif %}>{% if pages %}Over {{ pages }} pages{% else %}Any length{% endif %}</option>{% endfor %}
+    </select>
+  </label>
+  <input type="hidden" name="sort" value="{{ sort }}">
+  <button class="tonal">Show</button>
+</form>
+
+<p class="meta result-count" role="status">{{ "{:,}".format(listing.shown) }} of {{ "{:,}".format(listing.total) }} papers{% if listing.counting %} · counting pages for {{ "{:,}".format(listing.counting) }}, the length filter leaves them out until then{% endif %}</p>
+
+{% if listing.rows %}
+<form method="post" action="{{ url_for('console.papers_set_aside') }}" data-paper-list>
+  <input type="hidden" name="token" value="{{ token }}">
+  <input type="hidden" name="back" value="{{ request.full_path }}#papers">
+  <div class="bulk-bar">
+    <label class="check"><input type="checkbox" data-select-all>Tick all shown</label>
+    <span class="meta ticked-count" data-ticked-count role="status">0 ticked</span>
+    <span class="grow"></span>
+    <button class="text" name="action" value="skip-prep" disabled>Skip when preparing</button>
+    <button class="text" name="action" value="skip-sum" disabled>Skip when summarising</button>
+    <button class="text" name="action" value="include" disabled>Stop skipping</button>
+    {% if own_pdfs %}<button class="text danger" form="remove-copies" disabled>Remove PDF copies</button>{% endif %}
+  </div>
+  <div class="card papers-card">
+    <table class="papers-table">
+      <thead>
+        <tr>
+          <th></th>
+          {% for column, label in [("name", "Name"), ("pages", "Pages"), ("prepared", "Prepared"), ("summarised", "Summarised")] %}
+          {% set ascending = sort == column %}
+          {% set descending = sort == "-" + column %}
+          <th{% if column == "pages" %} class="num"{% endif %} aria-sort="{% if ascending %}ascending{% elif descending %}descending{% else %}none{% endif %}"><a class="sort-link" href="{{ url_for('console.library', q=wanted, longer=longer_than, sort=('-' + column) if ascending else column) }}#papers">{{ label }}{% if ascending %} ↑{% elif descending %} ↓{% endif %}</a></th>
+          {% endfor %}
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in listing.rows %}
+        <tr>
+          <td><input type="checkbox" name="name" value="{{ row.name }}" aria-label="Select {{ row.name }}"></td>
+          <td class="paper-name" title="{{ row.name }}">{{ row.name }}</td>
+          <td class="num">{% if row.pages is none %}…{% else %}{{ "{:,}".format(row.pages) }}{% endif %}</td>
+          <td{% if row.skip_prep %} class="skipped"{% endif %}>{% if row.skip_prep %}<span class="chip">Skipped</span> {% endif %}{% if row.prepared > 1 %}{{ row.prepared }} chapters{% elif row.prepared == 1 %}One file{% else %}Not yet{% endif %}</td>
+          <td{% if row.skip_sum %} class="skipped"{% endif %}>{% if row.skip_sum %}<span class="chip">Skipped</span> {% endif %}{% if row.prepared and row.summarised == row.prepared %}Done{% elif row.in_batch %}In a batch{% elif row.summarised %}{{ row.summarised }} of {{ row.prepared }}{% else %}Not yet{% endif %}</td>
+          <td>{% if row.removed %}<span class="chip">PDF removed</span>{% else %}<a class="button text" href="{{ url_for('console.chapters_page', file=row.relative) }}">{% if row.marked %}Chapters marked{% else %}Mark chapters{% endif %}</a>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</form>
+{% if own_pdfs %}
+<form id="remove-copies" method="post" action="{{ url_for('console.papers_remove_copies') }}" data-collect-ticked data-confirm="Remove these PDF copies?" data-confirm-detail="Only papers already prepared lose their copy. Their text, summaries and search stay. To mark chapters or prepare them again, copy the PDFs in again." data-confirm-button="Remove">
+  <input type="hidden" name="token" value="{{ token }}">
+  <input type="hidden" name="back" value="{{ request.full_path }}#papers">
+</form>
+{% endif %}
+{% if listing.pages > 1 %}
+<nav class="pager" aria-label="Pages of papers">
+  {% if listing.page > 1 %}<a class="button text" href="{{ url_for('console.library', q=wanted, longer=longer_than, sort=sort, page=listing.page - 1) }}#papers">{{ icon.back() }}Previous</a>{% endif %}
+  <span class="meta">Page {{ listing.page }} of {{ listing.pages }}</span>
+  {% if listing.page < listing.pages %}<a class="button text" href="{{ url_for('console.library', q=wanted, longer=longer_than, sort=sort, page=listing.page + 1) }}#papers">Next</a>{% endif %}
+</nav>
+{% endif %}
+{% else %}
+<div class="empty">
+  <h2>{% if listing.total %}Nothing matches{% else %}No PDFs yet{% endif %}</h2>
+</div>
+{% endif %}
+
 <dialog id="run-dialog" class="dialog" aria-labelledby="run-title">
-  <form method="post" action="{{ url_for('console.pipeline_run') }}" data-fetch="run" data-slot="pipeline-run">
+  <form method="post" action="{{ url_for('console.library_run') }}" data-fetch="run" data-slot="pipeline-run" data-estimate-url="{{ url_for('console.library_estimate') }}">
     <input type="hidden" name="token" value="{{ token }}">
     <h2 id="run-title">Process papers</h2>
     <p class="supporting">The ticked steps run in order, and papers already done are skipped. If a step fails, the steps after it do not run.</p>
+    <div class="only-line" data-only-line hidden>
+      <span data-only-count></span>
+      <button type="button" class="text" data-only-clear>All papers instead</button>
+    </div>
+    <div data-only-names></div>
     <div class="checklist">
       {% for step in steps %}
-      <label class="check"><input type="checkbox" name="step" value="{{ step.app }} {{ step.command }}"{% if step.missing %} disabled{% elif not step.needs %} checked{% endif %}{% if step.app == "pepa-sum" %} data-sum-step{% endif %}><span class="grow">{{ step.label }}{% if step.missing == "keys" %}<a class="check-note" href="{{ url_for('console.keys_page') }}">Add a key on the Keys page first.</a>{% elif step.missing == "models" %}<a class="check-note" href="{{ url_for('console.models_page') }}">Choose an embedding model on the Models page first.</a>{% endif %}</span>{% if step.needs %}<span class="chip">API costs</span>{% endif %}</label>
-      {% if step.app == "pepa-sum" and not step.missing %}
-      <div class="step-options" data-sum-options hidden>
-        <label class="field">
-          <span>How to run</span>
-          <select name="sum_mode" data-sum-mode>
-            <option value="auto"{% if sum_mode == "auto" %} selected{% endif %}>Auto: the fastest for this many papers</option>
-            <option value="serial"{% if sum_mode == "serial" %} selected{% endif %}>One paper at a time</option>
-            <option value="parallel"{% if sum_mode == "parallel" %} selected{% endif %}>Several papers at once</option>
-            <option value="batch"{% if sum_mode == "batch" %} selected{% endif %}>Batch: about half price, can take hours</option>
-          </select>
-        </label>
-        <p class="supporting" data-sum-estimate role="status">Working out the cost…</p>
+      <label class="check"><input type="checkbox" name="step" value="{{ step.app }} {{ step.command }}"{% if step.missing %} disabled{% elif not step.needs %} checked{% endif %}{% if step.estimated %} data-estimate-step="{{ step.app }}"{% endif %}><span class="grow">{{ step.label }}{% if step.missing == "keys" %}<a class="check-note" href="{{ url_for('console.keys_page') }}">Add a key on the Keys page first.</a>{% elif step.missing == "models" %}<a class="check-note" href="{{ url_for('console.models_page') }}">Choose an embedding model on the Models page first.</a>{% endif %}</span>{% if step.needs %}<span class="chip">API costs</span>{% endif %}</label>
+      {% if not step.missing and step.settings %}
+      <div class="step-options"{% if step.estimated %} data-step-options="{{ step.app }}" hidden{% endif %}>
+        {% for field in step.settings if field.main %}
+        {% with field = field %}{% include "_setting.html" %}{% endwith %}
+        {% endfor %}
+        {% if step.estimated %}
+        <p class="supporting" data-estimate-line role="status">Working out the cost…</p>
+        <input type="hidden" name="limit {{ step.app }}" data-limit>
+        {% endif %}
+        <details class="step-settings">
+          <summary>Settings</summary>
+          {% for field in step.settings if not field.main %}
+          {% with field = field %}{% include "_setting.html" %}{% endwith %}
+          {% endfor %}
+        </details>
       </div>
       {% endif %}
       {% endfor %}
