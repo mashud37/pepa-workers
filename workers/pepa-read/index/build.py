@@ -111,7 +111,8 @@ def _index_body(conn, doc_id, text_path):
 def _scan_text_dir(text_dir):
     docs = {}
     if not text_dir.exists():
-        raise SystemExit(f"text directory not found: {text_dir}")
+        ui.warn(f"no prepared text yet in {text_dir}; indexing summaries only")
+        return docs
     ui.info("scanning directory...")
     files = sorted(text_dir.glob("text_*.md"))
     total = len(files)
@@ -128,7 +129,8 @@ def _scan_text_dir(text_dir):
 
 def _scan_sum_dir(sum_dir, docs):
     if not sum_dir.exists():
-        raise SystemExit(f"sum directory not found: {sum_dir}")
+        ui.warn(f"no summaries yet in {sum_dir}; indexing the text only")
+        return
     ui.info("scanning directory...")
     files = sorted(sum_dir.glob("sum_*.md"))
     total = len(files)
@@ -191,6 +193,9 @@ def run(force: bool = False):
     _scan_sum_dir(config.SUM_DIR, docs)
 
     ui.step("3/3 build search index")
+    if not docs:
+        ui.warn("Nothing to index yet: prepare or summarise papers first.")
+        return
     conn = _connect()
     if force:
         conn.execute("INSERT INTO bodies_fts (bodies_fts) VALUES ('delete-all')")
