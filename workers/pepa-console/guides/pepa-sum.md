@@ -15,10 +15,14 @@ methods, arguments, key conclusions, and discussion items.
 
 ## Use it
 
-1. Put PDFs, markdown or text files in **Papers to summarise**. **Copy PDFs in** on **Library**
-   puts them there too.
+1. **Papers to summarise** is pepa-prep's prepared text, so prepare the PDFs first. **Folders** can
+   point it at any folder of PDFs, markdown or text instead.
 2. Run **summarize**. Papers already summarised are skipped unless **force** is ticked.
 3. Open a file under **Summaries**. The buttons above it switch between the paper's brief,
    rundown, quotes and prepared text.
 
 **clean** lists summaries that failed, so they can be redone.
+
+In batch mode, at about half the price, the papers go to Anthropic as one batch and the run ends.
+**batches** writes the summaries once Anthropic has answered, which can take up to a day; on
+**Library** this happens by itself.

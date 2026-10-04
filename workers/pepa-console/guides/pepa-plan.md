@@ -10,7 +10,8 @@ skeletons. An outline follows one skeleton, or a template written by hand.
 
 ## Use it
 
-1. Run **abstract** once to learn the skeletons from the summarised papers.
+1. Run **abstract** to learn the skeletons from the summarised papers. Run again, it labels only
+   papers added since. **Learn writing patterns** in **Process papers** on **Library** runs it too.
 2. Put the idea in **Ideas and drafts**: **Write a file** on its page, a few sentences are enough.
 3. Run **outline**. The outline is under **Outlines**.
 

@@ -31,13 +31,15 @@ python manage.py install
 ```
 
 `install` stores the Anthropic key; for another provider, set `BACKEND: "openai-compatible"`,
-`LLM_BASE_URL` and `LLM_MODEL` in `env.yaml`. Put the papers into `input/`.
+`LLM_BASE_URL` and `LLM_MODEL` in `env.yaml`. Put the papers into `input/`; when it is empty,
+pepa-sum reads pepa-prep's prepared text beside it.
 
 ## Commands
 
 | Action | Command |
 |---|---|
 | Summarise every paper in the input folder | `python manage.py summarize` |
+| Check batches sent to Anthropic and write the finished ones | `python manage.py batches` |
 | Remove failed outputs so they are redone | `python manage.py clean` |
 | Choose the backend and speed | `python manage.py settings` |
 | Show the configuration | `python manage.py config` |

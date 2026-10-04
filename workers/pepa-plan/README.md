@@ -35,7 +35,7 @@ another provider, and put an idea file into `input/`.
 
 | Action | Command |
 |---|---|
-| Learn skeletons from the pepa-sum corpus | `python manage.py abstract` |
+| Learn skeletons from the pepa-sum corpus, labelling only papers added since | `python manage.py abstract` |
 | Learn how each section unfolds paragraph by paragraph | `python manage.py blueprint` |
 | Outline an idea | `python manage.py outline` |
 | Create or list hand-written templates | `python manage.py template` |

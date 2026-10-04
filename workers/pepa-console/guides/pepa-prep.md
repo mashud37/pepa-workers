@@ -20,4 +20,7 @@ are removed.
 For books, **validate** grades the chapter files and **refine** repairs chapter boundaries it can
 tell are wrong; tick **apply** to write the repairs.
 
+**Mark chapters** beside a paper on **Library** shows every page. Tick where each chapter starts and
+leave out pages nothing should read, such as an index, then prepare the paper again.
+
 Scanned PDFs need Tesseract. On Windows, install it with `winget install UB-Mannheim.TesseractOCR`.

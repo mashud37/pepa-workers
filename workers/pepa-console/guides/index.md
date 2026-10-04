@@ -26,7 +26,7 @@ folder itself. A folder of papers you already have can be linked there; pepa onl
 
 Summaries, reviews, outlines and drafts call a language model and need an API key; preparing
 PDFs and searching do not. Add a key once on the **Keys** page and every worker that needs it gets
-it. Steps marked **Paid** are billed to that key.
+it. Steps marked **API costs** are billed to that key and show their cost before they run.
 
 ## Models
 
@@ -35,10 +35,10 @@ DeepSeek, Kimi, Qwen, or one running on this computer. [Models](models.md) expla
 
 ## A first run
 
-1. On **Library**, press **Copy PDFs in** and choose some papers.
-2. Press **Process papers**. The papers are prepared, summarised and indexed for search, and the
-   log shows each step as it runs.
-3. Press **Summarised**, then a paper, to read its brief, its paragraph rundown and its quotes.
+1. On **Library**, drop some PDFs on the page, or press **Copy PDFs in** and choose them.
+2. **Process papers** opens for the new papers. Press **Run**: they are prepared, summarised and
+   indexed for search, and each paper shows its progress.
+3. Press **Read** beside a finished paper to read its brief, its paragraph rundown and its quotes.
 4. **Search** finds papers by author, title, or any word in their briefs.
 
 ## The workers

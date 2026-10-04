@@ -1,3 +1,19 @@
+# pepa-workers 0.3.0 (unreleased)
+
+* The console's Library page holds the papers and how far each stage has got. PDFs dropped on it
+  are copied in and processed. Papers ticked in its list can be processed alone, skipped in a
+  stage, or lose their PDF copy once prepared.
+* Mark chapters shows every page of a PDF: tick where each chapter starts and leave out pages such
+  as an index. pepa-prep follows the marks.
+* pepa-sum's batch mode sends the batch and ends. `pepa-sum batches`, or the Library's Batches
+  card, writes the summaries once Anthropic has answered, which can take up to a day.
+* pepa-plan's `abstract` labels only papers it has not seen and shows its cost first.
+* Every paid step shows its cost at list price before it runs, and stops if the run would cost more
+  than was approved.
+* pepa-sum reads pepa-prep's prepared text when its own input folder is empty.
+* pepa-read indexes prepared text before any paper is summarised.
+* Works with version 1 of the anthropic library.
+
 # pepa-workers 0.2.0 (unreleased)
 
 * New worker, `pepa-host`: deploys a model server of your own on Google Cloud Run or Azure

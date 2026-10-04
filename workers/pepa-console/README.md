@@ -16,7 +16,7 @@ flowchart TD
 
 | Page | What it does |
 |---|---|
-| Library | Counts PDFs, prepared texts and summaries, and runs the ticked workers in order |
+| Library | The papers and how far each stage has got; drop PDFs on it to add them, tick papers to process only those, and press Process papers to run the stages in order |
 | Apps | One page per worker, each command as a form with its live log, its run settings, and every file it reads or writes |
 | Search | The pepa-read search page |
 | Jobs | Every run since the console started |
