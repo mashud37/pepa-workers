@@ -2,7 +2,7 @@
 import re
 from pathlib import Path
 
-_ITEM_RE = re.compile(r"^(\d+)\.\s+\[([A-Z_\-–— ]+)\]\s*[—\-–]\s*(.+)$")
+_ITEM_RE = re.compile(r"^(\d+)\.\s+\[([A-Z_\-–\u2014 ]+)\]\s*[\u2014\-–]\s*(.+)$")
 
 MOVE_TO_SECTION = {
     "HOOK_PROBLEM": "introduction",
