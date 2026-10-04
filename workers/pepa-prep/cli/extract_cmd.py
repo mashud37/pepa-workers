@@ -8,6 +8,8 @@ from extract import categorise, marks, workers
 
 from . import items, ui
 
+OCR_LOG_EVERY = 25
+
 
 def _print_plan(src: Path, out_dir: Path, cfg: dict) -> None:
     """The four phases and the folders they use, printed before any phase starts."""
@@ -37,15 +39,16 @@ def run(cfg: dict, file: str | None = None, force: bool = False) -> None:
         pdfs = sorted(src.glob("*.pdf"))
     excluded = marks.excluded_names()
     pdfs = [p for p in pdfs if p.name not in excluded]
+    only = marks.only_names()
+    if only is not None:
+        pdfs = [p for p in pdfs if p.name in only]
     if file:
         pdfs = [p for p in pdfs if p.name == file]
     if not pdfs:
         raise SystemExit(f"No PDFs to prepare in {src}")
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    if force:
-        for p in pdfs:
-            _clear_outputs(out_dir, p.stem)
+    cfg = dict(cfg, force=force)
 
     _print_plan(src, out_dir, cfg)
 
@@ -110,7 +113,7 @@ def _categorise_phase(pdfs: list, out_dir: Path, cfg: dict) -> dict:
 
     to_scan = []
     for p in pdfs:
-        if categorise.any_output(existing, p.stem):
+        if categorise.any_output(existing, p.stem) and not cfg["force"]:
             skipped += 1
         else:
             to_scan.append(p)
@@ -131,6 +134,8 @@ def _categorise_phase(pdfs: list, out_dir: Path, cfg: dict) -> dict:
                     continue
                 pages, fraction = scan["pages"], scan["fraction"]
                 file_route = categorise.route(pages, fraction, cfg)
+                if file_route == "straight" and marks.marked_starts(path.stem):
+                    file_route = "book"
                 groups[file_route].append(path)
     except KeyboardInterrupt:
         raise SystemExit("\nInterrupted.")
@@ -177,6 +182,8 @@ def _extract_one(handler, path, out_dir, cfg, counter):
     """Announce a file the moment a worker picks it up, then extract it."""
     ui.info(f"{counter} {path.name}")
     items.announce("start", path.name)
+    if cfg["force"]:
+        _clear_outputs(out_dir, path.stem)
     return handler(path, out_dir, cfg)
 
 
@@ -198,7 +205,11 @@ def _live_clear() -> None:
 
 
 def _report_progress(i: int, name: str, n: int, done: int, total: int) -> None:
+    """Show OCR page progress: a live line in a terminal, a log line every few pages elsewhere, and the console's item row."""
     _live(f"[{i}/{n}] {name}: page {done}/{total}")
+    items.announce("progress", name, f"page {done:,} of {total:,}")
+    if not sys.stdout.isatty() and done and (done % OCR_LOG_EVERY == 0 or done == total):
+        ui.info(f"[{i}/{n}] {name}: page {done}/{total}")
 
 
 def _run_ocr_phase(step_label: str, files: list, out_dir: Path, cfg: dict) -> list:
@@ -216,6 +227,8 @@ def _run_ocr_phase(step_label: str, files: list, out_dir: Path, cfg: dict) -> li
         name = path.name
         ui.info(f"[{i}/{n}] {name}: OCR starting…")
         items.announce("start", name)
+        if cfg["force"]:
+            _clear_outputs(out_dir, path.stem)
 
         try:
             report = functools.partial(_report_progress, i, name, n)

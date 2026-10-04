@@ -192,4 +192,6 @@ def write_chapters(stem: str, out_dir: Path, chapters: list) -> str:
     for i, elements in enumerate(chapters, 1):
         md = strip_references(render(elements))
         (out_dir / f"text_{stem}_{i:0{width}d}.md").write_text(md, encoding="utf-8")
-    return f"{len(chapters)} chapter file(s)"
+    if len(chapters) == 1:
+        return "one chapter file"
+    return f"{len(chapters)} chapter files"
