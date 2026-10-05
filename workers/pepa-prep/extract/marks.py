@@ -28,6 +28,19 @@ def left_out_pages(stem):
     return set(json.loads(path.read_text(encoding="utf-8")).get("skip", []))
 
 
+def contents_pages(stem):
+    """The left-out PDF pages the user marked as the printed table of contents, sorted, counted from 1."""
+    path = MARKS_DIR / f"{stem}.json"
+    if not path.exists():
+        return []
+    kinds = json.loads(path.read_text(encoding="utf-8")).get("kinds", {})
+    pages = []
+    for page, kind in kinds.items():
+        if kind == "contents":
+            pages.append(int(page))
+    return sorted(pages)
+
+
 def blank_left_out(stem, pages, empty):
     """The pages with each left-out one replaced by an empty page, so every later page keeps its number."""
     left_out = left_out_pages(stem)

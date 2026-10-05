@@ -68,7 +68,8 @@ def extract_book(path: Path, out_dir: Path, cfg: dict) -> dict:
     doc = pdf.open_pdf(path)
     try:
         page_count = pdf.page_count(doc)
-        pages = marks.blank_left_out(path.stem, doc_lines(doc, range(page_count)), [])
+        every_page = doc_lines(doc, range(page_count))
+        pages = marks.blank_left_out(path.stem, every_page, [])
         dims = doc_dims(doc, range(page_count))
         tables = marks.blank_left_out(path.stem, doc_tables(path, doc, range(page_count)), [])
         stats = doc_stats(pages)
@@ -78,7 +79,11 @@ def extract_book(path: Path, out_dir: Path, cfg: dict) -> dict:
             bounds = [{"title": "", "page": page - 1} for page in marked]
             meta = {"strategy": "marked", "notes": []}
         else:
-            detected = detect_chapters(doc, pages, dims, stats, cfg)
+            marked_pages = {
+                "left_out": {page - 1 for page in marks.left_out_pages(path.stem)},
+                "contents": [page - 1 for page in marks.contents_pages(path.stem)],
+            }
+            detected = detect_chapters(doc, every_page, dims, stats, dict(cfg, marked_pages=marked_pages))
             bounds, meta = detected["bounds"], detected["meta"]
     finally:
         pdf.close_pdf(doc)
@@ -91,6 +96,7 @@ def extract_book(path: Path, out_dir: Path, cfg: dict) -> dict:
     else:
         chapters = split_into_chapters(whole)
         marks.save_found(path.stem, [], meta["strategy"])
+    chapters = [chapter for chapter in chapters if chapter]
     warnings = []
     if meta["strategy"] != "marked":
         resolved = _resolve_chapters(chapters, whole, cfg, page_count, "pages")

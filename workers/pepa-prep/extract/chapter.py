@@ -88,7 +88,7 @@ def detect_chapters(doc, pages: list, dims: list, stats: dict,
         pages: Per-page line blocks from doc_lines().
         dims: Per-page (width, height) from doc_dims().
         stats: {"body", "heads", "lh"} from doc_stats().
-        cfg: Loaded config dict.
+        cfg: Loaded config dict; optional "marked_pages" holds the user's 0-based "left_out" and "contents" pages.
 
     Returns:
         {"bounds", "meta"}: bounds as [{"title", "page"}] with 0-based start
@@ -96,9 +96,14 @@ def detect_chapters(doc, pages: list, dims: list, stats: dict,
         is "outline" | "toc" | "regex" | "none".
     """
     page_count = len(pages)
+    marked = cfg.get("marked_pages", {"left_out": set(), "contents": []})
     index = anchor.heading_index(pages, dims, stats)
+    index = [c for c in index if c["page"] not in marked["left_out"]]
     widths = [d[0] for d in dims]
-    toc_rng = toc.find_toc(pages, widths, _toc_words(cfg))
+    if marked["contents"]:
+        toc_rng = range(marked["contents"][0], marked["contents"][-1] + 1)
+    else:
+        toc_rng = toc.find_toc(pages, widths, _toc_words(cfg))
     entries = toc.parse_entries(pages, toc_rng, widths, _toc_words(cfg)) if toc_rng else []
     if toc_rng is not None:
         index = [c for c in index if c["page"] not in toc_rng]
