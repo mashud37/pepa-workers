@@ -1,3 +1,14 @@
+# pepa-workers 0.3.1 (unreleased)
+
+* The console's Library list filters by length: books, or papers shorter than books. Ticking can
+  reach every paper that matches, across pages.
+* The Process dialog lists the papers it will work on.
+* The Jobs page keeps a record of finished jobs across restarts, for as long as chosen there.
+* Mark chapters records what a left-out page is, such as contents, notes or an index. pepa-prep
+  reads pages left out as contents as the book's table of contents.
+* pepa-review keeps its index's vectors in their own file, so the index loads in about a second.
+* A paper the model declines to answer counts as failed rather than done.
+
 # pepa-workers 0.3.0 (unreleased)
 
 * The console's Library page holds the papers and how far each stage has got. PDFs dropped on it
