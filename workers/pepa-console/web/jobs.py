@@ -8,11 +8,12 @@ import signal
 import subprocess
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from registry import get_app, get_command
 from runner import build_argv, job_environment
 from web import paths
+from web.settings import SETTINGS
 
 STATUS_LABEL = {
     "running": "Running",
@@ -27,6 +28,18 @@ STOP_WAIT_SECONDS = 5
 ESTIMATE_SECONDS = 120
 SECONDS_PER_MINUTE = 60
 CLOCK_FORMAT = "%H:%M"
+DAY_FORMAT = "%d %b, %H:%M"
+HISTORY_FOLDER_NAME = "jobs"
+HISTORY_SETTING_FILE_NAME = "job-history.json"
+# How long finished jobs are kept, in days; 0 keeps them for good.
+KEEP_CHOICES = {
+    7: "A week",
+    30: "30 days",
+    90: "90 days",
+    365: "A year",
+    0: "Forever",
+}
+KEEP_DAYS = 30
 READ_BYTES = 4096
 # Asks a child to announce each item it starts and finishes, which the run panel lists.
 ITEM_EVENTS = {"PEPA_ITEM_EVENTS": "on"}
@@ -99,7 +112,7 @@ def start_job(app_name, command_name, values, extra_environment=None):
         raise ValueError(f"Could not start {app_name} {command_name}: {error}") from error
 
     with LOCK:
-        job_id = str(len(JOBS) + 1)
+        job_id = next_id(JOBS)
         JOBS[job_id] = {
             "id": job_id,
             "app": app_name,
@@ -107,7 +120,7 @@ def start_job(app_name, command_name, values, extra_environment=None):
             "kind": command.kind,
             "shown": " ".join(argv[2:]),
             "status": "running",
-            "started_at": datetime.now().strftime(CLOCK_FORMAT),
+            "started_at": datetime.now().isoformat(timespec="seconds"),
             "started": time.monotonic(),
             "ended": None,
             "exit_code": None,
@@ -165,6 +178,7 @@ def watch_job(job_id):
             job["status"] = "ok"
         elif job["status"] == "running":
             job["status"] = "failed"
+    save_record("job", job)
 
 
 def send_input(job_id, text):
@@ -217,6 +231,7 @@ def stop_all():
         running = [job_id for job_id, job in JOBS.items() if job["status"] == "running"]
     for job_id in running:
         cancel_job(job_id)
+        WATCHERS[job_id].join(timeout=STOP_WAIT_SECONDS)
 
 
 # ---- Reading jobs ----
@@ -245,7 +260,7 @@ def summary_row(job):
         "shown": job["shown"],
         "status": job["status"],
         "label": STATUS_LABEL[job["status"]],
-        "started_at": job["started_at"],
+        "started_at": started_text(job),
         "elapsed": elapsed_text(job),
         "exit_code": job["exit_code"],
         "last_line": last_line,
@@ -334,7 +349,8 @@ def shown_chain():
     with LOCK:
         if not CHAINS:
             return None
-        chain = CHAINS[str(len(CHAINS))]
+        newest = max(CHAINS, key=int)
+        chain = CHAINS[newest]
         if chain["status"] == "cancelled" or chain["dismissed"]:
             return None
         return chain_row(chain)
@@ -373,11 +389,11 @@ def start_chain(steps):
             "error": "",
         })
     with LOCK:
-        chain_id = str(len(CHAINS) + 1)
+        chain_id = next_id(CHAINS)
         CHAINS[chain_id] = {
             "id": chain_id,
             "status": "running",
-            "started_at": datetime.now().strftime(CLOCK_FORMAT),
+            "started_at": datetime.now().isoformat(timespec="seconds"),
             "started": time.monotonic(),
             "ended": None,
             "steps": planned,
@@ -416,6 +432,7 @@ def run_chain(chain_id):
     with LOCK:
         CHAINS[chain_id]["status"] = outcome
         CHAINS[chain_id]["ended"] = time.monotonic()
+    save_record("chain", CHAINS[chain_id])
 
 
 def chain_row(chain):
@@ -424,7 +441,7 @@ def chain_row(chain):
         "id": chain["id"],
         "status": chain["status"],
         "label": STATUS_LABEL[chain["status"]],
-        "started_at": chain["started_at"],
+        "started_at": started_text(chain),
         "elapsed": elapsed_text(chain),
         "steps": [dict(step) for step in chain["steps"]],
     }
@@ -467,7 +484,9 @@ def chain_log(chain_id, after):
             if step["job_id"] is None:
                 lines.append(step["error"])
                 continue
-            job = JOBS[step["job_id"]]
+            job = JOBS.get(step["job_id"])
+            if job is None:
+                continue
             lines.extend(job["lines"])
             if job["status"] == "running":
                 running_job = job
@@ -485,3 +504,102 @@ def chain_log(chain_id, after):
             "elapsed": row["elapsed"],
             "steps": row["steps"],
         }
+
+
+# ---- History ----
+
+def next_id(records):
+    """The id after the highest one in use, so ids read back from disk are never reused."""
+    numbers = [int(key) for key in records]
+    return str(max(numbers, default=0) + 1)
+
+
+def started_text(record):
+    """When a job or Library run started: the time for today, the day and time before that."""
+    started = datetime.fromisoformat(record["started_at"])
+    if started.date() == datetime.now().date():
+        return started.strftime(CLOCK_FORMAT)
+    return started.strftime(DAY_FORMAT).lstrip("0")
+
+
+def history_folder():
+    """Where finished jobs are kept: beside the key store, outside the workspace."""
+    return SETTINGS["keys_file"].parent / HISTORY_FOLDER_NAME
+
+
+def save_record(kind, record):
+    """Keep a finished job or Library run on disk, so the Jobs page still lists it after a restart."""
+    with LOCK:
+        kept = dict(record)
+        kept["seconds"] = int(record["ended"] - record["started"])
+        if kind == "chain":
+            kept["steps"] = [dict(step) for step in record["steps"]]
+    kept.pop("started")
+    kept.pop("ended")
+    try:
+        paths.write_json(history_folder() / f"{kind}-{record['id']}.json", kept)
+    except OSError:
+        return
+
+
+def keep_days():
+    """How many days finished jobs are kept: the user's choice on the Jobs page, else 30."""
+    path = SETTINGS["keys_file"].parent / HISTORY_SETTING_FILE_NAME
+    try:
+        days = json.loads(path.read_text(encoding="utf-8"))["keep_days"]
+    except (OSError, ValueError, KeyError):
+        return KEEP_DAYS
+    if days not in KEEP_CHOICES:
+        return KEEP_DAYS
+    return days
+
+
+def set_keep_days(days):
+    """Remember how long finished jobs are kept, and forget the ones already older than that.
+
+    Raises:
+        ValueError: the number of days is not one of the choices.
+    """
+    if days not in KEEP_CHOICES:
+        raise ValueError("Pick one of the choices for how long jobs are kept.")
+    paths.write_json(SETTINGS["keys_file"].parent / HISTORY_SETTING_FILE_NAME, {"keep_days": days})
+    forget_old_jobs()
+
+
+def forget_old_jobs():
+    """Drop finished jobs and Library runs that started before the kept days, from the page and from disk."""
+    days = keep_days()
+    if days == 0:
+        return
+    oldest = datetime.now() - timedelta(days=days)
+    records = {"job": JOBS, "chain": CHAINS}
+    for kind, kept in records.items():
+        with LOCK:
+            old_ids = [record_id for record_id, record in kept.items() if record["status"] != "running" and datetime.fromisoformat(record["started_at"]) < oldest]
+            for record_id in old_ids:
+                del kept[record_id]
+        for record_id in old_ids:
+            (history_folder() / f"{kind}-{record_id}.json").unlink(missing_ok=True)
+
+
+def load_history():
+    """Read back the finished jobs and Library runs kept on disk, oldest first.
+
+    Read-back runs count as closed, so the Library does not show last week's run as the current one.
+    """
+    folder = history_folder()
+    if not folder.is_dir():
+        return
+    records = {"job": JOBS, "chain": CHAINS}
+    saved = sorted(folder.glob("*.json"), key=lambda path: int(path.stem.partition("-")[2]))
+    for path in saved:
+        kind = path.stem.partition("-")[0]
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        record["started"] = 0.0
+        record["ended"] = float(record.pop("seconds"))
+        record["dismissed"] = True
+        records[kind][record["id"]] = record
+    forget_old_jobs()

@@ -3,6 +3,7 @@ jobs, or key store, then renders a template, answers with JSON, or redirects.
 """
 import socket
 import threading
+import time
 from pathlib import Path
 
 from flask import (
@@ -208,12 +209,13 @@ def favicon():
 @bp.route("/")
 def library():
     wanted = request.args.get("q", "")
-    longer = request.args.get("longer", "0")
+    length = request.args.get("length", "")
     page = request.args.get("page", "1")
     sort = request.args.get("sort", "name")
     if sort.lstrip("-") not in papers.SORT_COLUMNS:
         sort = "name"
-    longer_than = int(longer) if longer.isdigit() else 0
+    if length not in papers.LENGTHS:
+        length = ""
     summary = folders.pipeline_summary()
     nothing_yet = summary["pdfs"] == 0 and summary["summarised"] == 0
     return render_template(
@@ -222,14 +224,25 @@ def library():
         steps=pipeline_steps(),
         chain=jobs.shown_chain(),
         first_run=nothing_yet and not keys.load_store()["keys"],
-        listing=papers.paper_rows(wanted, longer_than, int(page) if page.isdigit() else 1, sort),
+        listing=papers.paper_rows(wanted, length, int(page) if page.isdigit() else 1, sort),
         sort=sort,
         has_batches=batches.any_kept(),
         own_pdfs=paths.own_pdf_folder(),
         wanted=wanted,
-        longer_than=longer_than,
-        lengths=papers.LONGER_THAN,
+        length=length,
+        lengths=papers.LENGTHS,
+        book_pages=papers.book_pages(),
     )
+
+
+@bp.route("/library/names")
+def library_names():
+    length = request.args.get("length", "")
+    if length not in papers.LENGTHS:
+        length = ""
+    found = papers.matching_papers(request.args.get("q", ""), length)
+    names = [Path(row["relative"]).name for row in found["rows"]]
+    return jsonify({"names": names})
 
 
 def pipeline_steps():
@@ -257,11 +270,15 @@ def library_estimate():
     sum_more = 0
     if "pepa-sum summarize" in ticked:
         extra = {}
+        only_file = None
         if only:
-            extra["PEPA_ONLY_FILE"] = str(paths.only_list_for("pepa-sum", only, "estimate"))
+            only_file = paths.only_list_for("pepa-sum", only, f"estimate{time.monotonic_ns()}")
+            extra["PEPA_ONLY_FILE"] = str(only_file)
         if "pepa-prep extract" in ticked:
             sum_more = folders.unprepared_count(only)
         found["pepa-sum"] = jobs.json_reply("pepa-sum", "summarize", ["--estimate", "--more", str(sum_more)], extra)
+        if only_file is not None:
+            only_file.unlink(missing_ok=True)
     if "pepa-plan abstract" in ticked:
         plan_more = 0
         if found.get("pepa-sum"):
@@ -370,7 +387,7 @@ def chapters_page():
     relative = request.args.get("file", "")
     if papers.source_path(relative) is None:
         abort(404)
-    return render_template("chapters.html", book=papers.chapter_view(relative))
+    return render_template("chapters.html", book=papers.chapter_view(relative), kind_names=papers.LEAVE_OUT_KINDS)
 
 
 @bp.route("/papers/chapters", methods=["POST"])
@@ -380,7 +397,11 @@ def chapters_save():
     if path is None:
         abort(404)
     try:
-        papers.save_marks(relative, request.form.getlist("start"), request.form.getlist("skip"))
+        skips = request.form.getlist("skip")
+        kinds = {}
+        for page in skips:
+            kinds[page] = request.form.get(f"kind_{page}", "")
+        papers.save_marks(relative, request.form.getlist("start"), skips, kinds)
     except ValueError as error:
         flash(str(error))
         return redirect(url_for("console.chapters_page", file=relative))
@@ -531,7 +552,16 @@ def browse_page(name, slot):
 def jobs_page():
     rows = jobs.list_jobs()
     running = [row for row in rows if row["status"] == "running"]
-    return render_template("jobs.html", jobs=rows, chains=jobs.list_chains(), refresh=bool(running))
+    return render_template("jobs.html", jobs=rows, chains=jobs.list_chains(), refresh=bool(running), keep_choices=jobs.KEEP_CHOICES, keep_days=jobs.keep_days())
+
+
+@bp.route("/jobs/history", methods=["POST"])
+def jobs_history():
+    try:
+        jobs.set_keep_days(int(request.form.get("keep_days", "")))
+    except ValueError as error:
+        flash(str(error))
+    return redirect(url_for("console.jobs_page"))
 
 
 @bp.route("/jobs/<job_id>")

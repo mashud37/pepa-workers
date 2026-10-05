@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pypdfium2 as pdfium
 
-from web import batches, folders, paths
+from web import batches, folders, options, paths
 from web.settings import SETTINGS
 
 PAGE_COUNTS_FILE_NAME = "page-counts.json"
@@ -19,14 +19,24 @@ JPEG_QUALITY = 75
 PAGE_SIZE = 100
 SAVE_COUNTS_EVERY = 200
 
-# Choices for the length filter: a PDF is shown when it has more pages than this.
-LONGER_THAN = [
-    0,
-    50,
-    100,
-    200,
-    400,
-]
+# Choices for the Pages column's filter. A book has more pages than pepa-prep's book setting.
+LENGTHS = {
+    "": "Any length",
+    "books": "Books",
+    "shorter": "Shorter than books",
+}
+BOOK_PAGES = 100
+
+# What a left-out page is, as the Chapters page offers it; every kind is left out alike, and
+# pepa-prep reads pages marked "contents" as the book's printed table of contents.
+LEAVE_OUT_KINDS = {
+    "": "Not needed",
+    "front": "Front matter",
+    "contents": "Contents",
+    "notes": "Notes",
+    "bibliography": "Bibliography",
+    "index": "Index",
+}
 
 # The columns the paper list sorts by; a leading "-" in the request turns the order round.
 SORT_COLUMNS = [
@@ -141,13 +151,31 @@ def sort_key(column, row, progress):
     return Path(row["relative"]).name.lower()
 
 
-def paper_rows(wanted, longer_than, page, sort="name"):
-    """One page of rows for the PDFs waiting to be prepared that match the name and length filters.
+def book_pages():
+    """The page count above which pepa-prep treats a PDF as a book: its setting here, else its default."""
+    chosen = os.environ.get("PEPAPREP_BOOK_PAGES") or options.load_store().get("pepa-prep", {}).get("PEPAPREP_BOOK_PAGES")
+    if chosen and chosen.isdigit():
+        return int(chosen)
+    return BOOK_PAGES
+
+
+def fits_length(pages, length, threshold):
+    """Whether a PDF passes the length filter; one whose pages are not counted yet passes only "Any length"."""
+    if not length:
+        return True
+    if pages is None:
+        return False
+    if length == "books":
+        return pages > threshold
+    return pages <= threshold
+
+
+def matching_papers(wanted, length):
+    """Every PDF, prepared or waiting, whose name holds the wanted text and whose length fits, as name and pages.
 
     Returns:
-        dict with "rows", each with name, relative path, pages (None while not counted), prepared
-        and summarised counts and whether it is set aside; "total", the PDFs before filtering;
-        "shown", the PDFs after filtering; "page" and "pages"; and "counting", the PDFs not counted yet.
+        dict with "rows", each with relative and pages; "total", the PDFs before filtering; "present",
+        the names still in the folder; and "uncounted", the names whose pages are not counted yet.
     """
     folder = paths.chosen("pepa-prep", "sources")
     present = folders.matching_names(folders.PDFS_WAITING)["names"]
@@ -156,16 +184,31 @@ def paper_rows(wanted, longer_than, page, sort="name"):
     known = load_counts()
     uncounted = [name for name in present if name not in known]
     count_in_background(folder, present)
-    matching = []
+    threshold = book_pages()
+    rows = []
     for name in names:
         pages = known.get(name, {}).get("pages")
         if name not in present:
             pages = removed[name]["pages"]
         if wanted.lower() not in Path(name).name.lower():
             continue
-        if longer_than and (pages is None or pages <= longer_than):
+        if not fits_length(pages, length, threshold):
             continue
-        matching.append({"relative": name, "pages": pages})
+        rows.append({"relative": name, "pages": pages})
+    return {"rows": rows, "total": len(names), "present": present, "uncounted": uncounted}
+
+
+def paper_rows(wanted, length, page, sort="name"):
+    """One page of rows for the PDFs waiting to be prepared that match the name and length filters.
+
+    Returns:
+        dict with "rows", each with name, relative path, pages (None while not counted), prepared
+        and summarised counts and whether it is set aside; "total", the PDFs before filtering;
+        "shown", the PDFs after filtering; "page" and "pages"; and "counting", the PDFs not counted yet.
+    """
+    found = matching_papers(wanted, length)
+    matching = found["rows"]
+    present = found["present"]
     column = sort.lstrip("-")
     if column in ("prepared", "summarised"):
         everything = progress_by_stem([Path(row["relative"]).stem for row in matching])
@@ -196,11 +239,11 @@ def paper_rows(wanted, longer_than, page, sort="name"):
         })
     return {
         "rows": rows,
-        "total": len(names),
+        "total": found["total"],
         "shown": len(matching),
         "page": page,
         "pages": page_count,
-        "counting": len(uncounted),
+        "counting": len(found["uncounted"]),
     }
 
 
@@ -250,7 +293,8 @@ def chapter_view(relative):
     """What the Chapters page shows for one PDF: its pages and the starts already marked or found.
 
     Returns:
-        dict with "name", "relative", "pages", "starts" (PDF pages from 1), and "source",
+        dict with "name", "relative", "pages", "starts" and "skips" (PDF pages from 1), "kinds"
+        (what each left-out page is, by page), and "source",
         which says whether the starts were marked by hand, found by pepa-prep, or are not there yet.
     """
     path = source_path(relative)
@@ -258,11 +302,14 @@ def chapter_view(relative):
     found_file = paths.project_folder() / "pepa-prep" / "data" / "found" / f"{stem}.json"
     starts = []
     skips = []
+    kinds = {}
     source = "none"
     if marks_file(stem).exists():
         marked = json.loads(marks_file(stem).read_text(encoding="utf-8"))
         starts = marked.get("starts", [])
         skips = marked.get("skip", [])
+        for page, kind in marked.get("kinds", {}).items():
+            kinds[int(page)] = kind
         source = "marked"
     elif found_file.exists():
         starts = json.loads(found_file.read_text(encoding="utf-8"))["starts"]
@@ -273,6 +320,7 @@ def chapter_view(relative):
         "pages": count_pages(path),
         "starts": starts,
         "skips": skips,
+        "kinds": kinds,
         "source": source,
     }
 
@@ -290,15 +338,24 @@ def page_numbers(values, pages):
     return numbers
 
 
-def save_marks(relative, starts, skips):
+def save_marks(relative, starts, skips, kinds):
     """Keep the chapter starts and left-out pages the user marked, as PDF pages from 1; none removes the marks.
 
+    Args:
+        kinds: what each left-out page is, as {page text: kind}; a blank kind is left out of the file.
+
     Raises:
-        ValueError: a page is not in this PDF.
+        ValueError: a page is not in this PDF, or a kind is not one of LEAVE_OUT_KINDS.
     """
     path = source_path(relative)
     pages = count_pages(path)
-    marked = {"starts": page_numbers(starts, pages), "skip": page_numbers(skips, pages)}
+    marked = {"starts": page_numbers(starts, pages), "skip": page_numbers(skips, pages), "kinds": {}}
+    for page in marked["skip"]:
+        kind = kinds.get(str(page), "")
+        if kind not in LEAVE_OUT_KINDS:
+            raise ValueError(f"Page {page}: {kind} is not a kind of page that can be left out.")
+        if kind:
+            marked["kinds"][str(page)] = kind
     target = marks_file(path.stem)
     if not marked["starts"] and not marked["skip"]:
         target.unlink(missing_ok=True)

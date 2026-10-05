@@ -9,6 +9,7 @@ const CONFETTI_COLOURS = [
   "#f9ab00",
 ];
 const CONFETTI_PIECES = 18;
+const ONLY_PAGE_SIZE = 10;
 
 const THEME_NAMES = {
   system: "Theme: follows the system",
@@ -42,7 +43,14 @@ document.addEventListener("submit", function (event) {
   }
   form.dataset.confirmed = "";
   if (form.hasAttribute("data-collect-ticked")) {
+    const onPage = [];
+    for (const box of form.querySelectorAll('input[name="name"]:checked')) {
+      onPage.push(box.value);
+    }
     for (const name of tickedNames()) {
+      if (onPage.includes(name)) {
+        continue;
+      }
       const input = document.createElement("input");
       input.type = "hidden";
       input.name = "name";
@@ -89,6 +97,14 @@ document.addEventListener("change", function (event) {
     for (const box of event.target.form.querySelectorAll('input[name="name"]')) {
       box.checked = event.target.checked;
     }
+    allMatching = null;
+    showTickMatching(event.target.checked);
+  } else if (event.target.matches('[data-paper-list] input[name="name"]') && allMatching) {
+    allMatching = null;
+    showTickMatching(false);
+  }
+  if (event.target.matches("[data-submit-on-change]")) {
+    event.target.form.requestSubmit();
   }
   if (event.target.closest("[data-marker]")) {
     countMarks(event.target.closest("[data-marker]"));
@@ -105,6 +121,12 @@ if (runDialog && runDialog.querySelector("[data-estimate-url]")) {
     setOnly(form, tickedNames(), "ticked");
     loadEstimate(form);
   });
+  form.querySelector("[data-only-pager]").addEventListener("click", function (event) {
+    const button = event.target.closest("[data-only-step]");
+    if (button) {
+      showOnlyPage(form, Number(form.dataset.onlyPage || 0) + Number(button.dataset.onlyStep));
+    }
+  });
   form.querySelector("[data-only-clear]").addEventListener("click", function () {
     setOnly(form, [], "");
     loadEstimate(form);
@@ -118,7 +140,45 @@ if (runDialog && runDialog.querySelector("[data-estimate-url]")) {
   });
 }
 
+let allMatching = null;
+
+function showTickMatching(pageTicked) {
+  const button = document.querySelector("[data-tick-matching]");
+  if (!button) {
+    return;
+  }
+  const total = Number(button.dataset.total);
+  const onPage = document.querySelectorAll('[data-paper-list] input[name="name"]').length;
+  button.hidden = !pageTicked || total <= onPage;
+  button.textContent = allMatching ? `Untick all ${total.toLocaleString()}` : `Tick all ${total.toLocaleString()} that match`;
+}
+
+document.addEventListener("click", async function (event) {
+  const button = event.target.closest("[data-tick-matching]");
+  if (!button) {
+    return;
+  }
+  const selectAll = document.querySelector("[data-select-all]");
+  if (allMatching) {
+    allMatching = null;
+    selectAll.checked = false;
+    for (const box of document.querySelectorAll('[data-paper-list] input[name="name"]')) {
+      box.checked = false;
+    }
+    showTickMatching(false);
+    showTicked();
+    return;
+  }
+  const response = await fetch(button.dataset.url);
+  allMatching = (await response.json()).names;
+  showTickMatching(true);
+  showTicked();
+});
+
 function tickedNames() {
+  if (allMatching) {
+    return allMatching.slice();
+  }
   const names = [];
   for (const box of document.querySelectorAll('[data-paper-list] input[name="name"]:checked')) {
     names.push(box.value);
@@ -161,7 +221,32 @@ function setOnly(form, names, which) {
   }
   form.querySelector("[data-only-line]").hidden = names.length === 0;
   const papers = names.length === 1 ? `the ${which} paper` : `the ${names.length} ${which} papers`;
-  form.querySelector("[data-only-count]").textContent = `Prepares and summarises only ${papers}.`;
+  form.querySelector("[data-only-count]").textContent = `Only ${papers}`;
+  form.querySelector(".only-list").open = false;
+  showOnlyPage(form, 0);
+}
+
+function showOnlyPage(form, page) {
+  const names = [];
+  for (const input of form.querySelectorAll('[data-only-names] input[name="only"]')) {
+    names.push(input.value);
+  }
+  const last = Math.max(0, Math.ceil(names.length / ONLY_PAGE_SIZE) - 1);
+  const shown = Math.min(Math.max(page, 0), last);
+  const start = shown * ONLY_PAGE_SIZE;
+  const list = form.querySelector("[data-only-page]");
+  list.replaceChildren();
+  list.start = start + 1;
+  for (const name of names.slice(start, start + ONLY_PAGE_SIZE)) {
+    const item = document.createElement("li");
+    item.textContent = name;
+    list.append(item);
+  }
+  form.dataset.onlyPage = String(shown);
+  form.querySelector("[data-only-pager]").hidden = names.length <= ONLY_PAGE_SIZE;
+  form.querySelector("[data-only-range]").textContent = `${start + 1} to ${Math.min(start + ONLY_PAGE_SIZE, names.length)} of ${names.length}`;
+  form.querySelector('[data-only-step="-1"]').disabled = shown === 0;
+  form.querySelector('[data-only-step="1"]').disabled = shown === last;
 }
 
 async function loadEstimate(form) {
@@ -296,13 +381,24 @@ function leaveOutRange(form, box, shift) {
   const last = form.dataset.lastSkip;
   form.dataset.lastSkip = boxes.indexOf(box);
   if (!shift || last === undefined) {
-    return;
+    return [box];
   }
   const from = Math.min(Number(last), boxes.indexOf(box));
   const to = Math.max(Number(last), boxes.indexOf(box));
+  const changed = [];
   for (let index = from; index <= to; index++) {
     boxes[index].checked = box.checked;
+    changed.push(boxes[index]);
   }
+  return changed;
+}
+
+function showKind(form, box) {
+  const label = box.closest(".leave-out");
+  const choice = form.querySelector("[data-kind-choice]");
+  const kind = box.checked ? choice.value : "";
+  label.querySelector('input[type="hidden"]').value = kind;
+  label.querySelector("[data-kind-name]").textContent = kind ? choice.selectedOptions[0].textContent : "Leave out";
 }
 
 const marker = document.querySelector("[data-marker]");
@@ -312,11 +408,16 @@ if (marker) {
     for (const box of marker.querySelectorAll('input[name="start"], input[name="skip"]')) {
       box.checked = false;
     }
+    for (const box of marker.querySelectorAll('input[name="skip"]')) {
+      showKind(marker, box);
+    }
     countMarks(marker);
   });
   marker.addEventListener("click", function (event) {
     if (event.target.matches('input[name="skip"]')) {
-      leaveOutRange(marker, event.target, event.shiftKey);
+      for (const box of leaveOutRange(marker, event.target, event.shiftKey)) {
+        showKind(marker, box);
+      }
       countMarks(marker);
     }
     const zoom = event.target.closest("[data-zoom]");

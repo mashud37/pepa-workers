@@ -174,12 +174,17 @@ def only_list_for(app_name, pdf_names, run_name):
 
 
 def exclude_list_for(app_name):
-    """Write the file names one app skips and return where; pepa-sum skips the text files of its PDFs."""
+    """Write the file names one app skips and return where; pepa-sum skips the text files of its PDFs.
+
+    An unchanged list is not written again, since another child may be reading it.
+    """
     names = set(load_excluded().get(app_name, []))
     if app_name == "pepa-sum":
         for pdf_name in list(names):
             names.update(prepared_names(Path(pdf_name).stem))
     path = excluded_file().with_name(f"excluded-{app_name}.json")
+    if path.exists() and json.loads(path.read_text(encoding="utf-8")) == sorted(names):
+        return path
     write_json(path, sorted(names))
     return path
 

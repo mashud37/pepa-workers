@@ -12,7 +12,7 @@
 <div class="page-head">
   <div class="heading">
     <h1>Mark chapters</h1>
-    <p class="supporting">Tick the first page of every chapter. Leave out the pages nothing should read, such as an index; shift-click a second Leave out to mark every page between. Then prepare the book again. {% if book.source == "found" %}The ticks show the chapters pepa-prep found.{% elif book.source == "marked" %}The ticks show your marks.{% endif %}</p>
+    <p class="supporting">Tick the first page of every chapter. Leave out the pages nothing should read, such as an index, and pick what they are under Leave out as; shift-click a second Leave out to mark every page between. Then prepare the book again. {% if book.source == "found" %}The ticks show the chapters pepa-prep found.{% elif book.source == "marked" %}The ticks show your marks.{% endif %}</p>
   </div>
 </div>
 
@@ -28,12 +28,17 @@
         <span class="page-number">Page {{ number }}</span>
         <button type="button" class="button icon zoom" data-zoom="{{ url_for('console.paper_page_image', file=book.relative, n=number, size='large') }}" aria-label="Enlarge page {{ number }}">{{ icon.open_new() }}</button>
       </label>
-      <label class="leave-out"><input type="checkbox" name="skip" value="{{ number }}"{% if number in book.skips %} checked{% endif %} aria-label="Leave out page {{ number }}">Leave out</label>
+      <label class="leave-out"><input type="checkbox" name="skip" value="{{ number }}"{% if number in book.skips %} checked{% endif %} aria-label="Leave out page {{ number }}"><span data-kind-name>{% if book.kinds.get(number) %}{{ kind_names[book.kinds[number]] }}{% else %}Leave out{% endif %}</span><input type="hidden" name="kind_{{ number }}" value="{{ book.kinds.get(number, '') }}"></label>
     </li>
     {% endfor %}
   </ol>
   <div class="marker-bar">
     <span class="grow" data-marker-count role="status"></span>
+    <label class="kind-choice"><span>Leave out as</span>
+      <select data-kind-choice aria-label="Leave out as">
+        {% for value, words in kind_names.items() %}<option value="{{ value }}">{{ words }}</option>{% endfor %}
+      </select>
+    </label>
     <button type="button" class="text" data-marker-clear>Clear all</button>
     <button class="filled">{{ icon.play() }}Save and prepare again</button>
   </div>

@@ -21,6 +21,7 @@ For books, **validate** grades the chapter files and **refine** repairs chapter 
 tell are wrong; tick **apply** to write the repairs.
 
 **Mark chapters** beside a paper on **Library** shows every page. Tick where each chapter starts and
-leave out pages nothing should read, such as an index, then prepare the paper again.
+leave out pages nothing should read, such as an index; **Leave out as** records what they are, and
+pages left out as Contents help find the chapters. Then prepare the paper again.
 
 Scanned PDFs need Tesseract. On Windows, install it with `winget install UB-Mannheim.TesseractOCR`.

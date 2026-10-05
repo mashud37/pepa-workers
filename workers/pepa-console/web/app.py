@@ -86,6 +86,7 @@ def run(port=None, open_browser=True):
     ui.step(f"serving pepa-console at {url}")
     logging.getLogger("werkzeug").setLevel(logging.WARNING)
     atexit.register(jobs.stop_all)
+    jobs.load_history()
     app = create_app()
     if open_browser:
         threading.Timer(BROWSER_DELAY_SECONDS, webbrowser.open, [url]).start()

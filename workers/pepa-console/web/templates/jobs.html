@@ -2,7 +2,19 @@
 {% import "_icons.html" as icon %}
 {% block title %}Jobs · pepa{% endblock %}
 {% block content %}
-<div class="page-head"><h1>Jobs</h1></div>
+<div class="page-head">
+  <h1>Jobs</h1>
+  <form class="filter keep-history" method="post" action="{{ url_for('console.jobs_history') }}">
+    <input type="hidden" name="token" value="{{ token }}">
+    <label class="field">
+      <span>Keep record of run jobs</span>
+      <select name="keep_days">
+        {% for days, label in keep_choices.items() %}<option value="{{ days }}"{% if days == keep_days %} selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </label>
+    <button class="tonal">Save</button>
+  </form>
+</div>
 <div data-region{% if refresh %} data-live="3000"{% endif %}>
 
 {% if not jobs and not chains %}
@@ -15,7 +27,7 @@
 {% for chain in chains %}
 <section class="card chain">
   <header>
-    <span class="title">Pipeline run</span>
+    <span class="title">Library run</span>
     <span class="meta">{{ chain.started_at }}</span>
     <span class="status status-{{ chain.status }}">{{ status_label[chain.status] }}</span>
   </header>

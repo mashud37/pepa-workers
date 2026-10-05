@@ -49,35 +49,35 @@
 <h2 class="section-title" id="papers">Papers</h2>
 <p class="supporting section-note">Tick papers to process only those, to skip them in a stage, or to remove their PDF copies.</p>
 <label class="drop-zone" for="copy-pdfs">{{ icon.copy_in() }}<span>Drop PDFs here, or anywhere on this page, to add them and process just those. Or click to choose them.</span></label>
-<form class="filter" method="get" action="{{ url_for('console.library') }}#papers" role="search">
+<form class="filter" id="paper-filter" method="get" action="{{ url_for('console.library') }}#papers" role="search">
   <label class="field grow">
     <span>Find by name</span>
     <input type="search" name="q" value="{{ wanted }}" placeholder="Part of a file name">
-  </label>
-  <label class="field">
-    <span>Length</span>
-    <select name="longer">
-      {% for pages in lengths %}<option value="{{ pages }}"{% if pages == longer_than %} selected{% endif %}>{% if pages %}Over {{ pages }} pages{% else %}Any length{% endif %}</option>{% endfor %}
-    </select>
   </label>
   <input type="hidden" name="sort" value="{{ sort }}">
   <button class="tonal">Show</button>
 </form>
 
-<p class="meta result-count" role="status">{{ "{:,}".format(listing.shown) }} of {{ "{:,}".format(listing.total) }} papers{% if listing.counting %} · counting pages for {{ "{:,}".format(listing.counting) }}, the length filter leaves them out until then{% endif %}</p>
+<div class="list-head">
+  <p class="meta result-count" role="status">{{ "{:,}".format(listing.shown) }} of {{ "{:,}".format(listing.total) }} papers{% if listing.counting %} · counting pages for {{ "{:,}".format(listing.counting) }}, the length filter leaves them out until then{% endif %}</p>
+  <button type="button" class="text reserve" data-tick-matching data-total="{{ listing.shown }}" data-url="{{ url_for('console.library_names', q=wanted, length=length) }}" hidden>Tick all {{ "{:,}".format(listing.shown) }} that match</button>
+</div>
 
 {% if listing.rows %}
-<form method="post" action="{{ url_for('console.papers_set_aside') }}" data-paper-list>
+<form method="post" action="{{ url_for('console.papers_set_aside') }}" data-paper-list data-collect-ticked>
   <input type="hidden" name="token" value="{{ token }}">
   <input type="hidden" name="back" value="{{ request.full_path }}#papers">
   <div class="bulk-bar">
-    <label class="check"><input type="checkbox" data-select-all>Tick all shown</label>
-    <span class="meta ticked-count" data-ticked-count role="status">0 ticked</span>
-    <span class="grow"></span>
-    <button class="text" name="action" value="skip-prep" disabled>Skip when preparing</button>
-    <button class="text" name="action" value="skip-sum" disabled>Skip when summarising</button>
-    <button class="text" name="action" value="include" disabled>Stop skipping</button>
-    {% if own_pdfs %}<button class="text danger" form="remove-copies" disabled>Remove PDF copies</button>{% endif %}
+    <span class="bulk-select">
+      <label class="check"><input type="checkbox" data-select-all>Tick all shown</label>
+      <span class="meta ticked-count" data-ticked-count role="status">0 ticked</span>
+    </span>
+    <span class="bulk-actions">
+      <button class="text" name="action" value="skip-prep" disabled>Skip when preparing</button>
+      <button class="text" name="action" value="skip-sum" disabled>Skip when summarising</button>
+      <button class="text" name="action" value="include" disabled>Stop skipping</button>
+      {% if own_pdfs %}<button class="text danger" form="remove-copies" disabled>Remove PDF copies</button>{% endif %}
+    </span>
   </div>
   <div class="card papers-card">
     <table class="papers-table">
@@ -87,7 +87,10 @@
           {% for column, label in [("name", "Name"), ("pages", "Pages"), ("prepared", "Prepared"), ("summarised", "Summarised")] %}
           {% set ascending = sort == column %}
           {% set descending = sort == "-" + column %}
-          <th{% if column == "pages" %} class="num"{% endif %} aria-sort="{% if ascending %}ascending{% elif descending %}descending{% else %}none{% endif %}"><a class="sort-link" href="{{ url_for('console.library', q=wanted, longer=longer_than, sort=('-' + column) if ascending else column) }}#papers">{{ label }}{% if ascending %} ↑{% elif descending %} ↓{% endif %}</a></th>
+          <th{% if column == "pages" %} class="num"{% endif %} aria-sort="{% if ascending %}ascending{% elif descending %}descending{% else %}none{% endif %}"><a class="sort-link" href="{{ url_for('console.library', q=wanted, length=length, sort=('-' + column) if ascending else column) }}#papers">{{ label }}{% if ascending %} ↑{% elif descending %} ↓{% endif %}</a>{% if column == "pages" %}
+            <select class="column-filter" name="length" form="paper-filter" aria-label="Show papers of this length" title="Books have over {{ book_pages }} pages, as pepa-prep counts them" data-submit-on-change>
+              {% for value, words in lengths.items() %}<option value="{{ value }}"{% if value == length %} selected{% endif %}>{{ words }}</option>{% endfor %}
+            </select>{% endif %}</th>
           {% endfor %}
           <th></th>
         </tr>
@@ -115,9 +118,9 @@
 {% endif %}
 {% if listing.pages > 1 %}
 <nav class="pager" aria-label="Pages of papers">
-  {% if listing.page > 1 %}<a class="button text" href="{{ url_for('console.library', q=wanted, longer=longer_than, sort=sort, page=listing.page - 1) }}#papers">{{ icon.back() }}Previous</a>{% endif %}
+  {% if listing.page > 1 %}<a class="button text" href="{{ url_for('console.library', q=wanted, length=length, sort=sort, page=listing.page - 1) }}#papers">{{ icon.back() }}Previous</a>{% endif %}
   <span class="meta">Page {{ listing.page }} of {{ listing.pages }}</span>
-  {% if listing.page < listing.pages %}<a class="button text" href="{{ url_for('console.library', q=wanted, longer=longer_than, sort=sort, page=listing.page + 1) }}#papers">Next</a>{% endif %}
+  {% if listing.page < listing.pages %}<a class="button text" href="{{ url_for('console.library', q=wanted, length=length, sort=sort, page=listing.page + 1) }}#papers">Next</a>{% endif %}
 </nav>
 {% endif %}
 {% else %}
@@ -130,9 +133,17 @@
   <form method="post" action="{{ url_for('console.library_run') }}" data-fetch="run" data-slot="pipeline-run" data-estimate-url="{{ url_for('console.library_estimate') }}">
     <input type="hidden" name="token" value="{{ token }}">
     <h2 id="run-title">Process papers</h2>
-    <p class="supporting">The ticked steps run in order, and papers already done are skipped. If a step fails, the steps after it do not run.</p>
+    <p class="supporting">Ticked steps run in order and skip papers already done.</p>
     <div class="only-line" data-only-line hidden>
-      <span data-only-count></span>
+      <details class="only-list">
+        <summary data-only-count></summary>
+        <ol data-only-page></ol>
+        <div class="only-pager" data-only-pager>
+          <button type="button" class="text" data-only-step="-1">Previous</button>
+          <span class="meta" data-only-range></span>
+          <button type="button" class="text" data-only-step="1">Next</button>
+        </div>
+      </details>
       <button type="button" class="text" data-only-clear>All papers instead</button>
     </div>
     <div data-only-names></div>

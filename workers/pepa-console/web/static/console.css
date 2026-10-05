@@ -361,7 +361,13 @@ dialog.dialog .actions { justify-content: flex-end; margin-top: 8px; }
 .step-options[hidden] { display: none; }
 .step-settings summary { cursor: pointer; color: var(--text-secondary); font-size: 13px; }
 .step-settings[open] { display: grid; gap: 8px; }
-.only-line { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
+.only-line { display: grid; grid-template-columns: 1fr auto; align-items: start; gap: 8px; margin: 0 0 8px; }
+.only-list { min-width: 0; }
+.only-list > summary, details[open].only-list > summary { padding: 10px 0; background: none; cursor: pointer; font-weight: 500; }
+.only-list ol { margin: 4px 0 0; padding-left: 28px; color: var(--text-secondary); font-size: 13px; }
+.only-list li { margin: 0 0 2px; overflow-wrap: anywhere; }
+.only-pager { display: flex; align-items: center; gap: 8px; }
+.only-pager[hidden] { display: none; }
 .run-now { margin: 0; padding: 8px 24px; overflow: hidden; border-bottom: 1px solid var(--outline); color: var(--text-secondary); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .run-now[hidden] { display: none; }
 .batches { display: grid; gap: 12px; margin: 16px 0 24px; }
@@ -375,10 +381,16 @@ dialog.dialog .actions { justify-content: flex-end; margin-top: 8px; }
 .dropping .drop-hint { display: flex; position: fixed; inset: 16px; z-index: 50; align-items: center; justify-content: center; border: 3px dashed var(--primary); border-radius: 24px; background: color-mix(in srgb, var(--surface) 85%, transparent); color: var(--primary); font-size: 22px; font-weight: 500; pointer-events: none; }
 .item-read { margin-left: 8px; }
 .only-line[hidden] { display: none; }
-.ticked-count { min-width: 9ch; font-variant-numeric: tabular-nums; }
+.ticked-count { min-width: 12ch; font-variant-numeric: tabular-nums; }
+.reserve[hidden] { display: inline-flex !important; visibility: hidden; }
+.papers-table th .select-button { display: inline-flex; width: auto; height: 28px; margin-left: 6px; padding: 0 4px 0 10px; background-position: right 4px center; background-size: 16px; font-size: 12px; vertical-align: middle; }
+.papers-table th .select-button span { padding-right: 18px; }
 .process-label { display: inline-block; min-width: 9.5em; text-align: left; }
 .section-note { margin: -4px 0 12px; }
-.bulk-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+.bulk-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin: 8px 0; }
+.bulk-select, .bulk-actions { display: flex; align-items: center; gap: 8px; }
+.list-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 40px; }
+.list-head .reserve { min-width: 14em; justify-content: flex-end; }
 .papers-card { overflow-x: auto; padding: 0; }
 .papers-table { width: 100%; border-collapse: collapse; }
 .papers-table th, .papers-table td { padding: 8px 12px; border-bottom: 1px solid var(--outline); text-align: left; white-space: nowrap; }
@@ -397,9 +409,12 @@ th[aria-sort="ascending"] .sort-link, th[aria-sort="descending"] .sort-link { co
 .page-tile:has(input:checked) { border-color: var(--primary); background: var(--primary-container); }
 .page-cell { display: flex; flex-direction: column; gap: 4px; }
 .page-cell:has(input[name="skip"]:checked) .page-tile { opacity: 0.4; }
-.leave-out { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 4px; border-radius: 8px; color: var(--text-secondary); font-size: 12px; cursor: pointer; user-select: none; }
+.leave-out { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 4px; border-radius: 8px; color: var(--text-secondary); font-size: 12px; white-space: nowrap; cursor: pointer; user-select: none; }
 .leave-out:hover { background: var(--surface-hover); }
 .leave-out:has(input:checked) { color: var(--error); }
+.marker-bar .grow { flex: 1; }
+.kind-choice { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 13px; }
+.kind-choice .select-button { width: auto; min-width: 11em; height: 40px; }
 .page-tile img { width: 100%; height: auto; aspect-ratio: 200 / 283; object-fit: contain; border: 1px solid var(--outline); border-radius: 4px; background: #fff; }
 .page-tile input { position: absolute; top: 14px; left: 14px; width: 20px; height: 20px; }
 .page-tile .page-number { color: var(--text-secondary); font-size: 12px; text-align: center; }
@@ -456,7 +471,8 @@ th[aria-sort="ascending"] .sort-link, th[aria-sort="descending"] .sort-link { co
 .prose th, .prose td { padding: 6px 12px; border: 1px solid var(--outline); text-align: left; vertical-align: top; }
 .filter { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-bottom: 12px; }
 .filter .grow { flex: 1 1 240px; }
-.result-count { margin: 0 0 12px; }
+.page-head .filter { margin-bottom: 0; }
+.result-count { margin: 0; }
 .file-list { margin: 0; padding: 0; list-style: none; }
 .row-link { display: flex; align-items: center; gap: 16px; min-height: 48px; padding: 8px 24px; color: inherit; }
 .row-link:hover { background: var(--surface-variant); }
@@ -477,11 +493,12 @@ th[aria-sort="ascending"] .sort-link, th[aria-sort="descending"] .sort-link { co
 
 /* ---- Motion ---- */
 
-/* Moving between pages cross-fades, and the highlighted tab slides to its new place. */
+/* Moving between pages cross-fades the page; the top bar changes at once. */
 @view-transition { navigation: auto; }
-.tabs a[aria-current="page"] { view-transition-name: current-tab; }
+.top { view-transition-name: top-bar; }
+::view-transition-group(top-bar), ::view-transition-new(top-bar) { animation: none; }
+::view-transition-old(top-bar) { display: none; }
 .buddy-button { view-transition-name: buddy; }
-::view-transition-group(current-tab) { animation-duration: var(--tab-slide, 0.32s); animation-timing-function: var(--ease); }
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.16s; }
 
 /* A page settles in from below, its cards and rows one after another. */
@@ -559,6 +576,7 @@ body.busy .buddy .ink rect { animation: write 1.4s steps(1, end) infinite; anima
 /* ---- Narrow screens and reduced motion ---- */
 
 @media (max-width: 760px) {
+  .bulk-actions { flex-wrap: wrap; }
   .top { gap: 16px; padding: 0 16px; }
   main { padding: 8px 16px 72px; }
   .flow { grid-template-columns: 1fr 1fr; }

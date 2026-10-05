@@ -14,7 +14,7 @@ OPTIONS_FILE_NAME = "options.json"
 # A "main" setting shows beside its stage in the Library's Process dialog; the rest sit under Settings.
 OPTIONS = {
     "pepa-prep": [
-        {"variable": "PEPAPREP_BOOK_PAGES", "label": "Treat a PDF as a book from this many pages", "low": 20, "high": 2000},
+        {"variable": "PEPAPREP_BOOK_PAGES", "label": "Treat a PDF as a book over this many pages", "low": 20, "high": 2000},
         {"variable": "PEPAPREP_OCR_DPI", "label": "Scan resolution for scanned pages, in dpi", "low": 72, "high": 600},
         {"variable": "PEPAPREP_WORKERS", "label": "PDFs prepared at once", "low": 1, "high": 16},
         {"variable": "PEPAPREP_MAX_CHAPTERS", "label": "Most chapters a book can have", "low": 1, "high": 500},
