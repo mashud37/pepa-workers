@@ -327,9 +327,10 @@ def _write_sidecar(sections, outliers, meta):
 
 
 def _load_index():
-    if not config.INDEX_FILE.exists():
+    from index.store import load_index
+    idx = load_index()
+    if idx is None:
         raise SystemExit(f"No index found. Run: {config.COMMAND} index")
-    idx = json.loads(config.INDEX_FILE.read_text(encoding="utf-8"))
     if not idx.get("records"):
         raise SystemExit("Index is empty.")
     return idx

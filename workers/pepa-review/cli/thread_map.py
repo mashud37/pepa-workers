@@ -97,9 +97,10 @@ def _index_by_base():
         dict with keys "by_base" (dict of base id to (record, vector) pair)
         and "model" (the index's provider/model string).
     """
-    if not config.INDEX_FILE.exists():
+    from index.store import load_index
+    idx = load_index()
+    if idx is None:
         raise SystemExit(f"No index found. Run: {config.COMMAND} index")
-    idx = json.loads(config.INDEX_FILE.read_text(encoding="utf-8"))
     by_base = {r["base"]: (r, v) for r, v in zip(idx["records"], idx["vectors"])}
     return {"by_base": by_base, "model": idx.get("model", "")}
 

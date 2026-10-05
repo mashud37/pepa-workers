@@ -5,6 +5,8 @@ from pathlib import Path
 import config
 
 NO_KEY = "no-key"
+# pepa-review keeps the index's vectors beside it, in index_vectors.npy.
+VECTORS_ENDING = "_vectors.npy"
 
 
 def _load(index_path: Path = None) -> dict:
@@ -15,7 +17,11 @@ def _load(index_path: Path = None) -> dict:
             f"Build it in pepa-review with: {config.REVIEW_COMMAND} index\n"
             "Or set review_index in secrets.yaml."
         )
-    return json.loads(p.read_text(encoding="utf-8"))
+    import numpy as np
+    index = json.loads(p.read_text(encoding="utf-8"))
+    if "vectors" not in index:
+        index["vectors"] = np.load(p.with_name(p.stem + VECTORS_ENDING))
+    return index
 
 
 def retrieve(query: str, k: int = None, restrict_bases: set = None, index_path: Path = None) -> list[dict]:

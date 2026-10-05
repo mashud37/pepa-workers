@@ -1,7 +1,6 @@
 """Assemble a literature review from works chosen by map browsing, keyword search, or a
 stem list, then draft or synthesise them into sections.
 """
-import json
 import os
 import re
 import subprocess
@@ -519,9 +518,10 @@ _INDEX_CACHE = None
 def _load_index():
     global _INDEX_CACHE
     if _INDEX_CACHE is None:
-        if not config.INDEX_FILE.exists():
+        from index.store import load_index
+        _INDEX_CACHE = load_index()
+        if _INDEX_CACHE is None:
             raise SystemExit(f"No index found. Run: {config.COMMAND} index")
-        _INDEX_CACHE = json.loads(config.INDEX_FILE.read_text(encoding="utf-8"))
     return _INDEX_CACHE
 
 

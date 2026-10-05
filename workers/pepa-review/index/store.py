@@ -1,8 +1,8 @@
-"""Build and query the sum_-level embedding index, one record per paper
-in data/index.json with its dense vector, retrieved by cosine or
-BM25+dense RRF when rank_bm25 is installed.
+"""Build and query the sum_-level embedding index: one record per paper in data/index.json, its vectors
+in data/index_vectors.npy, retrieved by cosine or BM25+dense RRF when rank_bm25 is installed.
 """
 import json
+import os
 import re
 
 import config
@@ -17,6 +17,7 @@ RRF_K = 60
 RELATED_FILE = config.DATA_DIR / "related.json"
 RELATED_COUNT = 10
 RELATED_ROWS_AT_ONCE = 1000
+VECTORS_FILE = config.INDEX_FILE.with_name(config.INDEX_FILE.stem + "_vectors.npy")
 
 
 def build_index(force=False, progress_cb=None, status_cb=None):
@@ -29,13 +30,15 @@ def build_index(force=False, progress_cb=None, status_cb=None):
         dict with keys "n_records" (total records now in the index) and
         "model_used" (the "provider/model_string" the index was built with).
     """
-    existing = _load_raw() or {}
+    existing = load_index() or {}
     existing_bases = {r["base"] for r in existing.get("records", [])}
 
     all_works = work_list()
     to_index = all_works if force else [w for w in all_works if w["base"] not in existing_bases]
 
     if not to_index:
+        if existing.get("records") and not VECTORS_FILE.exists():
+            _write_index(existing["records"], existing["vectors"], existing.get("model", ""))
         if existing.get("records") and not RELATED_FILE.exists():
             write_related(existing["records"], existing["vectors"])
         return {
@@ -225,27 +228,45 @@ def _rrf(rankings, rrf_k=RRF_K):
 
 
 def _write_index(records, vectors, model):
+    """Write the records as JSON and the vectors as one numpy array, each through a temporary file."""
+    import numpy as np
     provider = model.split("/", 1)[0] if model else ""
-    dim = len(vectors[0]) if vectors else 0
+    dim = len(vectors[0]) if len(vectors) else 0
     data = {
         "provider": provider,
         "model": model,
         "dim": dim,
         "records": records,
-        "vectors": vectors,
     }
     config.INDEX_FILE.parent.mkdir(parents=True, exist_ok=True)
-    config.INDEX_FILE.write_text(json.dumps(data), encoding="utf-8")
+    temporary_vectors = VECTORS_FILE.with_name(VECTORS_FILE.stem + ".tmp.npy")
+    np.save(temporary_vectors, np.array(vectors, dtype=np.float32))
+    os.replace(temporary_vectors, VECTORS_FILE)
+    temporary_records = config.INDEX_FILE.with_suffix(".tmp")
+    temporary_records.write_text(json.dumps(data), encoding="utf-8")
+    os.replace(temporary_records, config.INDEX_FILE)
 
 
-def _load_raw():
+def load_index():
+    """The index with its vectors as one numpy array, or None before the first build.
+
+    An index written before the vectors had their own file holds them in the JSON, and is read as such.
+    """
+    import numpy as np
     if not config.INDEX_FILE.exists():
         return None
-    return json.loads(config.INDEX_FILE.read_text(encoding="utf-8"))
+    data = json.loads(config.INDEX_FILE.read_text(encoding="utf-8"))
+    if "vectors" in data:
+        data["vectors"] = np.array(data["vectors"], dtype=np.float32)
+        return data
+    data["vectors"] = np.load(VECTORS_FILE)
+    if len(data["vectors"]) != len(data["records"]):
+        raise SystemExit(f"The index and its vectors disagree. Rebuild it: {config.COMMAND} index --force")
+    return data
 
 
 def _require_index():
-    idx = _load_raw()
+    idx = load_index()
     if not idx:
         raise SystemExit(f"No index found. Run: {config.COMMAND} index")
     return idx

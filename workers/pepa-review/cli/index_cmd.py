@@ -33,7 +33,7 @@ def run(force=False):
     elif config.INDEX_FILE.exists():
         import json
         existing = json.loads(config.INDEX_FILE.read_text(encoding="utf-8"))
-        done = len(existing.get("records", []))
+        done = len(existing["records"])
         ui.info(f"already indexed: {done} papers; will embed {total - done} new ones")
 
     sp = progress.StepSpinner("indexing")
