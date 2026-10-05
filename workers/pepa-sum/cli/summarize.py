@@ -212,13 +212,14 @@ def _estimate(n):
     """Rough wall-clock seconds for each mode at this volume. Parallel is bounded
     by the tier-realistic papers/hour (raising the worker counts won't beat the
     account's rate limit); batch carries a latency floor but very high throughput
-    once running, so it overtakes parallel on large volumes."""
-    cores = config.local_workers()
-    conc = config.throughput('MAX_CONCURRENCY')
+    once running, so it overtakes parallel on large volumes. Parallel runs whole
+    papers side by side, so it never uses more lanes than there are papers."""
+    cores = min(config.local_workers(), max(n, 1))
+    papers_at_once = min(config.throughput('PAPER_WORKERS'), config.throughput('MAX_CONCURRENCY'), max(n, 1))
     local_serial = n * config.EST_LOCAL_SECONDS
     llm_serial = n * config.EST_LLM_SECONDS
     serial = local_serial + llm_serial
-    parallel = max(local_serial / cores + llm_serial / conc,
+    parallel = max(local_serial / cores + llm_serial / papers_at_once,
                    n / config.est_parallel_pph() * 3600)
     estimates = {"serial": serial, "parallel": parallel}
     if config.load('BACKEND') == "anthropic":
