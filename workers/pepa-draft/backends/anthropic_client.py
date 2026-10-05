@@ -15,6 +15,8 @@ def _call_once(client, model, system, prompt, max_tokens):
         system=system,
         messages=[{"role": "user", "content": prompt}],
     )
+    if getattr(msg, "stop_reason", None) == "refusal":
+        raise SystemExit("The model declined to write this section.")
     return "".join(b.text for b in msg.content if getattr(b, "type", None) == "text").strip()
 
 

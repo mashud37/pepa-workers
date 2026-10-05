@@ -48,6 +48,8 @@ def complete(system, prompt, max_tokens=DEFAULT_MAX_TOKENS, model=None):
                 messages=[{"role": "user", "content": prompt}],
                 extra_body=_sampling(_model),
             )
+            if getattr(msg, "stop_reason", None) == "refusal":
+                raise SystemExit("The model declined to answer this request.")
             return "".join(
                 b.text for b in msg.content if getattr(b, "type", None) == "text"
             ).strip()

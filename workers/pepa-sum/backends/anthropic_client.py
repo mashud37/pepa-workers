@@ -189,6 +189,8 @@ def complete(system, prompt, max_tokens=DEFAULT_MAX_TOKENS, flag_truncation=Fals
             text = "".join(
                 b.text for b in msg.content if getattr(b, "type", None) == "text"
             ).strip()
+            if getattr(msg, "stop_reason", None) == "refusal":
+                raise RuntimeError("the model declined to answer for this paper")
             if flag_truncation and getattr(msg, "stop_reason", None) == "max_tokens":
                 raise Truncated(text)
             return text
@@ -290,12 +292,14 @@ def collect_batch(batch_id):
         if res.result.type != "succeeded":
             continue
         msg = res.result.message
+        _record_usage(msg)
+        if getattr(msg, "stop_reason", None) == "refusal":
+            continue
         results[res.custom_id] = "".join(
             b.text for b in msg.content if getattr(b, "type", None) == "text"
         ).strip()
         if getattr(msg, "stop_reason", None) == "max_tokens":
             truncated.add(res.custom_id)
-        _record_usage(msg)
     return {"results": results, "truncated": truncated}
 
 

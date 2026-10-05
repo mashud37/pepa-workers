@@ -148,6 +148,8 @@ def complete(system, prompt, max_tokens=_DEFAULT_MAX_TOKENS, model=None):
                     extra_body=_sampling(model),
                 )
             _tally(model, msg)
+            if getattr(msg, "stop_reason", None) == "refusal":
+                raise RuntimeError("the model declined to answer")
             return "".join(
                 b.text for b in msg.content if getattr(b, "type", None) == "text"
             ).strip()
@@ -240,10 +242,12 @@ def _collect_results(client, batch_id, sub, default_model):
         if res.result.type != "succeeded":
             continue
         msg = res.result.message
+        _tally(models.get(res.custom_id, default_model), msg, batch=True)
+        if getattr(msg, "stop_reason", None) == "refusal":
+            continue
         collected[res.custom_id] = "".join(
             b.text for b in msg.content if getattr(b, "type", None) == "text"
         ).strip()
-        _tally(models.get(res.custom_id, default_model), msg, batch=True)
     return collected
 
 
