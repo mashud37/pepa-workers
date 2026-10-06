@@ -17,7 +17,7 @@ methods, arguments, key conclusions, and discussion items.
 
 1. **Papers to summarise** is pepa-prep's prepared text, so prepare the PDFs first. **Folders** can
    point it at any folder of PDFs, markdown or text instead.
-2. Run **summarize**. Papers already summarised are skipped unless **force** is ticked.
+2. Run **summarize**. Papers already summarised are skipped unless **force** is ticked or their text has changed since.
 3. Open a file under **Summaries**. The buttons above it switch between the paper's brief,
    rundown, quotes and prepared text.
 
