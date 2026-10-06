@@ -16,13 +16,11 @@ flowchart TD
 
 | Page | What it does |
 |---|---|
-| Library | The papers and how far each stage has got; drop PDFs on it to add them, tick papers to process only those, and press Process papers to run the stages in order |
+| Library | The items and how far each stage has got; drop PDFs on it to add them, tick items to process only those, and press Process items to run the stages in order |
 | Apps | One page per worker, each command as a form with its live log, its run settings, and every file it reads or writes |
 | Search | The pepa-read search page |
-| Jobs | Every run since the console started |
-| Folders | The project folder, and where each worker reads and writes |
-| Models | Which model and server each worker writes and embeds with |
-| Keys | Store a key once and choose which workers get it |
+| Jobs | Every run, kept for as long as chosen there |
+| Settings | Folders: the project folder, and where each worker reads and writes. Models: which model and server each worker writes and embeds with. Keys: store a key once and choose which workers get it |
 | Guide | How to start, and what each worker does |
 
 ## Setup

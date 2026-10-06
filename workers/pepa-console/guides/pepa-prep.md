@@ -7,7 +7,8 @@ volumes. It runs on your computer and calls no model.
 
 Each PDF takes one of three routes. A paper becomes one text file. A long PDF is treated as a book
 and split into one file per chapter, using its bookmarks, its table of contents or its chapter
-headings. A scan is read with Tesseract first. Headers, footers, page numbers and reference lists
+headings. Front matter, the pages a book numbers in roman numerals, is left out. A scan is read
+with Tesseract first. Headers, footers, page numbers and reference lists
 are removed.
 
 ## Use it
