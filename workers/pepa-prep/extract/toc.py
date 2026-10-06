@@ -64,6 +64,12 @@ def _roman(token: str) -> int:
     return total
 
 
+def is_roman(label: str) -> bool:
+    """Whether a printed page number is a roman numeral, as books number their front matter."""
+    number = _page_no(label)
+    return number is not None and number["roman"]
+
+
 def _page_no(token: str) -> dict | None:
     t = _LEADER_RE.sub("", token).strip().strip("()[]")
     if not t:

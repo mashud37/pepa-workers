@@ -48,7 +48,7 @@ def _outline_results(doc, index: list, page_count: int, cfg: dict) -> list:
 
 
 def _toc_results(doc, pages: list, entries: list, index: list, cfg: dict) -> list:
-    chap = [e for e in entries if e["level"] <= 1]
+    chap = [e for e in entries if e["level"] <= 1 and not e["roman"]]
     if len(chap) < 2:
         return []
     offsets = []

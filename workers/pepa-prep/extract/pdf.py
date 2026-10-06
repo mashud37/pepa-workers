@@ -100,6 +100,15 @@ def page_with_label(doc, label):
     return None
 
 
+def page_label(doc, index):
+    """The printed label of a 0-based page, such as "ix" or "12", or an empty string when it has none."""
+    with LOCK:
+        try:
+            return doc.get_page_label(index) or ""
+        except Exception:
+            return ""
+
+
 def page_image(doc, index, dpi):
     """One page as a greyscale image for OCR."""
     with LOCK:

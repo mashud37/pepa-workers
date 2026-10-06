@@ -1,7 +1,7 @@
 """Per-file extraction workers for straight, book, and OCR routes."""
 from pathlib import Path
 
-from . import marks, pdf
+from . import marks, pdf, toc
 from .chapter import detect_chapters, split_into_chapters, write_chapters
 from .ocr import ocr_pages
 from .tables import doc_tables
@@ -59,6 +59,26 @@ def extract_straight(path: Path, out_dir: Path, cfg: dict) -> dict:
     return {"result": f"one file, {len(md):,} characters", "warnings": []}
 
 
+def drop_front_matter(doc, bounds: list) -> list:
+    """The chapter starts without front matter: units whose pages are mostly roman-numbered, as books number it.
+
+    The starts stay as found when fewer than two would be left.
+    """
+    page_count = pdf.page_count(doc)
+    ends = [bound["page"] for bound in bounds[1:]] + [page_count]
+    kept = []
+    for bound, end in zip(bounds, ends):
+        roman = 0
+        for page in range(bound["page"], end):
+            if toc.is_roman(pdf.page_label(doc, page)):
+                roman += 1
+        if roman * 2 <= end - bound["page"]:
+            kept.append(bound)
+    if len(kept) < 2:
+        return bounds
+    return kept
+
+
 def extract_book(path: Path, out_dir: Path, cfg: dict) -> dict:
     """Extract a born-digital PDF and split it into chapter files.
 
@@ -85,6 +105,7 @@ def extract_book(path: Path, out_dir: Path, cfg: dict) -> dict:
             }
             detected = detect_chapters(doc, every_page, dims, stats, dict(cfg, marked_pages=marked_pages))
             bounds, meta = detected["bounds"], detected["meta"]
+            bounds = drop_front_matter(doc, bounds)
     finally:
         pdf.close_pdf(doc)
     whole = segment(pages, stats, dk, tables)
