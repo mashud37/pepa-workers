@@ -17,34 +17,12 @@
 </div>
 <div data-region{% if refresh %} data-live="3000"{% endif %}>
 
-{% if not jobs and not chains %}
+{% if not jobs %}
 <div class="empty">
   <h2>Nothing has run yet</h2>
   <p class="supporting">Anything you start appears here with a live log.</p>
 </div>
 {% endif %}
-
-{% for chain in chains %}
-<section class="card chain">
-  <header>
-    <span class="title">Library run</span>
-    <span class="meta">{{ chain.started_at }}</span>
-    <span class="status status-{{ chain.status }}">{{ status_label[chain.status] }}</span>
-  </header>
-  <ol class="steps">
-    {% for step in chain.steps %}
-    <li>
-      {% if step.job_id %}
-      <a href="{{ url_for('console.job_page', job_id=step.job_id) }}"><span class="dot dot-{{ step.status }}"></span>{{ step.label }}</a>
-      {% else %}
-      <span><span class="dot dot-{{ step.status }}"></span>{{ step.label }}</span>
-      {% endif %}
-      {% if step.error %}<span class="meta">{{ step.error }}</span>{% endif %}
-    </li>
-    {% endfor %}
-  </ol>
-</section>
-{% endfor %}
 
 {% if jobs %}
 <div class="list">

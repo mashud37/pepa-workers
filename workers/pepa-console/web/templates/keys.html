@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% import "_icons.html" as icon %}
-{% block title %}Keys · pepa{% endblock %}
+{% block title %}Keys · Settings · pepa{% endblock %}
 {% block content %}
+{% include "_settings_tabs.html" %}
 <div class="page-head">
   <div class="heading">
-    <h1>Keys</h1>
-    <p class="supporting">Stored once on this computer. Each app gets the key chosen here, or reads its own file.</p>
+    <p class="supporting">Stored once on this computer. Pick the key each app uses. With none chosen, an app uses the key in its own settings file, env.yaml, if it has one.</p>
   </div>
   <button type="button" class="filled" data-open="key-dialog">{{ icon.plus() }}Add key</button>
 </div>
@@ -17,7 +17,7 @@
     <span class="name">{{ key.name }}</span>
     <span class="supporting mono">{{ key.variable }}</span>
     <span class="meta">{% if key.used_by %}{{ key.used_by | length }} app{% if key.used_by | length != 1 %}s{% endif %}{% else %}Unused{% endif %}</span>
-    <form method="post" action="{{ url_for('console.keys_delete') }}" data-confirm="Delete {{ key.name }}?" data-confirm-detail="Apps using it go back to their own file." data-confirm-button="Delete">
+    <form method="post" action="{{ url_for('console.keys_delete') }}" data-confirm="Delete {{ key.name }}?" data-confirm-detail="Apps using it are left with none chosen." data-confirm-button="Delete">
       <input type="hidden" name="token" value="{{ token }}">
       <input type="hidden" name="name" value="{{ key.name }}">
       <button class="icon" aria-label="Delete {{ key.name }}">{{ icon.remove() }}</button>
@@ -37,7 +37,7 @@
       <td class="mono supporting">{{ row.variable }}</td>
       <td class="select-cell">
         <select name="assign|{{ app.name }}|{{ row.variable }}" aria-label="{{ app.name }} {{ row.variable }}">
-          <option value="">Own file</option>
+          <option value="">None chosen</option>
           {% for option in row.options %}<option{% if option == row.chosen %} selected{% endif %}>{{ option }}</option>{% endfor %}
         </select>
       </td>

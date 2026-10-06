@@ -13,8 +13,12 @@ from web import batches, folders, options, paths
 from web.settings import SETTINGS
 
 PAGE_COUNTS_FILE_NAME = "page-counts.json"
-THUMBNAIL_WIDTH = 200
-LARGE_WIDTH = 1000
+# Page image widths in pixels: the Chapters page's tiles, its bigger tiles, and the enlarged page.
+PAGE_WIDTHS = {
+    "": 200,
+    "medium": 500,
+    "large": 1000,
+}
 JPEG_QUALITY = 75
 PAGE_SIZE = 100
 SAVE_COUNTS_EVERY = 200
@@ -32,6 +36,7 @@ BOOK_PAGES = 100
 LEAVE_OUT_KINDS = {
     "": "Not needed",
     "front": "Front matter",
+    "acknowledgements": "Acknowledgements",
     "contents": "Contents",
     "notes": "Notes",
     "bibliography": "Bibliography",

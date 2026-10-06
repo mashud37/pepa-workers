@@ -10,6 +10,13 @@ const CONFETTI_COLOURS = [
 ];
 const CONFETTI_PIECES = 18;
 const ONLY_PAGE_SIZE = 10;
+const TICKED_KEY = "pepa-ticked";
+const PAGE_SIZE_KEY = "pepa-page-size";
+const PAGE_IMAGE_SIZES = {
+  "": "200px",
+  medium: "340px",
+  large: "520px",
+};
 
 const THEME_NAMES = {
   system: "Theme: follows the system",
@@ -27,6 +34,8 @@ const MENU_STEPS = {
 };
 const openedMenu = {menu: null, anchor: null, pick: null};
 const ITEM_PREFIX = "pepa-item: ";
+const STEP_HEADING = "── ";
+const CONTINUE_NOTE = "This run did not finish. Continue runs the steps left for the same items; finished work is skipped.";
 
 const AFTER_SEND = {
   run: showRun,
@@ -57,6 +66,8 @@ document.addEventListener("submit", function (event) {
       input.value = name;
       form.append(input);
     }
+    ticked.clear();
+    saveTicks();
   }
   if (form.hasAttribute("data-batch-action")) {
     event.preventDefault();
@@ -86,6 +97,10 @@ document.addEventListener("click", function (event) {
   if (runClose) {
     closeRun(runClose.closest(".run"));
   }
+  const runHide = event.target.closest("[data-run-hide]");
+  if (runHide) {
+    runHide.closest("dialog").close();
+  }
   const dismiss = event.target.closest("[data-dismiss]");
   if (dismiss) {
     dismiss.closest(".snackbar").remove();
@@ -96,12 +111,12 @@ document.addEventListener("change", function (event) {
   if (event.target.matches("[data-select-all]")) {
     for (const box of event.target.form.querySelectorAll('input[name="name"]')) {
       box.checked = event.target.checked;
+      keepTick(box);
     }
-    allMatching = null;
-    showTickMatching(event.target.checked);
-  } else if (event.target.matches('[data-paper-list] input[name="name"]') && allMatching) {
-    allMatching = null;
-    showTickMatching(false);
+    showTickMatching();
+  } else if (event.target.matches('[data-paper-list] input[name="name"]')) {
+    keepTick(event.target);
+    showTickMatching();
   }
   if (event.target.matches("[data-submit-on-change]")) {
     event.target.form.requestSubmit();
@@ -140,17 +155,56 @@ if (runDialog && runDialog.querySelector("[data-estimate-url]")) {
   });
 }
 
-let allMatching = null;
+const ticked = new Set(savedTicks());
 
-function showTickMatching(pageTicked) {
+function savedTicks() {
+  try {
+    return JSON.parse(sessionStorage.getItem(TICKED_KEY) || "[]");
+  } catch (error) {
+    return [];
+  }
+}
+
+function saveTicks() {
+  try {
+    sessionStorage.setItem(TICKED_KEY, JSON.stringify(Array.from(ticked)));
+  } catch (error) {
+    return;
+  }
+}
+
+function keepTick(box) {
+  if (box.checked) {
+    ticked.add(box.value);
+  } else {
+    ticked.delete(box.value);
+  }
+  saveTicks();
+}
+
+function clearTicks() {
+  ticked.clear();
+  saveTicks();
+  for (const box of document.querySelectorAll('[data-paper-list] input[name="name"], [data-select-all]')) {
+    box.checked = false;
+  }
+  showTickMatching();
+  showTicked();
+}
+
+function showTickMatching() {
   const button = document.querySelector("[data-tick-matching]");
   if (!button) {
     return;
   }
   const total = Number(button.dataset.total);
-  const onPage = document.querySelectorAll('[data-paper-list] input[name="name"]').length;
-  button.hidden = !pageTicked || total <= onPage;
-  button.textContent = allMatching ? `Untick all ${total.toLocaleString()}` : `Tick all ${total.toLocaleString()} that match`;
+  const boxes = document.querySelectorAll('[data-paper-list] input[name="name"]');
+  const pageTicked = boxes.length > 0 && document.querySelectorAll('[data-paper-list] input[name="name"]:checked').length === boxes.length;
+  const offPage = ticked.size - document.querySelectorAll('[data-paper-list] input[name="name"]:checked').length;
+  const untick = offPage > 0 || (pageTicked && ticked.size >= total);
+  button.hidden = !untick && (!pageTicked || total <= boxes.length);
+  button.dataset.untick = untick ? "yes" : "";
+  button.textContent = untick ? `Untick all ${ticked.size.toLocaleString()}` : `Tick all ${total.toLocaleString()} that match`;
 }
 
 document.addEventListener("click", async function (event) {
@@ -158,41 +212,31 @@ document.addEventListener("click", async function (event) {
   if (!button) {
     return;
   }
-  const selectAll = document.querySelector("[data-select-all]");
-  if (allMatching) {
-    allMatching = null;
-    selectAll.checked = false;
-    for (const box of document.querySelectorAll('[data-paper-list] input[name="name"]')) {
-      box.checked = false;
-    }
-    showTickMatching(false);
-    showTicked();
+  if (button.dataset.untick) {
+    clearTicks();
     return;
   }
   const response = await fetch(button.dataset.url);
-  allMatching = (await response.json()).names;
-  showTickMatching(true);
+  for (const name of (await response.json()).names) {
+    ticked.add(name);
+  }
+  saveTicks();
+  showTickMatching();
   showTicked();
 });
 
 function tickedNames() {
-  if (allMatching) {
-    return allMatching.slice();
-  }
-  const names = [];
-  for (const box of document.querySelectorAll('[data-paper-list] input[name="name"]:checked')) {
-    names.push(box.value);
-  }
-  return names;
+  return Array.from(ticked);
 }
 
 function showTicked() {
-  const count = tickedNames().length;
+  const count = ticked.size;
   const note = document.querySelector("[data-ticked-count]");
   if (!note) {
     return;
   }
-  note.textContent = `${count} ticked`;
+  const onPage = document.querySelectorAll('[data-paper-list] input[name="name"]:checked').length;
+  note.textContent = count > onPage ? `${count.toLocaleString()} ticked, ${(count - onPage).toLocaleString()} on other pages` : `${count.toLocaleString()} ticked`;
   const removeForm = document.getElementById("remove-copies");
   if (removeForm) {
     removeForm.dataset.confirm = count === 1 ? "Remove this PDF copy?" : `Remove ${count} PDF copies?`;
@@ -200,7 +244,7 @@ function showTicked() {
   for (const button of document.querySelectorAll("[data-paper-list] .bulk-bar button")) {
     button.disabled = count === 0;
   }
-  document.querySelector("[data-process-label]").textContent = count ? `Process ${count} ticked` : "Process papers";
+  document.querySelector("[data-process-label]").textContent = count ? `Process ${count} ticked` : "Process items";
 }
 
 document.addEventListener("change", function (event) {
@@ -208,6 +252,18 @@ document.addEventListener("change", function (event) {
     showTicked();
   }
 });
+
+const paperList = document.querySelector("[data-paper-list]");
+if (paperList) {
+  const boxes = paperList.querySelectorAll('input[name="name"]');
+  for (const box of boxes) {
+    box.checked = ticked.has(box.value);
+  }
+  const onPage = paperList.querySelectorAll('input[name="name"]:checked').length;
+  paperList.querySelector("[data-select-all]").checked = boxes.length > 0 && onPage === boxes.length;
+  showTickMatching();
+  showTicked();
+}
 
 function setOnly(form, names, which) {
   const holder = form.querySelector("[data-only-names]");
@@ -220,7 +276,7 @@ function setOnly(form, names, which) {
     holder.append(input);
   }
   form.querySelector("[data-only-line]").hidden = names.length === 0;
-  const papers = names.length === 1 ? `the ${which} paper` : `the ${names.length} ${which} papers`;
+  const papers = names.length === 1 ? `the ${which} item` : `the ${names.length.toLocaleString()} ${which} items`;
   form.querySelector("[data-only-count]").textContent = `Only ${papers}`;
   form.querySelector(".only-list").open = false;
   showOnlyPage(form, 0);
@@ -284,7 +340,7 @@ async function loadEstimate(form) {
 }
 
 const ESTIMATE_WORDS = {
-  "pepa-sum": {line: "to summarise", ask: "summarise", done: "nothing to summarise: every paper is done or skipped", first: "prepared"},
+  "pepa-sum": {line: "to summarise", ask: "summarise", done: "nothing to summarise: every item is done or skipped", first: "prepared"},
   "pepa-plan": {line: "to learn writing patterns from", ask: "learn writing patterns from", done: "nothing new to learn from", first: "summarised"},
 };
 
@@ -340,7 +396,7 @@ function describeEstimate(app, data, options) {
   if (mode === "" || mode === "auto") {
     mode = data.auto;
   }
-  const count = `${data.papers.toLocaleString()} paper${data.papers === 1 ? "" : "s"}`;
+  const count = `${data.papers.toLocaleString()} item${data.papers === 1 ? "" : "s"}`;
   let text = `${count} ${words.line} with ${data.model}`;
   if (data.more > 0) {
     text += ` (${data.more.toLocaleString()} of them ${words.first} first)`;
@@ -401,9 +457,36 @@ function showKind(form, box) {
   label.querySelector("[data-kind-name]").textContent = kind ? choice.selectedOptions[0].textContent : "Leave out";
 }
 
+function showPageSize(form, size) {
+  form.querySelector("[data-page-grid]").dataset.size = size;
+  for (const image of form.querySelectorAll(".page-tile img")) {
+    image.sizes = PAGE_IMAGE_SIZES[size];
+  }
+  try {
+    localStorage.setItem(PAGE_SIZE_KEY, size);
+  } catch (error) {
+    return;
+  }
+}
+
+function savedPageSize() {
+  try {
+    const size = localStorage.getItem(PAGE_SIZE_KEY) || "";
+    return size in PAGE_IMAGE_SIZES ? size : "";
+  } catch (error) {
+    return "";
+  }
+}
+
 const marker = document.querySelector("[data-marker]");
 if (marker) {
   countMarks(marker);
+  const sizeChoice = marker.querySelector("[data-page-size]");
+  sizeChoice.value = savedPageSize();
+  showPageSize(marker, sizeChoice.value);
+  sizeChoice.addEventListener("change", function () {
+    showPageSize(marker, sizeChoice.value);
+  });
   marker.querySelector("[data-marker-clear]").addEventListener("click", function () {
     for (const box of marker.querySelectorAll('input[name="start"], input[name="skip"]')) {
       box.checked = false;
@@ -523,6 +606,23 @@ for (const panel of document.querySelectorAll(".run")) {
   followRun(panel);
 }
 
+const runWindow = document.querySelector(".run-window");
+if (runWindow) {
+  const runPill = document.querySelector("[data-run-show]");
+  runWindow.addEventListener("close", function () {
+    runPill.hidden = runWindow.querySelector(".run") === null;
+  });
+  runPill.addEventListener("click", function () {
+    runPill.hidden = true;
+    runWindow.showModal();
+  });
+  if (runWindow.hasAttribute("data-open-on-load")) {
+    runWindow.showModal();
+  } else {
+    runPill.hidden = runWindow.querySelector(".run") === null;
+  }
+}
+
 const liveRegion = document.querySelector("[data-live]");
 if (liveRegion) {
   keepRegionFresh(liveRegion);
@@ -544,6 +644,8 @@ for (const select of document.querySelectorAll("select")) {
 }
 document.addEventListener("click", handleMenuClick);
 document.addEventListener("keydown", handleMenuKeys);
+document.addEventListener("scroll", closeMenuOnScroll, true);
+window.addEventListener("resize", closeMenu);
 labelThemeButton();
 
 
@@ -583,10 +685,17 @@ async function sendForm(form) {
 
 function showRun(form, data) {
   const slot = document.getElementById(form.dataset.slot);
-  slot.innerHTML = data.panel;
   const dialog = form.closest("dialog");
-  if (dialog) {
+  if (dialog && dialog !== slot) {
     dialog.close();
+  }
+  slot.innerHTML = data.panel;
+  if (form.querySelector('[data-only-names] input[name="only"]')) {
+    clearTicks();
+  }
+  if (slot.tagName === "DIALOG" && !slot.open) {
+    document.querySelector("[data-run-show]").hidden = true;
+    slot.showModal();
   }
   followRun(slot.querySelector(".run"));
 }
@@ -670,7 +779,12 @@ function closeRun(panel) {
   const body = new FormData();
   body.append("token", panel.querySelector('input[name="token"]').value);
   fetch(panel.querySelector("[data-run-close]").dataset.runClose, {method: "POST", body: body});
+  const runWindow = panel.closest(".run-window");
   panel.remove();
+  if (runWindow) {
+    runWindow.close();
+    document.querySelector("[data-run-show]").hidden = true;
+  }
 }
 
 function showMessage(text) {
@@ -750,7 +864,9 @@ function showNow(panel, data, shown) {
       latest = plain;
     }
   }
-  now.hidden = data.status !== "running";
+  const box = panel.querySelector("[data-items]");
+  const ownItems = !box.hidden && box.dataset.stepLabel === (panel.dataset.heading || "");
+  now.hidden = data.status !== "running" || ownItems;
   if (latest) {
     now.textContent = latest;
   }
@@ -759,6 +875,9 @@ function showNow(panel, data, shown) {
 function takeItemEvents(panel, lines) {
   const shown = [];
   for (const line of lines) {
+    if (line.startsWith(STEP_HEADING)) {
+      panel.dataset.heading = line.slice(STEP_HEADING.length);
+    }
     if (line.startsWith(ITEM_PREFIX)) {
       const parts = line.slice(ITEM_PREFIX.length).split(" | ");
       showItem(panel, parts[0], parts[1], parts.slice(2).join(" | "));
@@ -777,6 +896,7 @@ function showItem(panel, state, name, detail) {
     box.hidden = false;
     panel.querySelector("[data-log-details]").open = false;
     box.dataset.total = name;
+    box.dataset.stepLabel = panel.dataset.heading || "";
     box.dataset.markTime = Date.now();
     box.dataset.markFinished = 0;
     box.dataset.finished = 0;
@@ -834,6 +954,9 @@ function countItems(box) {
   const finished = Number(box.dataset.finished);
   const failed = Number(box.dataset.failed);
   let text = `${finished} of ${total} done`;
+  if (box.dataset.stepLabel) {
+    text = `${box.dataset.stepLabel}: ${text}`;
+  }
   if (failed > 0) {
     text += ` · ${failed} failed`;
   }
@@ -900,7 +1023,9 @@ function showState(panel, data) {
     stop.action = data.cancel_url;
   }
   panel.querySelector("[data-run-close]").hidden = data.status === "running";
-  if (data.status === "cancelled" && !panel.closest(".run-page")) {
+  showAsk(panel, data);
+  showPill(panel, data);
+  if (data.status === "cancelled" && before === "running" && !panel.closest(".run-page")) {
     closeRun(panel);
     showMessage("Stopped. Finished work is kept and skipped next time.");
     return;
@@ -929,6 +1054,34 @@ function showState(panel, data) {
   }
   badge.textContent = data.running;
   badge.hidden = data.running === 0;
+}
+
+function showAsk(panel, data) {
+  const ask = panel.querySelector("[data-ask]");
+  if (!ask) {
+    return;
+  }
+  ask.hidden = !data.can_continue;
+  const paused = data.status === "paused";
+  ask.querySelector("[data-ask-text]").textContent = paused ? data.question : CONTINUE_NOTE;
+  ask.querySelector("[data-ask-approve]").value = paused ? "yes" : "";
+  ask.querySelector("[data-ask-button]").textContent = paused ? "Approve and continue" : "Continue";
+}
+
+function showPill(panel, data) {
+  const pill = document.querySelector("[data-run-show]");
+  if (!pill || !panel.closest(".run-window")) {
+    return;
+  }
+  const box = panel.querySelector("[data-items]");
+  let text = `Library run · ${data.label}`;
+  if (data.status === "running" && !box.hidden && box.dataset.stepLabel === panel.dataset.heading) {
+    text += " · " + box.querySelector("[data-items-count]").textContent;
+  } else if (data.status === "running" && panel.dataset.heading) {
+    text += " · " + panel.dataset.heading;
+  }
+  pill.querySelector("[data-pill-text]").textContent = text;
+  pill.querySelector("[data-pill-dot]").className = "dot dot-" + data.status;
 }
 
 function showDot(dot, stepStatus) {
@@ -1159,16 +1312,14 @@ function openMenu(anchor, groups, chosen, pick) {
   }
   const box = (anchor.closest(".combo") || anchor).getBoundingClientRect();
   menu.style.minWidth = box.width + "px";
-  const dialog = anchor.closest("dialog");
-  if (dialog) {
-    const frame = dialog.getBoundingClientRect();
-    menu.style.left = box.left - frame.left - dialog.clientLeft + dialog.scrollLeft + "px";
-    menu.style.top = box.bottom - frame.top - dialog.clientTop + dialog.scrollTop + 4 + "px";
-    dialog.append(menu);
+  menu.classList.add("menu-fixed");
+  menu.style.left = box.left + "px";
+  (anchor.closest("dialog") || document.body).append(menu);
+  const roomBelow = window.innerHeight - box.bottom;
+  if (menu.offsetHeight + 8 > roomBelow && box.top > roomBelow) {
+    menu.style.bottom = window.innerHeight - box.top + 4 + "px";
   } else {
-    menu.style.left = box.left + window.scrollX + "px";
-    menu.style.top = box.bottom + window.scrollY + 4 + "px";
-    document.body.append(menu);
+    menu.style.top = box.bottom + 4 + "px";
   }
   anchor.setAttribute("aria-expanded", "true");
   openedMenu.menu = menu;
@@ -1176,7 +1327,8 @@ function openMenu(anchor, groups, chosen, pick) {
   openedMenu.pick = pick;
   const first = menu.querySelector('[aria-selected="true"]') || menu.querySelector(".menu-option");
   if (first) {
-    first.focus();
+    first.focus({preventScroll: true});
+    first.scrollIntoView({block: "nearest"});
   }
 }
 
@@ -1197,6 +1349,12 @@ function menuOption(item, chosen) {
     option.append(detail);
   }
   return option;
+}
+
+function closeMenuOnScroll(event) {
+  if (openedMenu.menu && !openedMenu.menu.contains(event.target)) {
+    closeMenu();
+  }
 }
 
 function closeMenu() {

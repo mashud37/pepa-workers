@@ -19,12 +19,12 @@
 <form method="post" action="{{ url_for('console.chapters_save') }}" class="marker" data-marker>
   <input type="hidden" name="token" value="{{ token }}">
   <input type="hidden" name="file" value="{{ book.relative }}">
-  <ol class="page-grid">
+  <ol class="page-grid" data-page-grid>
     {% for number in range(1, book.pages + 1) %}
     <li class="page-cell">
       <label class="page-tile">
         <input type="checkbox" name="start" value="{{ number }}"{% if number in book.starts %} checked{% endif %} aria-label="Chapter starts on page {{ number }}">
-        <img src="{{ url_for('console.paper_page_image', file=book.relative, n=number) }}" alt="" loading="lazy" width="200" height="283">
+        <img src="{{ url_for('console.paper_page_image', file=book.relative, n=number) }}" srcset="{{ url_for('console.paper_page_image', file=book.relative, n=number) }} 200w, {{ url_for('console.paper_page_image', file=book.relative, n=number, size='medium') }} 500w, {{ url_for('console.paper_page_image', file=book.relative, n=number, size='large') }} 1000w" sizes="200px" alt="" loading="lazy" width="200" height="283">
         <span class="page-number">Page {{ number }}</span>
         <button type="button" class="button icon zoom" data-zoom="{{ url_for('console.paper_page_image', file=book.relative, n=number, size='large') }}" aria-label="Enlarge page {{ number }}">{{ icon.open_new() }}</button>
       </label>
@@ -37,6 +37,13 @@
     <label class="kind-choice"><span>Leave out as</span>
       <select data-kind-choice aria-label="Leave out as">
         {% for value, words in kind_names.items() %}<option value="{{ value }}">{{ words }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="kind-choice"><span>Page size</span>
+      <select data-page-size aria-label="Page size">
+        <option value="">Small</option>
+        <option value="medium">Medium</option>
+        <option value="large">Large</option>
       </select>
     </label>
     <button type="button" class="text" data-marker-clear>Clear all</button>

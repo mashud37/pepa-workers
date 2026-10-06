@@ -5,7 +5,7 @@
 <div class="page-head">
   <div class="heading">
     <h1>Library</h1>
-    <p class="supporting">Your papers and how far each stage has got. Drop PDFs here to add them.</p>
+    <p class="supporting">Your items and how far each stage has got. Drop PDFs here to add them.</p>
   </div>
   <div class="actions">
     <a class="button text" href="{{ url_for('console.folders_page') }}">{{ icon.folder() }}Link a source folder</a>
@@ -14,7 +14,7 @@
       <label class="button tonal file-button">{{ icon.copy_in() }}Copy PDFs in<input type="file" id="copy-pdfs" name="pdfs" accept=".pdf" multiple class="visually-hidden" data-copy data-process-after></label>
       <div class="snackbar copy-progress" role="status" data-copy-status hidden><span class="copy-count"></span><span class="copy-name"></span><span class="copy-bar"><span></span></span></div>
     </form>
-    <button type="button" class="filled" data-open="run-dialog" data-process-all>{{ icon.play() }}<span class="process-label" data-process-label>Process papers</span></button>
+    <button type="button" class="filled" data-open="run-dialog" data-process-all>{{ icon.play() }}<span class="process-label" data-process-label>Process items</span></button>
   </div>
 </div>
 
@@ -24,7 +24,7 @@
   <ol>
     <li><a href="{{ url_for('console.keys_page') }}">Add an Anthropic API key</a>. Summaries, reviews, outlines and drafts need one; preparing PDFs and searching do not.</li>
     <li>Copy PDFs in with the button above, or <a href="{{ url_for('console.folders_page') }}">link a folder</a> of papers you already have.</li>
-    <li>Press <strong>Process papers</strong>.</li>
+    <li>Press <strong>Process items</strong>.</li>
   </ol>
   <p class="supporting"><a href="{{ url_for('console.guide_page', name='index') }}">Read the guide</a> for what each worker does.</p>
 </section>
@@ -42,12 +42,13 @@
 
 <div class="drop-hint" aria-hidden="true"><span>Drop PDFs to add and process them</span></div>
 
-<div class="run-slot pipeline-run" id="pipeline-run">
+<dialog class="dialog run-window" id="pipeline-run" aria-label="Library run"{% if chain and chain.status == "paused" %} data-open-on-load{% endif %}>
   {% if chain %}{% with run = chain, log_url = url_for('console.chain_log', chain_id=chain.id) %}{% include "_run.html" %}{% endwith %}{% endif %}
-</div>
+</dialog>
+<button type="button" class="run-pill" data-run-show hidden><span class="dot" data-pill-dot></span><span data-pill-text>Library run</span></button>
 
-<h2 class="section-title" id="papers">Papers</h2>
-<p class="supporting section-note">Tick papers to process only those, to skip them in a stage, or to remove their PDF copies.</p>
+<h2 class="section-title" id="papers">Items</h2>
+<p class="supporting section-note">Tick items to process only those, to skip them in a stage, or to remove their PDF copies.</p>
 <label class="drop-zone" for="copy-pdfs">{{ icon.copy_in() }}<span>Drop PDFs here, or anywhere on this page, to add them and process just those. Or click to choose them.</span></label>
 <form class="filter" id="paper-filter" method="get" action="{{ url_for('console.library') }}#papers" role="search">
   <label class="field grow">
@@ -59,7 +60,7 @@
 </form>
 
 <div class="list-head">
-  <p class="meta result-count" role="status">{{ "{:,}".format(listing.shown) }} of {{ "{:,}".format(listing.total) }} papers{% if listing.counting %} · counting pages for {{ "{:,}".format(listing.counting) }}, the length filter leaves them out until then{% endif %}</p>
+  <p class="meta result-count" role="status">{{ "{:,}".format(listing.shown) }} of {{ "{:,}".format(listing.total) }} items{% if listing.counting %} · counting pages for {{ "{:,}".format(listing.counting) }}, the length filter leaves them out until then{% endif %}</p>
   <button type="button" class="text reserve" data-tick-matching data-total="{{ listing.shown }}" data-url="{{ url_for('console.library_names', q=wanted, length=length) }}" hidden>Tick all {{ "{:,}".format(listing.shown) }} that match</button>
 </div>
 
@@ -67,43 +68,40 @@
 <form method="post" action="{{ url_for('console.papers_set_aside') }}" data-paper-list data-collect-ticked>
   <input type="hidden" name="token" value="{{ token }}">
   <input type="hidden" name="back" value="{{ request.full_path }}#papers">
-  <div class="bulk-bar">
-    <span class="bulk-select">
-      <label class="check"><input type="checkbox" data-select-all>Tick all shown</label>
-      <span class="meta ticked-count" data-ticked-count role="status">0 ticked</span>
-    </span>
-    <span class="bulk-actions">
-      <button class="text" name="action" value="skip-prep" disabled>Skip when preparing</button>
-      <button class="text" name="action" value="skip-sum" disabled>Skip when summarising</button>
-      <button class="text" name="action" value="include" disabled>Stop skipping</button>
-      {% if own_pdfs %}<button class="text danger" form="remove-copies" disabled>Remove PDF copies</button>{% endif %}
-    </span>
-  </div>
   <div class="card papers-card">
+    <div class="bulk-bar">
+      <span class="ticked-count" data-ticked-count role="status">0 ticked</span>
+      <span class="bulk-actions">
+        <button class="text" name="action" value="skip-prep" disabled>Skip when preparing</button>
+        <button class="text" name="action" value="skip-sum" disabled>Skip when summarising</button>
+        <button class="text" name="action" value="include" disabled>Stop skipping</button>
+        {% if own_pdfs %}<button class="text danger" form="remove-copies" disabled>Remove PDF copies</button>{% endif %}
+      </span>
+    </div>
     <table class="papers-table">
       <thead>
         <tr>
-          <th></th>
+          <th class="tick"><input type="checkbox" data-select-all aria-label="Tick all shown"></th>
           {% for column, label in [("name", "Name"), ("pages", "Pages"), ("prepared", "Prepared"), ("summarised", "Summarised")] %}
           {% set ascending = sort == column %}
           {% set descending = sort == "-" + column %}
-          <th{% if column == "pages" %} class="num"{% endif %} aria-sort="{% if ascending %}ascending{% elif descending %}descending{% else %}none{% endif %}"><a class="sort-link" href="{{ url_for('console.library', q=wanted, length=length, sort=('-' + column) if ascending else column) }}#papers">{{ label }}{% if ascending %} ↑{% elif descending %} ↓{% endif %}</a>{% if column == "pages" %}
-            <select class="column-filter" name="length" form="paper-filter" aria-label="Show papers of this length" title="Books have over {{ book_pages }} pages, as pepa-prep counts them" data-submit-on-change>
+          <th class="{% if column == 'pages' %}num{% endif %}{% if column == 'name' %} name-head{% endif %}" aria-sort="{% if ascending %}ascending{% elif descending %}descending{% else %}none{% endif %}"><span class="head-cell">{% if column == "pages" %}
+            <select class="column-filter" name="length" form="paper-filter" aria-label="Show items of this length" title="Books have over {{ book_pages }} pages, as pepa-prep counts them" data-submit-on-change>
               {% for value, words in lengths.items() %}<option value="{{ value }}"{% if value == length %} selected{% endif %}>{{ words }}</option>{% endfor %}
-            </select>{% endif %}</th>
+            </select>{% endif %}<a class="sort-link" href="{{ url_for('console.library', q=wanted, length=length, sort=('-' + column) if ascending else column) }}#papers">{{ label }}<span class="sort-arrow" aria-hidden="true">{% if ascending %}↑{% elif descending %}↓{% endif %}</span></a></span></th>
           {% endfor %}
-          <th></th>
+          <th><span class="visually-hidden">Chapters</span></th>
         </tr>
       </thead>
       <tbody>
         {% for row in listing.rows %}
         <tr>
-          <td><input type="checkbox" name="name" value="{{ row.name }}" aria-label="Select {{ row.name }}"></td>
+          <td class="tick"><input type="checkbox" name="name" value="{{ row.name }}" aria-label="Select {{ row.name }}"></td>
           <td class="paper-name" title="{{ row.name }}">{{ row.name }}</td>
           <td class="num">{% if row.pages is none %}…{% else %}{{ "{:,}".format(row.pages) }}{% endif %}</td>
           <td{% if row.skip_prep %} class="skipped"{% endif %}>{% if row.skip_prep %}<span class="chip">Skipped</span> {% endif %}{% if row.prepared > 1 %}{{ row.prepared }} chapters{% elif row.prepared == 1 %}One file{% else %}Not yet{% endif %}</td>
           <td{% if row.skip_sum %} class="skipped"{% endif %}>{% if row.skip_sum %}<span class="chip">Skipped</span> {% endif %}{% if row.prepared and row.summarised == row.prepared %}Done{% elif row.in_batch %}In a batch{% elif row.summarised %}{{ row.summarised }} of {{ row.prepared }}{% else %}Not yet{% endif %}</td>
-          <td>{% if row.removed %}<span class="chip">PDF removed</span>{% else %}<a class="button text" href="{{ url_for('console.chapters_page', file=row.relative) }}">{% if row.marked %}Chapters marked{% else %}Mark chapters{% endif %}</a>{% endif %}</td>
+          <td class="row-action">{% if row.removed %}<span class="chip">PDF removed</span>{% else %}<a class="button text" href="{{ url_for('console.chapters_page', file=row.relative) }}">{% if row.marked %}Chapters marked{% else %}Mark chapters{% endif %}</a>{% endif %}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -117,7 +115,7 @@
 </form>
 {% endif %}
 {% if listing.pages > 1 %}
-<nav class="pager" aria-label="Pages of papers">
+<nav class="pager" aria-label="Pages of items">
   {% if listing.page > 1 %}<a class="button text" href="{{ url_for('console.library', q=wanted, length=length, sort=sort, page=listing.page - 1) }}#papers">{{ icon.back() }}Previous</a>{% endif %}
   <span class="meta">Page {{ listing.page }} of {{ listing.pages }}</span>
   {% if listing.page < listing.pages %}<a class="button text" href="{{ url_for('console.library', q=wanted, length=length, sort=sort, page=listing.page + 1) }}#papers">Next</a>{% endif %}
@@ -129,11 +127,11 @@
 </div>
 {% endif %}
 
-<dialog id="run-dialog" class="dialog" aria-labelledby="run-title">
+<dialog id="run-dialog" class="dialog process-dialog" aria-labelledby="run-title">
   <form method="post" action="{{ url_for('console.library_run') }}" data-fetch="run" data-slot="pipeline-run" data-estimate-url="{{ url_for('console.library_estimate') }}">
     <input type="hidden" name="token" value="{{ token }}">
-    <h2 id="run-title">Process papers</h2>
-    <p class="supporting">Ticked steps run in order and skip papers already done.</p>
+    <h2 id="run-title">Process items</h2>
+    <p class="supporting">Ticked steps run in order and skip items already done.</p>
     <div class="only-line" data-only-line hidden>
       <details class="only-list">
         <summary data-only-count></summary>
@@ -144,12 +142,12 @@
           <button type="button" class="text" data-only-step="1">Next</button>
         </div>
       </details>
-      <button type="button" class="text" data-only-clear>All papers instead</button>
+      <button type="button" class="text" data-only-clear>All items instead</button>
     </div>
     <div data-only-names></div>
     <div class="checklist">
       {% for step in steps %}
-      <label class="check"><input type="checkbox" name="step" value="{{ step.app }} {{ step.command }}"{% if step.missing %} disabled{% elif not step.needs %} checked{% endif %}{% if step.estimated %} data-estimate-step="{{ step.app }}"{% endif %}><span class="grow">{{ step.label }}{% if step.missing == "keys" %}<a class="check-note" href="{{ url_for('console.keys_page') }}">Add a key on the Keys page first.</a>{% elif step.missing == "models" %}<a class="check-note" href="{{ url_for('console.models_page') }}">Choose an embedding model on the Models page first.</a>{% endif %}</span>{% if step.needs %}<span class="chip">API costs</span>{% endif %}</label>
+      <label class="check"><input type="checkbox" name="step" value="{{ step.app }} {{ step.command }}"{% if step.missing %} disabled{% elif not step.needs %} checked{% endif %}{% if step.estimated %} data-estimate-step="{{ step.app }}"{% endif %}><span class="grow">{{ step.label }}{% if step.missing == "keys" %}<a class="check-note" href="{{ url_for('console.keys_page') }}">Add a key in Settings first.</a>{% elif step.missing == "models" %}<a class="check-note" href="{{ url_for('console.models_page') }}">Choose an embedding model in Settings first.</a>{% endif %}</span>{% if step.needs %}<span class="chip">API costs</span>{% endif %}</label>
       {% if not step.missing and step.settings %}
       <div class="step-options"{% if step.estimated %} data-step-options="{{ step.app }}" hidden{% endif %}>
         {% for field in step.settings if field.main %}

@@ -3,6 +3,7 @@ The web pages read these records; a chain runs several jobs one after another.
 """
 import codecs
 import json
+import math
 import os
 import signal
 import subprocess
@@ -22,7 +23,14 @@ STATUS_LABEL = {
     "cancelled": "Stopped",
     "waiting": "Waiting",
     "skipped": "Skipped",
+    "paused": "Paused",
 }
+# A Library run in one of these states can go on from its first unfinished step.
+CONTINUABLE = [
+    "failed",
+    "cancelled",
+    "paused",
+]
 
 STOP_WAIT_SECONDS = 5
 ESTIMATE_SECONDS = 120
@@ -131,6 +139,7 @@ def start_job(app_name, command_name, values, extra_environment=None):
         PROCESSES[job_id] = process
         watcher = threading.Thread(target=watch_job, args=(job_id,), daemon=True)
         WATCHERS[job_id] = watcher
+    save_record("job", JOBS[job_id])
     watcher.start()
     return job_id
 
@@ -345,23 +354,26 @@ def shown_job(app_name, command_name):
 
 
 def shown_chain():
-    """The newest pipeline run the home page still shows: not stopped and not closed."""
+    """The newest Library run the Library still shows: not closed."""
     with LOCK:
         if not CHAINS:
             return None
         newest = max(CHAINS, key=int)
         chain = CHAINS[newest]
-        if chain["status"] == "cancelled" or chain["dismissed"]:
+        if chain["dismissed"]:
             return None
         return chain_row(chain)
 
 
-def dismiss(records, record_id):
-    """Close a finished job or pipeline run, so its page stops showing it."""
+def dismiss(kind, record_id):
+    """Close a finished job or Library run, so its page stops showing it, also after a restart."""
+    records = {"job": JOBS, "chain": CHAINS}[kind]
     with LOCK:
         record = records.get(record_id)
-        if record is not None and record["status"] != "running":
-            record["dismissed"] = True
+        if record is None or record["status"] == "running":
+            return
+        record["dismissed"] = True
+    save_record(kind, record)
 
 
 def running_service(app_name, command_name):
@@ -397,16 +409,73 @@ def start_chain(steps):
             "started": time.monotonic(),
             "ended": None,
             "steps": planned,
+            "question": "",
+            "asking": None,
             "dismissed": False,
         }
     threading.Thread(target=run_chain, args=(chain_id,), daemon=True).start()
     return chain_id
 
 
+def continue_chain(chain_id, approve):
+    """Run a paused, failed or stopped Library run again from its first unfinished step, for the same papers.
+
+    With `approve`, the step that paused may spend up to the cost it asked about.
+
+    Raises:
+        ValueError: there is no such run, or it is not waiting to go on.
+    """
+    with LOCK:
+        chain = CHAINS.get(chain_id)
+        if chain is None or chain["status"] not in CONTINUABLE:
+            raise ValueError("That run is not waiting to go on.")
+        for step in chain["steps"]:
+            if step["status"] == "paused" and approve and chain.get("asking"):
+                step["values"]["--approve-cost"] = f"{math.ceil(chain['asking'] * 100) / 100:.2f}"
+            if step["status"] != "ok":
+                step["status"] = "waiting"
+                step["error"] = ""
+                step["job_id"] = None
+        chain["status"] = "running"
+        chain["question"] = ""
+        chain["asking"] = None
+        chain["dismissed"] = False
+        chain["started"] = time.monotonic() - (chain["ended"] - chain["started"])
+        chain["ended"] = None
+    threading.Thread(target=run_chain, args=(chain_id,), daemon=True).start()
+
+
+def cost_question(step, extra):
+    """What to ask before a paid step whose estimate now tops the amount approved, or None to go ahead.
+
+    The steps before it can add papers, such as a book prepared into chapters.
+    """
+    approved = step["values"].get("--approve-cost", "")
+    if not approved:
+        return None
+    estimate = json_reply(step["app"], step["command"], ["--estimate"], extra)
+    if estimate is None:
+        return None
+    cost = estimate["cost"][estimate["auto"]]
+    if cost is None or cost <= float(approved):
+        return None
+    items = f"{estimate['papers']:,} items"
+    if estimate["papers"] == 1:
+        items = "1 item"
+    text = f"{step['label']} waits for you: {items} would cost about ${cost:.2f} at list price, more than the ${float(approved):.2f} approved."
+    return {"cost": cost, "text": text}
+
+
 def run_chain(chain_id):
-    """Start each step once the one before it has succeeded; any other ending skips the rest."""
+    """Start each unfinished step once the one before it has succeeded; any other ending skips the rest.
+
+    A paid step that would now cost more than approved pauses the run until the user approves or closes it.
+    """
     outcome = "ok"
+    save_record("chain", CHAINS[chain_id])
     for step in CHAINS[chain_id]["steps"]:
+        if step["status"] == "ok" or outcome == "paused":
+            continue
         if outcome != "ok":
             with LOCK:
                 step["status"] = "skipped"
@@ -414,6 +483,14 @@ def run_chain(chain_id):
         extra = {}
         if step["only"] is not None:
             extra["PEPA_ONLY_FILE"] = str(paths.only_list_for(step["app"], step["only"], f"chain{chain_id}"))
+        question = cost_question(step, extra)
+        if question is not None:
+            with LOCK:
+                step["status"] = "paused"
+                CHAINS[chain_id]["question"] = question["text"]
+                CHAINS[chain_id]["asking"] = question["cost"]
+            outcome = "paused"
+            continue
         try:
             job_id = start_job(step["app"], step["command"], step["values"], extra)
         except ValueError as error:
@@ -425,6 +502,7 @@ def run_chain(chain_id):
         with LOCK:
             step["job_id"] = job_id
             step["status"] = "running"
+        save_record("chain", CHAINS[chain_id])
         WATCHERS[job_id].join()
         with LOCK:
             step["status"] = JOBS[job_id]["status"]
@@ -436,7 +514,7 @@ def run_chain(chain_id):
 
 
 def chain_row(chain):
-    """The fields a page shows for one pipeline run, with a copy of its steps."""
+    """The fields a page shows for one Library run, with a copy of its steps."""
     return {
         "id": chain["id"],
         "status": chain["status"],
@@ -444,15 +522,10 @@ def chain_row(chain):
         "started_at": started_text(chain),
         "elapsed": elapsed_text(chain),
         "steps": [dict(step) for step in chain["steps"]],
+        "question": chain.get("question", ""),
+        "asking": chain.get("asking"),
+        "can_continue": chain["status"] in CONTINUABLE,
     }
-
-
-def list_chains():
-    """Every pipeline run, newest first."""
-    with LOCK:
-        rows = [chain_row(chain) for chain in CHAINS.values()]
-    rows.reverse()
-    return rows
 
 
 def chain_summary(chain_id):
@@ -503,6 +576,9 @@ def chain_log(chain_id, after):
             "exit_code": None,
             "elapsed": row["elapsed"],
             "steps": row["steps"],
+            "question": row["question"],
+            "asking": row["asking"],
+            "can_continue": row["can_continue"],
         }
 
 
@@ -531,7 +607,7 @@ def save_record(kind, record):
     """Keep a finished job or Library run on disk, so the Jobs page still lists it after a restart."""
     with LOCK:
         kept = dict(record)
-        kept["seconds"] = int(record["ended"] - record["started"])
+        kept["seconds"] = int((record["ended"] or time.monotonic()) - record["started"])
         if kind == "chain":
             kept["steps"] = [dict(step) for step in record["steps"]]
     kept.pop("started")
@@ -583,9 +659,10 @@ def forget_old_jobs():
 
 
 def load_history():
-    """Read back the finished jobs and Library runs kept on disk, oldest first.
+    """Read back the jobs and Library runs kept on disk, oldest first.
 
-    Read-back runs count as closed, so the Library does not show last week's run as the current one.
+    Read-back jobs count as closed, so their pages do not show last week's log. A Library run the user
+    did not close stays on the Library to go on; one still running when the console quit counts as stopped.
     """
     folder = history_folder()
     if not folder.is_dir():
@@ -600,6 +677,9 @@ def load_history():
             continue
         record["started"] = 0.0
         record["ended"] = float(record.pop("seconds"))
-        record["dismissed"] = True
+        if record["status"] == "running":
+            record["status"] = "cancelled"
+        if kind == "job":
+            record["dismissed"] = True
         records[kind][record["id"]] = record
     forget_old_jobs()

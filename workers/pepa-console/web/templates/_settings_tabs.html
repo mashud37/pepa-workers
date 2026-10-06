@@ -1,0 +1,6 @@
+<h1 class="settings-title">Settings</h1>
+<nav class="sub-tabs" aria-label="Settings">
+  <a href="{{ url_for('console.folders_page') }}"{% if section == "folders" %} aria-current="page"{% endif %}>Folders</a>
+  <a href="{{ url_for('console.models_page') }}"{% if section == "models" %} aria-current="page"{% endif %}>Models</a>
+  <a href="{{ url_for('console.keys_page') }}"{% if section == "keys" %} aria-current="page"{% endif %}>Keys</a>
+</nav>

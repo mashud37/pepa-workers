@@ -76,10 +76,10 @@ MASCOTS = {
 # What pepa says when clicked, by the first part of the page's address.
 TIPS = {
     "": [
-        "Press Process papers and I read everything new. Papers already done are skipped.",
+        "Press Process items and I read everything new. Items already done are skipped.",
         "Each number opens what is behind it.",
-        "Copy PDFs in, or link a folder you already keep papers in.",
-        "Tick papers to process only those, or to skip them in a stage.",
+        "Copy PDFs in, or link a folder you already keep them in.",
+        "Tick items to process only those, or to skip them in a stage.",
         "Mark chapters splits a book where you say.",
     ],
     "apps": [
@@ -88,7 +88,7 @@ TIPS = {
     ],
     "read": [
         "Search one part of a brief: methods:interviews author:smith.",
-        "Plain words search the whole paper too.",
+        "Plain words search the whole text too.",
     ],
     "jobs": [
         "Every run keeps its log here, finished or not.",
@@ -98,7 +98,7 @@ TIPS = {
     ],
     "models": [
         "Claude Haiku is the cheapest. Sonnet writes a better review.",
-        "A model on this computer keeps every paper on this computer.",
+        "A model on this computer keeps every item on this computer.",
         "Show models asks the server which models it has.",
     ],
     "keys": [

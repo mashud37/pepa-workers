@@ -25,13 +25,13 @@ from web import batches, documents, folders, jobs, keys, mascot, models, options
 from web.settings import SETTINGS
 
 MISSING_NOTE = {
-    "keys": "Add a key on the Keys page first.",
-    "models": "Choose an embedding model on the Models page first.",
+    "keys": "Add a key in Settings first.",
+    "models": "Choose an embedding model in Settings first.",
 }
 SET_ASIDE_ACTIONS = {
-    "skip-prep": {"apps": ["pepa-prep"], "wanted": True, "message": "{count} paper(s) will be skipped when preparing."},
-    "skip-sum": {"apps": ["pepa-sum"], "wanted": True, "message": "{count} paper(s) will be skipped when summarising."},
-    "include": {"apps": ["pepa-prep", "pepa-sum"], "wanted": False, "message": "{count} paper(s) are back in every stage."},
+    "skip-prep": {"apps": ["pepa-prep"], "wanted": True, "message": "{items} will be skipped when preparing."},
+    "skip-sum": {"apps": ["pepa-sum"], "wanted": True, "message": "{items} will be skipped when summarising."},
+    "include": {"apps": ["pepa-prep", "pepa-sum"], "wanted": False, "message": "Back in every stage: {items}."},
 }
 # The Library's stages in the order a run takes them. An estimated stage shows its cost before it runs.
 PIPELINE_STEPS = [
@@ -147,17 +147,27 @@ def copy_step(results, back_to):
 
 
 def folder_message(app_name, slot):
-    """What was saved, and how many papers sit in sub-folders the app is not reading."""
+    """What was saved, and how many items sit in sub-folders the app is not reading."""
     if not paths.can_scan_subfolders(app_name, slot):
         return "Saved."
     count = folders.paper_counts(app_name, slot)
     here = folders.counted(count["here"], count["capped"])
     deeper = folders.counted(count["deeper"], count["capped"])
+    items = f"{here} items"
+    if count["here"] == 1:
+        items = "1 item"
     if not count["deeper"]:
-        return f"Saved. {here} paper(s) in that folder."
+        return f"Saved. {items} in that folder."
     if paths.scans_subfolders(app_name, slot):
-        return f"Saved. {here} paper(s) there and {deeper} in sub-folders, all of them read."
-    return f"Saved. {here} paper(s) there and {deeper} in sub-folders, which stay unread until you turn on Scan sub-folders."
+        return f"Saved. {items} there and {deeper} in sub-folders, all of them read."
+    return f"Saved. {items} there and {deeper} in sub-folders, which stay unread until you turn on Scan sub-folders."
+
+
+def item_count(count):
+    """A count of library items in words, such as "1 item" or "17 items"."""
+    if count == 1:
+        return "1 item"
+    return f"{count:,} items"
 
 
 def back_to(default):
@@ -356,11 +366,11 @@ def papers_set_aside():
     names = request.form.getlist("name")
     action = SET_ASIDE_ACTIONS.get(request.form.get("action", ""))
     if not names or action is None:
-        flash("Tick at least one paper.")
+        flash("Tick at least one item.")
     else:
         for app_name in action["apps"]:
             paths.set_excluded(names, app_name, action["wanted"])
-        flash(action["message"].format(count=len(names)))
+        flash(action["message"].format(items=item_count(len(names))))
     return redirect(request.form.get("back") or url_for("console.library"))
 
 
@@ -368,7 +378,7 @@ def papers_set_aside():
 def papers_remove_copies():
     names = request.form.getlist("name")
     if not names:
-        flash("Tick at least one paper.")
+        flash("Tick at least one item.")
         return redirect(request.form.get("back") or url_for("console.library"))
     try:
         outcome = papers.remove_copies(names)
@@ -413,10 +423,10 @@ def chapters_save():
 def paper_page_image():
     relative = request.args.get("file", "")
     number = request.args.get("n", "")
-    width = papers.LARGE_WIDTH if request.args.get("size") == "large" else papers.THUMBNAIL_WIDTH
-    if papers.source_path(relative) is None or not number.isdigit():
+    size = request.args.get("size", "")
+    if papers.source_path(relative) is None or not number.isdigit() or size not in papers.PAGE_WIDTHS:
         abort(404)
-    image = papers.page_image(relative, int(number), width)
+    image = papers.page_image(relative, int(number), papers.PAGE_WIDTHS[size])
     if image is None:
         abort(404)
     return Response(image, mimetype="image/jpeg", headers={"Cache-Control": "private, max-age=3600"})
@@ -552,7 +562,7 @@ def browse_page(name, slot):
 def jobs_page():
     rows = jobs.list_jobs()
     running = [row for row in rows if row["status"] == "running"]
-    return render_template("jobs.html", jobs=rows, chains=jobs.list_chains(), refresh=bool(running), keep_choices=jobs.KEEP_CHOICES, keep_days=jobs.keep_days())
+    return render_template("jobs.html", jobs=rows, refresh=bool(running), keep_choices=jobs.KEEP_CHOICES, keep_days=jobs.keep_days())
 
 
 @bp.route("/jobs/history", methods=["POST"])
@@ -594,14 +604,23 @@ def job_cancel(job_id):
 
 @bp.route("/jobs/<job_id>/dismiss", methods=["POST"])
 def job_dismiss(job_id):
-    jobs.dismiss(jobs.JOBS, job_id)
+    jobs.dismiss("job", job_id)
     return jsonify({"ok": True})
 
 
 @bp.route("/chains/<chain_id>/dismiss", methods=["POST"])
 def chain_dismiss(chain_id):
-    jobs.dismiss(jobs.CHAINS, chain_id)
+    jobs.dismiss("chain", chain_id)
     return jsonify({"ok": True})
+
+
+@bp.route("/chains/<chain_id>/continue", methods=["POST"])
+def chain_continue(chain_id):
+    try:
+        jobs.continue_chain(chain_id, request.form.get("approve") == "yes")
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+    return run_panel(jobs.chain_summary(chain_id), url_for("console.chain_log", chain_id=chain_id))
 
 
 @bp.route("/chains/<chain_id>/log")

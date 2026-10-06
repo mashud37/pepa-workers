@@ -310,7 +310,7 @@ def list_models(app_name, base_url):
             data = json.loads(reply.read())
     except urllib.error.HTTPError as error:
         if error.code in (401, 403):
-            raise ValueError("The server refused the key. Add it on the Keys page as PEPA_LLM_API_KEY.")
+            raise ValueError("The server refused the key. Add it in Settings, under Keys, as PEPA_LLM_API_KEY.")
         raise ValueError(f"The server answered with error {error.code}.")
     except (urllib.error.URLError, OSError, ValueError):
         raise ValueError("No answer from that address. Is the server running?")

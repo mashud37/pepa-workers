@@ -12,7 +12,18 @@
       <button class="text danger">Stop</button>
     </form>
     <button type="button" class="text" data-run-close="{{ log_url[:-4] }}/dismiss"{% if run.status == "running" %} hidden{% endif %}>Close</button>
+    <button type="button" class="text" data-run-hide>Hide</button>
   </div>
+  {% if run.can_continue is defined %}
+  <div class="run-ask" data-ask hidden>
+    <p data-ask-text></p>
+    <form method="post" action="{{ log_url[:-4] }}/continue" data-fetch="run" data-slot="pipeline-run">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="approve" data-ask-approve>
+      <button class="filled" data-ask-button>Continue</button>
+    </form>
+  </div>
+  {% endif %}
   <p class="run-now" data-now role="status" hidden></p>
   <div class="items" data-items hidden>
     <div class="items-head"><span class="items-count" data-items-count></span><span class="items-bar"><span data-items-bar></span></span></div>

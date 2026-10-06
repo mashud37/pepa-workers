@@ -43,12 +43,11 @@ def check_request():
 
 
 def template_values():
-    """Values every template can use: the token, the apps, job labels, the log interval, and the mascot."""
+    """Values every template can use: the token, the apps, the log interval, and the mascot."""
     return {
         "token": current_app.config["CONSOLE_TOKEN"],
         "apps": APPS,
         "installed": INSTALLED,
-        "status_label": jobs.STATUS_LABEL,
         "running": jobs.running_count(),
         "poll_ms": SETTINGS["poll_ms"],
         "draw_mascot": mascot.svg,

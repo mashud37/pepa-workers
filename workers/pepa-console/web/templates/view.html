@@ -24,7 +24,7 @@
 </div>
 
 {% if related | length > 1 %}
-<nav class="doc-tabs" aria-label="This paper's documents">
+<nav class="doc-tabs" aria-label="This item's documents">
   {% for item in related %}
   <a href="{{ url_for('console.view_page', name=item.app, slot=item.slot, relative=item.relative) }}"{% if item.app == app.name and item.slot == slot and item.relative == relative %} aria-current="page"{% endif %}>{{ item.label }}</a>
   {% endfor %}

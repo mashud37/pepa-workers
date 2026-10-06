@@ -26,9 +26,9 @@ OPTIONS = {
             "main": True,
             "default": "auto",
             "choices": {
-                "auto": "Auto: the fastest for this many papers",
-                "serial": "One paper at a time",
-                "parallel": "Several papers at once",
+                "auto": "Auto: the fastest for this many items",
+                "serial": "One item at a time",
+                "parallel": "Several items at once",
                 "batch": "Batch: about half price, can take hours",
             },
         },
@@ -38,7 +38,7 @@ OPTIONS = {
         }},
         {
             "variable": "PEPA_ON_EXISTING",
-            "label": "Papers already summarised",
+            "label": "Items already summarised",
             "default": "skip",
             "choices": {
                 "skip": "Skip them",
@@ -65,7 +65,7 @@ OPTIONS = {
             "main": True,
             "default": "auto",
             "choices": {
-                "auto": "Auto: the fastest for this many papers",
+                "auto": "Auto: the fastest for this many items",
                 "serial": "One at a time",
                 "parallel": "Several at once",
                 "batch": "Batch: about half price, can take hours",
