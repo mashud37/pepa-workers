@@ -113,7 +113,8 @@ def _categorise_phase(pdfs: list, out_dir: Path, cfg: dict) -> dict:
 
     to_scan = []
     for p in pdfs:
-        if categorise.any_output(existing, p.stem) and not cfg["force"]:
+        done = categorise.any_output(existing, p.stem) and not marks.marked_since_prepared(p.stem, out_dir)
+        if done and not cfg["force"]:
             skipped += 1
         else:
             to_scan.append(p)
@@ -182,8 +183,7 @@ def _extract_one(handler, path, out_dir, cfg, counter):
     """Announce a file the moment a worker picks it up, then extract it."""
     ui.info(f"{counter} {path.name}")
     items.announce("start", path.name)
-    if cfg["force"]:
-        _clear_outputs(out_dir, path.stem)
+    _clear_outputs(out_dir, path.stem)
     return handler(path, out_dir, cfg)
 
 
@@ -227,8 +227,7 @@ def _run_ocr_phase(step_label: str, files: list, out_dir: Path, cfg: dict) -> li
         name = path.name
         ui.info(f"[{i}/{n}] {name}: OCR starting…")
         items.announce("start", name)
-        if cfg["force"]:
-            _clear_outputs(out_dir, path.stem)
+        _clear_outputs(out_dir, path.stem)
 
         try:
             report = functools.partial(_report_progress, i, name, n)

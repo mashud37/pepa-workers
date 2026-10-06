@@ -16,6 +16,16 @@ _MIN_ARABIC = 3
 _MAX_INVERSIONS = 0.30
 _FOLIO_MIN = 10
 _FOLIO_SHARE = 0.60
+_OCR_OFFSETS_TRIED = 5
+_OCR_OPENING_WORDS = 30
+_OPENER_SHARE = 0.70
+_LIST_HEADINGS = {
+    "tables",
+    "figures",
+    "illustrations",
+    "plates",
+    "maps",
+}
 
 _NUM_WORDS = (
     r"(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)"
@@ -324,6 +334,90 @@ def parse_entries(pages: list, toc_range: range, widths: list,
     return entries
 
 
+def ocr_contents_starts(pages: list, contents: list) -> list:
+    """The 0-based chapter start pages a scanned book's printed contents names.
+
+    Args:
+        pages: OCR text of every page, left-out pages included.
+        contents: 0-based pages the user marked as Contents.
+
+    Returns:
+        Sorted start pages, or an empty list when fewer than two can be placed.
+    """
+    if not contents:
+        return []
+    lined = []
+    for text in pages:
+        lined.append([[{"text": line} for line in text.splitlines()]])
+    lines = []
+    for page in contents:
+        lines.extend(pages[page].splitlines())
+    entries = []
+    for line in lines:
+        if _VETO_RE.match(norm(line)) or norm(line).casefold() in _LIST_HEADINGS:
+            break
+        entry = _loose_entry({"text": norm(line), "x0": 0, "bold": False}, len(pages))
+        if entry:
+            entry["title"] = _LEADER_RE.sub("", entry["title"]).strip()
+            entries.append(entry)
+    arabic = [e["no"] for e in entries if not e["roman"]]
+    if len(arabic) < _MIN_ARABIC or _inversions(arabic) > _MAX_INVERSIONS:
+        return []
+    _assign_levels(entries)
+    chapters = [e for e in entries if e["level"] <= 2 and not e["roman"]]
+    lengths = sorted(len(text) for text in pages if text.strip())
+    short = _OPENER_SHARE * lengths[len(lengths) // 2] if lengths else 0
+    best = {"hits": 0, "starts": set()}
+    for offset, _ in _folio_votes(lined).most_common(_OCR_OFFSETS_TRIED):
+        placed = _place_titles(chapters, pages, offset, short)
+        if placed["hits"] > best["hits"]:
+            best = placed
+    starts = best["starts"] - set(contents)
+    if best["hits"] < 2 or len(starts) < 2:
+        return []
+    return sorted(starts)
+
+
+def _title_on_page(title: str, text: str) -> bool:
+    """Whether a contents title's first words open a page's OCR text, its chapter number left aside."""
+    words = norm(title).casefold().split()
+    if words and (not any(c.isalpha() for c in words[0]) or _ROMAN_RE.match(words[0])):
+        words = words[1:]
+    if not words:
+        return False
+    opening = " ".join(text.casefold().replace("|", " ").split()[:_OCR_OPENING_WORDS])
+    return " ".join(words[:3]) in opening
+
+
+def _place_titles(entries: list, pages: list, offset: int, short: float) -> dict:
+    """Each chapter's start page at a page offset, moved up to two pages to the first page that opens with its title.
+
+    A title found away from the offset moves the offset for the entries after it, as unnumbered plates do.
+    A subsection-level entry starts a chapter only when its title opens a short page, as chapter openers are.
+
+    Returns:
+        {"hits": titles found on their pages, "starts": set of 0-based start pages}.
+    """
+    hits = 0
+    starts = set()
+    for entry in entries:
+        page = entry["no"] + offset
+        found = False
+        for shift in (-2, -1, 0, 1, 2):
+            near = page + shift
+            if 0 <= near < len(pages) and _title_on_page(entry["title"], pages[near]):
+                page = near
+                offset = near - entry["no"]
+                hits += 1
+                found = True
+                break
+        if not 0 <= page < len(pages):
+            continue
+        if entry["level"] <= 1 or (found and len(pages[page]) < short):
+            starts.add(page)
+    return {"hits": hits, "starts": starts}
+
+
 def label_offset(doc, entries: list) -> int | None:
     """Offset from PDF page labels: 0-based pdf index = printed number + offset."""
     arabic = [e for e in entries if not e["roman"]]
@@ -363,8 +457,8 @@ def _folio_digits(m, t: str) -> str:
     return t
 
 
-def folio_offset(pages: list) -> int | None:
-    """Offset from printed folio lines in page headers/footers (modal, gated)."""
+def _folio_votes(pages: list) -> Counter:
+    """How many printed page numbers in headers and footers point to each offset between PDF page and printed number."""
     diffs: Counter = Counter()
     for pno, page in enumerate(pages):
         flat = _flat_lines(page)
@@ -374,6 +468,12 @@ def folio_offset(pages: list) -> int | None:
             if m:
                 folio = _folio_digits(m, t)
                 diffs[pno - int(folio)] += 1
+    return diffs
+
+
+def folio_offset(pages: list) -> int | None:
+    """Offset from printed folio lines in page headers/footers (modal, gated)."""
+    diffs = _folio_votes(pages)
     if not diffs:
         return None
     off, cnt = diffs.most_common(1)[0]

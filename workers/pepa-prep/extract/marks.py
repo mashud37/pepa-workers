@@ -41,6 +41,20 @@ def contents_pages(stem):
     return sorted(pages)
 
 
+def marked_since_prepared(stem, out_dir):
+    """Whether the user saved marks for a PDF after its text was last prepared, so it must be prepared again."""
+    path = MARKS_DIR / f"{stem}.json"
+    if not path.exists():
+        return False
+    prefix = f"text_{stem}_"
+    newest = 0.0
+    for output in out_dir.glob("text_*.md"):
+        chapter = output.name.startswith(prefix) and output.stem[len(prefix):].isdigit()
+        if output.name == f"text_{stem}.md" or chapter:
+            newest = max(newest, output.stat().st_mtime)
+    return path.stat().st_mtime > newest
+
+
 def blank_left_out(stem, pages, empty):
     """The pages with each left-out one replaced by an empty page, so every later page keeps its number."""
     left_out = left_out_pages(stem)
@@ -50,10 +64,12 @@ def blank_left_out(stem, pages, empty):
     return blanked
 
 
-def save_found(stem, starts, strategy):
-    """Record where chapters start in a book, so the console can show them before the user marks any."""
+def save_found(stem, starts, strategy, detector=None):
+    """Record where chapters start in a book, and what detection alone found, so marks can later be compared with it."""
     FOUND_DIR.mkdir(parents=True, exist_ok=True)
     record = {"starts": starts, "strategy": strategy}
+    if detector is not None:
+        record["detector"] = detector
     (FOUND_DIR / f"{stem}.json").write_text(json.dumps(record), encoding="utf-8")
 
 
