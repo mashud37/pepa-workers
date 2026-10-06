@@ -78,6 +78,9 @@ def run(input_dir=None, output_dir=None, force=False, mode=None, approve_cost=No
         ui.info(f"{waiting} more are waiting in a batch at Anthropic; {config.COMMAND} batches collects them")
     ui.info(f"backend: {config.load('BACKEND')}  ·  model: {config.model_name()}  ·  "
             f"paragraph rundown: {config.load('PARA_METHOD')}")
+    dropped = _drop_old_chapters(in_dir, out_dir)
+    if dropped:
+        ui.info(f"{dropped} summary(ies) removed: their chapters are no longer in {in_dir}")
 
     planned = _plan_work(sources, out_dir, force, on_existing)
     work, skipped = planned["work"], planned["skipped"]
@@ -166,6 +169,51 @@ def _discover_sources(in_dir):
     return [found[stem] for stem in sorted(found)]
 
 
+def _text_changed(source, out_dir):
+    """Whether a text file changed after its summary was written, as when pepa-prep splits a book again."""
+    summary = out_dir / f"sum_{paper_stem(source.name)}.md"
+    if source.suffix.lower() == ".pdf" or not summary.exists():
+        return False
+    return source.stat().st_mtime > summary.stat().st_mtime
+
+
+def _book_of(stem):
+    """The book a pepa-prep chapter's name belongs to, "Book" for "Book_03", or an empty string when it is no chapter."""
+    head, _, tail = stem.rpartition("_")
+    if head and tail.isdigit() and len(tail) in (2, 3):
+        return head
+    return ""
+
+
+def _drop_old_chapters(in_dir, out_dir):
+    """Remove the documents of book chapters whose text is gone, as when a book is split again into fewer chapters.
+
+    Returns:
+        The number of chapters removed.
+    """
+    from extract import SUFFIXES
+
+    if config.scan_subfolders():
+        candidates = in_dir.rglob("*")
+    else:
+        candidates = in_dir.iterdir()
+    stems = set()
+    for path in candidates:
+        if path.is_file() and path.suffix.lower() in SUFFIXES:
+            stems.add(paper_stem(path.name))
+    books = {_book_of(stem) for stem in stems}
+    removed = 0
+    for summary in sorted(out_dir.glob("sum_*.md")):
+        stem = summary.stem[len("sum_"):]
+        book = _book_of(stem)
+        if stem in stems or not book or book not in books:
+            continue
+        for doc in _DOCS:
+            (out_dir / f"{doc}_{stem}.md").unlink(missing_ok=True)
+        removed += 1
+    return removed
+
+
 def _plan_work(sources, out_dir, force, on_existing):
     """Papers to (re)process, resolved without prompting: `ask` is treated as
     `skip` here, as it already is off a TTY. Each entry is (pdf, regen); regen
@@ -173,7 +221,7 @@ def _plan_work(sources, out_dir, force, on_existing):
     work, skipped = [], 0
     for pdf in sources:
         present = [d for d in _DOCS if (out_dir / f"{d}_{paper_stem(pdf.name)}.md").exists()]
-        if force:
+        if force or _text_changed(pdf, out_dir):
             work.append((pdf, True))
         elif len(present) == len(_DOCS):
             if on_existing == "overwrite":
@@ -874,7 +922,9 @@ def _serial_jobs(sources, out_dir, force, on_existing):
     skipped = 0
     for pdf in sources:
         present = [d for d in _DOCS if (out_dir / f"{d}_{paper_stem(pdf.name)}.md").exists()]
-        if len(present) == len(_DOCS) and not force:
+        if _text_changed(pdf, out_dir):
+            jobs.append((pdf, True))
+        elif len(present) == len(_DOCS) and not force:
             if _keep_existing(pdf.name, on_existing):
                 ui.info(f"skip {_short(pdf.name)} (all documents exist)")
                 skipped += 1
