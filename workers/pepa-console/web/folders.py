@@ -135,18 +135,41 @@ def pipeline_summary():
     }
 
 
+def remarked_stems():
+    """The PDFs whose chapter marks were saved after their text was prepared, which pepa-prep prepares again."""
+    marks_dir = paths.project_folder() / "pepa-prep" / "data" / "marks"
+    if not marks_dir.is_dir():
+        return set()
+    text_dir = paths.chosen(PREPARED["app"], PREPARED["slot"]) / PREPARED["inside"]
+    prepared = matching_names(PREPARED)["names"]
+    stems = set()
+    for marks in marks_dir.glob("*.json"):
+        prefix = f"text_{marks.stem}_"
+        newest = 0.0
+        for name in prepared:
+            leaf = leaf_name(name)
+            chapter = leaf.startswith(prefix) and leaf[len(prefix):-len(".md")].isdigit()
+            if leaf == f"text_{marks.stem}.md" or chapter:
+                newest = max(newest, (text_dir / name).stat().st_mtime)
+        if newest and marks.stat().st_mtime > newest:
+            stems.add(marks.stem)
+    return stems
+
+
 def unprepared_count(only=None):
-    """How many waiting PDFs a run would prepare and then summarise: not prepared yet, skipped by neither stage,
-    and among the only names given, when there are any."""
+    """How many waiting PDFs a run would prepare and then summarise: not prepared yet or marked again since,
+    skipped by neither stage, and among the only names given, when there are any."""
     waiting = matching_names(PDFS_WAITING)["names"]
     if only:
         waiting = [name for name in waiting if Path(name).name in only]
     prepared = papers_covered(PREPARED)
+    remarked = remarked_stems()
     excluded = paths.load_excluded()
     skipped = set(excluded["pepa-prep"]) | set(excluded["pepa-sum"])
     count = 0
     for name in waiting:
-        if Path(name).stem not in prepared and Path(name).name not in skipped:
+        to_prepare = Path(name).stem not in prepared or Path(name).stem in remarked
+        if to_prepare and Path(name).name not in skipped:
             count += 1
     return count
 
