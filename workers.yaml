@@ -1,5 +1,5 @@
 package: pepa-workers
-version: "0.3.1"
+version: "0.3.2"
 summary: "Standalone tools that augment academic work: read and condense literature, map a field, find gaps, outline, and draft to test ideas."
 license: "MIT"
 python: ">=3.10"

@@ -1,3 +1,18 @@
+# pepa-workers 0.3.2 (unreleased)
+
+* The console's Library run opens in its own window: the whole run, the current step's progress and
+  its items. Hide keeps it running behind a button at the bottom of the page.
+* A Library run that would cost more than was approved pauses and asks; a stopped or failed run
+  continues from its first unfinished step.
+* Ticked items stay ticked across pages and filters.
+* Folders, Models and Keys are one Settings page.
+* Mark chapters has an Acknowledgements kind and three page sizes.
+* pepa-prep leaves out a book's front matter, the pages numbered in roman numerals.
+* pepa-prep prepares a PDF again when its chapter marks changed after it was prepared, and finds a
+  scanned book's chapters from the pages marked as Contents.
+* pepa-sum summarises an item again when its prepared text changed, and removes the summaries of
+  chapters a book no longer has.
+
 # pepa-workers 0.3.1 (unreleased)
 
 * The console's Library list filters by length: books, or papers shorter than books. Ticking can
