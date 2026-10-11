@@ -8,6 +8,9 @@ on:
 jobs:
   publish:
     runs-on: windows-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/pepa-workers
     permissions:
       id-token: write
     steps:
@@ -21,6 +24,17 @@ jobs:
 
       - name: Install the bundle's dependencies
         run: python -m pip install -r requirements.txt
+
+      - name: Check the tag matches the version in workers.yaml
+        shell: python
+        run: |
+          import os
+          import yaml
+          with open("workers.yaml", encoding="utf-8") as file:
+              version = yaml.safe_load(file)["version"]
+          tag = os.environ["GITHUB_REF_NAME"]
+          if tag != f"v{version}":
+              raise SystemExit(f"The tag {tag} does not match version {version} in workers.yaml.")
 
       - name: Release gate
         run: python manage.py check
