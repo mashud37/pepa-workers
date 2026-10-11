@@ -132,6 +132,10 @@ document.addEventListener("change", function (event) {
   if (event.target.matches("[data-copy]")) {
     copyOneByOne(event.target, Array.from(event.target.files));
   }
+  if (event.target.matches("[data-file-chosen]")) {
+    const shown = event.target.closest(".file-pick").querySelector("[data-file-name]");
+    shown.textContent = event.target.files.length ? event.target.files[0].name : "No file chosen";
+  }
 });
 
 const runDialog = document.getElementById("run-dialog");

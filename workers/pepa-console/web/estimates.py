@@ -14,9 +14,9 @@ def dollars_words(dollars):
 def cost_words(estimate):
     """One sentence on what a step costs: tokens and model for a model call, lookups for OpenAlex."""
     if estimate.get("model") == "OpenAlex":
-        if not estimate["papers"]:
+        if not estimate["works"]:
             return "Every paper is already looked up."
-        return f"{estimate['papers']:,} papers to look up on OpenAlex: {estimate['by_doi']:,} by DOI, free, and {estimate['by_title']:,} by title, {dollars_words(estimate['dollars'])} at list price."
+        return f"{estimate['works']:,} works to look up, covering {estimate['papers']:,} papers, since a book's chapters share one lookup: {estimate['by_doi']:,} by a DOI printed in the paper or held in your export, and {estimate['by_search']:,} by a title search on Crossref. Both are free."
     tokens = estimate.get("tokens", 0) + estimate.get("input_tokens", 0) + estimate.get("output_tokens", 0)
     if estimate["dollars"] == 0:
         return "Runs on your computer, at no cost."
@@ -34,4 +34,6 @@ def estimate(app_name, command_name, flags):
     if reply is None:
         return None
     reply["words"] = cost_words(reply)
+    if "paid_upto" in reply:
+        reply["paid_words"] = dollars_words(reply["paid_upto"])
     return reply

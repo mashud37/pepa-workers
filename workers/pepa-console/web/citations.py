@@ -6,8 +6,13 @@ from pathlib import Path
 from web import connections, estimates, jobs, paths
 
 CITATIONS_FILE = Path("pepa-review") / "data" / "citations.json"
-# The Zotero export the lookup matches DOIs from, kept in the project so the next lookup finds it again.
-ZOTERO_FILE = Path("pepa-console") / "zotero.json"
+# The reference export the lookup takes DOIs from, kept in the project so the next lookup finds it again.
+EXPORT_FILE = Path("pepa-console") / "references"
+EXPORT_SUFFIXES = [
+    ".json",
+    ".bib",
+    ".ris",
+]
 SHOWN = 20
 
 
@@ -55,41 +60,45 @@ def overview():
     }
 
 
-def zotero_file():
-    """The kept Zotero export, or None when none has been added."""
-    path = paths.project_folder() / ZOTERO_FILE
-    return path if path.is_file() else None
+def export_file():
+    """The kept reference export, or None when none has been added."""
+    for suffix in EXPORT_SUFFIXES:
+        path = paths.project_folder() / EXPORT_FILE.with_suffix(suffix)
+        if path.is_file():
+            return path
+    return None
 
 
-def save_zotero(upload):
-    """Keep an uploaded Zotero CSL-JSON export in the project, replacing the one before.
+def save_export(upload):
+    """Keep an uploaded reference export in the project, replacing the one before.
 
     Raises:
-        ValueError: the file is not a .json file.
+        ValueError: the file is not CSL JSON, BibTeX or RIS.
     """
-    if not upload.filename.lower().endswith(".json"):
-        raise ValueError("Export from Zotero as CSL JSON; the file ends in .json.")
-    path = paths.project_folder() / ZOTERO_FILE
+    suffix = Path(upload.filename).suffix.lower()
+    if suffix not in EXPORT_SUFFIXES:
+        raise ValueError("Export from Zotero as CSL JSON, BibTeX or RIS.")
+    kept = export_file()
+    if kept is not None:
+        kept.unlink()
+    path = paths.project_folder() / EXPORT_FILE.with_suffix(suffix)
     path.parent.mkdir(parents=True, exist_ok=True)
     upload.save(path)
 
 
-def lookup_flags():
-    """The arguments a lookup runs with: fetch, and the Zotero export when there is one."""
-    flags = ["fetch"]
-    if zotero_file():
-        flags = flags + ["--zotero", str(zotero_file())]
-    return flags
-
-
 def lookup_estimate():
     """What looking the papers up will cost, worded, or None when pepa-review could not say."""
-    return estimates.estimate("pepa-review", "biblio", lookup_flags())
+    flags = ["fetch"]
+    if export_file():
+        flags = flags + ["--zotero", str(export_file())]
+    return estimates.estimate("pepa-review", "biblio", flags)
 
 
-def start_lookup():
-    """Start pepa-review looking the papers up on OpenAlex as a job, and return the job's id."""
+def start_lookup(paid_search):
+    """Start pepa-review looking the papers up as a job, with a paid title search for the rest when asked, and return the job's id."""
     values = {"subcmd": "fetch"}
-    if zotero_file():
-        values["--zotero"] = str(zotero_file())
+    if export_file():
+        values["--zotero"] = str(export_file())
+    if paid_search:
+        values["--paid-search"] = "on"
     return jobs.start_job("pepa-review", "biblio", values)

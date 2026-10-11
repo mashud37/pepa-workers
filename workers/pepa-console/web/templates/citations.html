@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_file_field.html" as files %}
 {% block title %}Citations · Explore · pepa{% endblock %}
 {% block content %}
 {% include "_explore_tabs.html" %}
@@ -7,13 +8,12 @@
 <section class="card start" aria-labelledby="lookup-title">
   <h2 class="title" id="lookup-title">Look up citations</h2>
   <p class="supporting">Finds each summarised paper on OpenAlex: its year, journal, how often it is cited, and which papers in your library it cites. Reviews then build their debates around the most cited papers. Papers already looked up are skipped.</p>
-  <p class="supporting">{% if zotero %}DOIs come from your Zotero export, which makes those lookups free.{% else %}A Zotero export makes the lookups more exact, and free for every paper it holds a DOI for: in Zotero, choose File, Export Library, CSL JSON.{% endif %}</p>
-  <form method="post" action="{{ url_for('explore.citations_zotero') }}" enctype="multipart/form-data" class="filter">
+  <p class="supporting">Each paper is found by the DOI printed on its first pages, by your reference export, or by a title search on Crossref, all free. Papers none of these find can be searched on OpenAlex by title, at a cost shown first.</p>
+  <form method="post" action="{{ url_for('explore.citations_next') }}" enctype="multipart/form-data">
     <input type="hidden" name="token" value="{{ token }}">
-    <label class="field grow"><span>{% if zotero %}Replace the Zotero export{% else %}Zotero export (.json){% endif %}</span><input type="file" name="file" accept=".json"></label>
-    <button class="tonal">Save</button>
+    {{ files.file_field("file", "Reference export, optional: in Zotero, File, Export Library, as CSL JSON, BibTeX or RIS", ".json,.bib,.ris", export.name if export else "") }}
+    <div class="form-actions"><button class="filled">Next</button></div>
   </form>
-  <div class="form-actions"><a class="button filled" href="{{ url_for('explore.citations_new') }}">Next</a></div>
 </section>
 
 {% if overview %}

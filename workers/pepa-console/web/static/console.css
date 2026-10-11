@@ -681,3 +681,5 @@ body.busy .buddy .ink rect { animation: write 1.4s steps(1, end) infinite; anima
 .side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .side-subtitle { margin: 16px 0 8px; font: 500 14px/20px var(--font); }
 .paper-main > .section-title { margin: 24px 0 8px; }
+.file-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.file-pick .meta { min-width: 0; overflow-wrap: anywhere; }

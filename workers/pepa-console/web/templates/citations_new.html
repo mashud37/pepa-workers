@@ -12,11 +12,13 @@
   <p class="title">Look up citations on OpenAlex</p>
   {% if estimate %}
   <p class="supporting">{{ estimate.words }}</p>
-  {% if estimate.papers %}
+  {% if export %}<p class="meta">Using your export {{ export.name }}.</p>{% endif %}
+  {% if estimate.works %}
   <form class="form-actions" method="post">
     <input type="hidden" name="token" value="{{ token }}">
     <a class="button text" href="{{ url_for('explore.citations_page') }}">Cancel</a>
-    <button class="filled">Look up</button>
+    {% if estimate.by_search %}<button class="tonal" name="paid" value="on">Then search OpenAlex for the rest, {{ estimate.paid_words }} at most</button>{% endif %}
+    <button class="filled">Look up, free</button>
   </form>
   {% else %}
   <div class="form-actions"><a class="button text" href="{{ url_for('explore.citations_page') }}">Back to Citations</a></div>

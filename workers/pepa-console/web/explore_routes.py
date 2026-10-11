@@ -356,34 +356,32 @@ def citations_page():
     return render_template(
         "citations.html",
         overview=citations.overview(),
-        zotero=citations.zotero_file(),
+        export=citations.export_file(),
         shown=shown_run("biblio"),
     )
 
 
-@bp.route("/explore/citations/zotero", methods=["POST"])
-def citations_zotero():
+@bp.route("/explore/citations", methods=["POST"])
+def citations_next():
     upload = request.files.get("file")
-    if upload is None or not upload.filename:
-        flash("Choose a Zotero export first.")
-        return redirect(url_for("explore.citations_page"))
-    try:
-        citations.save_zotero(upload)
-        flash("Saved. The next lookup matches DOIs from this export.")
-    except ValueError as error:
-        flash(str(error))
-    return redirect(url_for("explore.citations_page"))
+    if upload is not None and upload.filename:
+        try:
+            citations.save_export(upload)
+        except ValueError as error:
+            flash(str(error))
+            return redirect(url_for("explore.citations_page"))
+    return redirect(url_for("explore.citations_new"))
 
 
 @bp.route("/explore/citations/new")
 def citations_new():
-    return render_template("citations_new.html", estimate=citations.lookup_estimate(), zotero=citations.zotero_file())
+    return render_template("citations_new.html", estimate=citations.lookup_estimate(), export=citations.export_file())
 
 
 @bp.route("/explore/citations/new", methods=["POST"])
 def citations_run():
     try:
-        citations.start_lookup()
+        citations.start_lookup(request.form.get("paid") == "on")
     except ValueError as error:
         flash(str(error))
     return redirect(url_for("explore.citations_page"))
