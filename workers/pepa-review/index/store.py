@@ -272,6 +272,13 @@ def _require_index():
     return idx
 
 
+def checked_index():
+    """The index, refused when it is missing or was built with another embedding model than the active one."""
+    idx = _require_index()
+    _check_provider(idx)
+    return idx
+
+
 def _check_provider(idx):
     """Refuse a query embedded by another provider or model than the one that built the index."""
     embed_cfg = config.embed_config()

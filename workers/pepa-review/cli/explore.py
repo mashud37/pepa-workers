@@ -2,6 +2,8 @@
 body of works across turns that the user can follow up on, expand, or
 replace with a new search.
 """
+from datetime import datetime
+
 import config
 from backends import llm
 from backends import prompt as prompts
@@ -18,7 +20,8 @@ def run(query=None):
         ui.info(f"corpus map available: {maps[-1].name}  (run '{config.COMMAND} map' to refresh)")
 
     history = []
-    active = _start_conversation(query, history)
+    transcript = config.OUTPUT_DIR / f"explore_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+    active = _start_conversation(query, history, transcript)
 
     while True:
         if not active:
@@ -27,7 +30,7 @@ def run(query=None):
                 break
             active = _fetch(q)
             if active:
-                _reply(q, active, history)
+                _reply(q, active, history, transcript)
                 history.append(q)
             continue
 
@@ -43,7 +46,7 @@ def run(query=None):
             q = ui.ask("Question")
             if not q:
                 continue
-            _reply(q, active, history)
+            _reply(q, active, history, transcript)
             history.append(q)
             if len(history) > 12:
                 history = history[-12:]
@@ -61,16 +64,17 @@ def run(query=None):
 
         elif action == 2:
             history = []
-            active = _start_conversation(None, history)
+            active = _start_conversation(None, history, transcript)
 
 
-def _start_conversation(query, history):
+def _start_conversation(query, history, transcript):
     """Fetch or select the first work set and fire an opening reply.
 
     Args:
         query: a query string to retrieve by, or None to prompt for a
             corpus source (query search or manual selection).
         history: the conversation history list, appended to in place.
+        transcript: the file every answer is added to.
 
     Returns:
         The list of active work-record dicts, possibly empty.
@@ -78,14 +82,14 @@ def _start_conversation(query, history):
     if query:
         active = _fetch(query)
         if active:
-            _reply(query, active, history)
+            _reply(query, active, history, transcript)
             history.append(query)
         return active
 
     corpus = _build_corpus()
     active = corpus["active"]
     if active and corpus["seed_query"]:
-        _reply(corpus["seed_query"], active, history)
+        _reply(corpus["seed_query"], active, history, transcript)
         history.append(corpus["seed_query"])
     return active
 
@@ -221,7 +225,7 @@ def _add_by_number(raw, visible, selected, selected_bases):
         ui.ok(f"Added: {r.get('authors', '')}")
 
 
-def _reply(query, active, history):
+def _reply(query, active, history, transcript):
     briefs_text = _format_hits(active)
     hist_text = "\n".join(history[-6:])
 
@@ -242,6 +246,17 @@ def _reply(query, active, history):
     print(response)
     ui.rule()
     _print_corpus(active)
+    _keep(transcript, query, response, active)
+
+
+def _keep(transcript, query, response, active):
+    """Add one question, its answer and the works it drew on to the transcript in output/."""
+    works = ""
+    for h in active:
+        works += f"- {h.get('authors', '')}: {h.get('title', '')}\n"
+    config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    with transcript.open("a", encoding="utf-8") as out:
+        out.write(f"## {query}\n\n{response}\n\nWorks in context:\n\n{works}\n")
 
 
 def _print_corpus(active):

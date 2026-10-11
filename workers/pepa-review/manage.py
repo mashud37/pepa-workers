@@ -28,6 +28,11 @@ def _build_parser():
     e.add_argument("--query", default=None, metavar="QUERY",
                    help="Initial query (default: interactive prompt)")
 
+    si = sub.add_parser("similar", help="Find the indexed papers closest to a document")
+    si.add_argument("--input", required=True, metavar="FILE", help="A text or markdown file, such as a draft")
+    si.add_argument("--estimate", action="store_true", help="Print the embedding tokens and their cost as JSON, and stop")
+    si.add_argument("--json", action="store_true", help="Print the papers as JSON instead of a table")
+
     mp = sub.add_parser("map", help="Generate corpus thematic map")
     mp.add_argument("--threads", type=int, default=None, metavar="N",
                     help="Target thread count for k-means fallback (default: auto)")
@@ -78,6 +83,9 @@ def main():
     elif args.command == "explore":
         from cli import explore
         explore.run(query=args.query)
+    elif args.command == "similar":
+        from cli import similar
+        similar.run(args.input, only_estimate=args.estimate, as_json=args.json)
     elif args.command == "map":
         from cli import map as map_cmd
         map_cmd.run(n_threads=args.threads)
