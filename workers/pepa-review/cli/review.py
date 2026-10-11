@@ -1,6 +1,7 @@
 """Assemble a literature review from works chosen by map browsing, keyword search, or a
 stem list, then draft or synthesise them into sections.
 """
+import json
 import os
 import re
 import subprocess
@@ -16,11 +17,40 @@ import numpy as np
 import config
 from backends import llm
 from backends import prompt as prompts
-from cli import progress, ui
-from corpus.metadata import display_label, work_list
+from cli import costs, progress, ui
+from corpus.metadata import display_label, list_bases, work_list
+
+FOLLOW_TOKENS = 6000
+PLAN_TOKENS = 1500
+SECTION_TOKENS = 2200
 
 
-def run(outline_file=None, auto=False, list_file=None):
+def review_estimate(outline_file, list_file, structure):
+    """The cost of a review: the outline and every chosen brief go into each quality call, an upper bound."""
+    from index.store import checked_index
+    records = checked_index()["records"]
+    if list_file:
+        wanted = set(list_bases(list_file))
+        records = [record for record in records if record["base"] in wanted]
+    else:
+        records = records[:config.REVIEW_CANDIDATE_K]
+    outline_chars = len(Path(outline_file).read_text(encoding="utf-8")) if outline_file else 0
+    input_chars = outline_chars + len(records) * costs.brief_chars_mean(records)
+    calls = [{"input_chars": input_chars, "output_tokens": FOLLOW_TOKENS}]
+    if structure != "follow":
+        calls = [{"input_chars": input_chars, "output_tokens": PLAN_TOKENS}]
+        for _ in range(config.REVIEW_SECTIONS_MAX):
+            calls.append({"input_chars": input_chars, "output_tokens": SECTION_TOKENS})
+    result = costs.estimate(calls, quality=True)
+    result["papers"] = len(records)
+    result["upto"] = True
+    return result
+
+
+def run(outline_file=None, auto=False, list_file=None, structure=None, only_estimate=False):
+    if only_estimate:
+        print(json.dumps(review_estimate(outline_file, list_file, structure or "synthesise")))
+        return
     ui.header("Literature review")
 
     sp = progress.StepSpinner("scanning corpus")
@@ -45,7 +75,7 @@ def run(outline_file=None, auto=False, list_file=None):
         raise SystemExit("No works selected.")
     ui.ok(f"selected: {len(selected)} works")
 
-    mode = "synthesise" if auto else _ask_mode()
+    mode = structure or ("synthesise" if auto else _ask_mode())
     debates = _biblio_debates(selected) if config.use_biblio() else None
     sig = debates["sig"] if debates else None
 
@@ -270,7 +300,7 @@ def _draft_follow(outline, selected, debate_block):
     try:
         text = llm.complete(prompts.review_system(),
                             prompts.review_prompt(outline, briefs),
-                            max_tokens=6000, quality=True)
+                            max_tokens=FOLLOW_TOKENS, quality=True)
         sp.done("done")
         return text
     except Exception as e:
@@ -291,7 +321,7 @@ def _draft_synthesise(outline, selected, debates):
             prompts.review_plan_system(),
             prompts.review_plan_prompt(outline, _format_briefs(selected), terms,
                                        config.REVIEW_SECTIONS_MIN, config.REVIEW_SECTIONS_MAX),
-            max_tokens=1500, quality=True)
+            max_tokens=PLAN_TOKENS, quality=True)
         sp.done("planned")
     except Exception as e:
         sp.done("error")
@@ -335,7 +365,7 @@ def _draft_one_section(section, debates):
         prompts.review_section_prompt(section["title"], section.get("covers", ""),
                                       _format_briefs(section["records"]),
                                       _debate_block(section["records"], debates)),
-        max_tokens=2200, quality=True)
+        max_tokens=SECTION_TOKENS, quality=True)
 
 
 def _parse_plan(text):

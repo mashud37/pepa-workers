@@ -226,7 +226,7 @@ def _add_by_number(raw, visible, selected, selected_bases):
 
 
 def _reply(query, active, history, transcript):
-    briefs_text = _format_hits(active)
+    briefs_text = format_hits(active)
     hist_text = "\n".join(history[-6:])
 
     sp = progress.StepSpinner("responding")
@@ -265,7 +265,8 @@ def _print_corpus(active):
         ui.info(f"  {h.get('authors', '')}: {h.get('title', '')[:60]}")
 
 
-def _format_hits(hits):
+def format_hits(hits):
+    """The works in context as the short briefs a question is answered from."""
     parts = []
     for h in hits:
         parts.append(

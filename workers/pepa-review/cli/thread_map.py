@@ -1,5 +1,5 @@
-"""WS5: re-clusters one thread of a saved corpus map at finer granularity
-by rerunning the corpus-map pipeline over just that thread's works.
+"""Re-cluster one thread of a saved map at finer granularity by rerunning the map pipeline over its works.
+The console's theme pages offer it as Map this theme in detail.
 """
 import json
 import re
@@ -11,7 +11,7 @@ from cli import map as map_cmd
 from cli import ui
 
 
-def run(map_file=None, thread=None):
+def run(map_file=None, thread=None, only_estimate=False):
     sidecar = _resolve_map(map_file)
     if not sidecar:
         return
@@ -25,17 +25,22 @@ def run(map_file=None, thread=None):
     index = _index_by_base()
     records_by_base = index["by_base"]
     index_model = index["model"]
+    if only_estimate:
+        print(json.dumps(_estimate(chosen, records_by_base)))
+        return
     total = len(chosen)
+    mapped = 0
     for i, t in enumerate(chosen, 1):
         ui.info(f"[{i}/{total}] thread: {t['name']}")
         bases = list(dict.fromkeys(t["bases"] + t.get("also_bases", [])))
         gathered = _gather(bases, records_by_base)
         records = gathered["records"]
         vecs = gathered["vectors"]
-        if len(records) < config.MAP_SUB_MIN_THREADS + 1:
-            ui.warn(f"only {len(records)} works resolved, too few to sub-cluster, skipping")
+        if len(records) < config.MAP_SMALLEST:
+            ui.warn(f"only {len(records)} papers; a theme is mapped in detail from {config.MAP_SMALLEST}, skipping")
             continue
-        slug = re.sub(r"[^a-z0-9]+", "_", t["name"].lower()).strip("_")[:40] or "thread"
+        mapped += 1
+        slug = map_cmd.slug_of(t["name"])
         map_cmd.build_map(
             records, np.array(vecs, dtype=float),
             title=f"Thread map: {t['name']}",
@@ -45,6 +50,28 @@ def run(map_file=None, thread=None):
             max_threads=config.MAP_SUB_MAX_THREADS,
             source=source_name,
         )
+    if mapped == 0:
+        raise SystemExit(f"No theme here has the {config.MAP_SMALLEST} papers a detail map needs.")
+
+
+def _estimate(chosen, records_by_base):
+    """The cost of mapping each chosen thread in detail, added up."""
+    band = {"min": config.MAP_SUB_MIN_THREADS, "max": config.MAP_SUB_MAX_THREADS}
+    total = {"calls": 0, "input_tokens": 0, "output_tokens": 0, "model": "", "dollars": 0.0, "papers": 0, "upto": True}
+    for t in chosen:
+        bases = list(dict.fromkeys(t["bases"] + t.get("also_bases", [])))
+        records = _gather(bases, records_by_base)["records"]
+        one = map_cmd.map_estimate(records, None, band)
+        total["calls"] += one["calls"]
+        total["input_tokens"] += one["input_tokens"]
+        total["output_tokens"] += one["output_tokens"]
+        total["papers"] += one["papers"]
+        total["model"] = one["model"]
+        if one["dollars"] is None or total["dollars"] is None:
+            total["dollars"] = None
+        else:
+            total["dollars"] += one["dollars"]
+    return total
 
 
 # ---- Map and thread selection ----

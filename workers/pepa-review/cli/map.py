@@ -1,5 +1,5 @@
-"""Cluster every indexed work into thematic threads, ask Claude Sonnet to characterise
-each thread, and write one Markdown corpus map to output/.
+"""Cluster indexed works into thematic threads, ask the quality model to characterise each one,
+and write a Markdown map plus a JSON file the console reads to output/.
 """
 import json
 import re
@@ -11,14 +11,67 @@ import numpy as np
 import config
 from backends import llm
 from backends import prompt as prompts
-from cli import progress, ui
+from cli import costs, progress, ui
+from corpus.metadata import list_bases
 from index import cluster
 
+# A list holds fewer papers than the library, so it is mapped at the finer band a single theme gets.
+# Methods and empirical contexts join each brief in a theme's prompt, about a third more text.
+ENRICHED_SHARE = 1.3
+THEME_OUTPUT_TOKENS = 1400
 
-def run(n_threads=None):
+
+def run(n_threads=None, list_file=None, only_estimate=False):
     idx = _load_index()
-    build_map(idx["records"], np.array(idx["vectors"], dtype=float), n_threads=n_threads,
-              title="Corpus map", stem="corpus_map", index_model=idx.get("model", ""))
+    records = idx["records"]
+    vectors = idx["vectors"]
+    title = "Corpus map"
+    stem = "corpus_map"
+    band = {"min": None, "max": None}
+    if list_file:
+        wanted = set(list_bases(list_file))
+        kept = [(r, v) for r, v in zip(records, vectors) if r["base"] in wanted]
+        if len(kept) < config.MAP_SMALLEST:
+            raise SystemExit(f"Only {len(kept)} papers of this list are in the index; a map needs {config.MAP_SMALLEST}.")
+        records = [pair[0] for pair in kept]
+        vectors = [pair[1] for pair in kept]
+        name = Path(list_file).stem
+        title = f"List map: {name}"
+        stem = "list_map_" + slug_of(name)
+        band = {"min": config.MAP_SUB_MIN_THREADS, "max": config.MAP_SUB_MAX_THREADS}
+    if only_estimate:
+        print(json.dumps(map_estimate(records, n_threads, band)))
+        return
+    build_map(records, np.array(vectors, dtype=float), n_threads=n_threads, title=title, stem=stem,
+              index_model=idx.get("model", ""), min_threads=band["min"], max_threads=band["max"])
+
+
+def slug_of(name):
+    """A name cut down to lower-case letters, digits and underscores, for a file name."""
+    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")[:40] or "map"
+
+
+def most_threads(count, n_threads, band):
+    """The most threads a map of this many papers can find, the top of the band select_params sweeps."""
+    if n_threads:
+        return int(n_threads)
+    floor = band["min"] if band["min"] is not None else config.MAP_MIN_THREADS
+    ceiling = band["max"] if band["max"] is not None else config.MAP_MAX_THREADS
+    return max(1, min(ceiling, max(floor + 1, count // 8), count - 1))
+
+
+def map_estimate(records, n_threads, band):
+    """The cost of mapping these papers, counted at the most threads the map can find."""
+    threads = most_threads(len(records), n_threads, band)
+    per_thread = min(prompts.MAX_CLUSTER_WORKS, len(records))
+    input_chars = int(per_thread * costs.brief_chars_mean(records) * ENRICHED_SHARE)
+    calls = []
+    for _ in range(threads):
+        calls.append({"input_chars": input_chars, "output_tokens": THEME_OUTPUT_TOKENS})
+    result = costs.estimate(calls, quality=True)
+    result["papers"] = len(records)
+    result["upto"] = True
+    return result
 
 
 def build_map(records, vecs, n_threads=None, *, title="Corpus map", stem="corpus_map",
@@ -163,7 +216,7 @@ def _build_sections(thread_ids, records, clustering, vecs_norm, enriched_map):
                 prompts.map_system(),
                 prompts.map_thread_prompt(enriched, total_in_cluster=len(members),
                                           top_terms=terms.get(tid, [])),
-                max_tokens=1400,
+                max_tokens=THEME_OUTPUT_TOKENS,
                 quality=True,
             )
             section = _parse_response(response, members, also)
@@ -316,6 +369,11 @@ def _write_sidecar(sections, outliers, meta):
                 "name":       s["name"],
                 "bases":      [r["base"] for r in s["records"]],
                 "also_bases": [r["base"] for r in s.get("also", [])],
+                "discussion": s["discussion"],
+                "arguments":  s["arguments"],
+                "concepts":   s["concepts"],
+                "methods":    s["methods"],
+                "empirical":  s["empirical"],
             }
             for i, s in enumerate(sections, 1)
         ],

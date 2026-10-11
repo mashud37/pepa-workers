@@ -19,6 +19,8 @@ def _build_parser():
                    help="Auto-select works by similarity instead of prompting")
     r.add_argument("--list", default=None, metavar="FILE",
                    help="Path to a stem list (e.g. exported from pepa-reader) to select works from")
+    r.add_argument("--structure", default=None, choices=["follow", "synthesise"], help="Follow the outline, or synthesise sections from the works (default: ask)")
+    r.add_argument("--estimate", action="store_true", help="Print the cost as JSON, and stop")
 
     g = sub.add_parser("gaps", help="Gap-check a draft against the corpus")
     g.add_argument("--input", default=None, metavar="FILE",
@@ -28,6 +30,12 @@ def _build_parser():
     e.add_argument("--query", default=None, metavar="QUERY",
                    help="Initial query (default: interactive prompt)")
 
+    ak = sub.add_parser("ask", help="Answer one question about the literature, kept in output/")
+    ak.add_argument("--question", default="", metavar="TEXT", help="The question")
+    ak.add_argument("--conversation", default=None, metavar="FILE", help="A conversation in output/ to follow up, or the name for a new one")
+    ak.add_argument("--list", default=None, metavar="FILE", help="Answer only from the papers in this literature list")
+    ak.add_argument("--estimate", action="store_true", help="Print the cost of one question as JSON, and stop")
+
     si = sub.add_parser("similar", help="Find the indexed papers closest to a document")
     si.add_argument("--input", required=True, metavar="FILE", help="A text or markdown file, such as a draft")
     si.add_argument("--estimate", action="store_true", help="Print the embedding tokens and their cost as JSON, and stop")
@@ -36,12 +44,15 @@ def _build_parser():
     mp = sub.add_parser("map", help="Generate corpus thematic map")
     mp.add_argument("--threads", type=int, default=None, metavar="N",
                     help="Target thread count for k-means fallback (default: auto)")
+    mp.add_argument("--list", default=None, metavar="FILE", help="Map only the papers in this literature list")
+    mp.add_argument("--estimate", action="store_true", help="Print the cost as JSON, and stop")
 
     tm = sub.add_parser("threadmap", help="Re-cluster one thread of a saved map in detail")
     tm.add_argument("--map", default=None, metavar="FILE",
                     help="Corpus map file in output/ (default: pick interactively)")
     tm.add_argument("--thread", default=None, metavar="N|NAME|all",
                     help="Thread number, name substring, or 'all' (default: pick interactively)")
+    tm.add_argument("--estimate", action="store_true", help="Print the cost as JSON, and stop")
 
     ix = sub.add_parser("index", help="Build/refresh the embedding index")
     ix.add_argument("--force", action="store_true", help="Rebuild from scratch")
@@ -49,9 +60,12 @@ def _build_parser():
     sub.add_parser("config", help="Show effective configuration")
     sub.add_parser("install", help="Set up files and check dependencies")
 
-    bi = sub.add_parser("biblio", help="Bibliographic enrichment (ingest, export, stats, network)")
-    bi.add_argument("subcmd", choices=["ingest", "export", "stats", "network"],
-                    help="ingest | export | stats | network")
+    bi = sub.add_parser("biblio", help="Bibliography: fetch from OpenAlex, ingest, export, stats, network")
+    bi.add_argument("subcmd", choices=["fetch", "ingest", "export", "stats", "network"],
+                    help="fetch | ingest | export | stats | network")
+    bi.add_argument("--zotero", default=None, metavar="FILE", help="With fetch: a Zotero CSL-JSON export, whose DOIs make lookups free")
+    bi.add_argument("--force", action="store_true", help="With fetch: look up papers already stored again")
+    bi.add_argument("--estimate", action="store_true", help="With fetch: print the lookups and their cost as JSON, and stop")
     bi.add_argument("--works", default=None, metavar="FILE",
                     help="Works metadata file (CSV or JSONL), required for ingest")
     bi.add_argument("--citations", default=None, metavar="FILE",
@@ -76,22 +90,25 @@ def main():
         return menu.main()
     if args.command == "review":
         from cli import review
-        review.run(outline_file=args.input, auto=args.auto, list_file=args.list)
+        review.run(outline_file=args.input, auto=args.auto, list_file=args.list, structure=args.structure, only_estimate=args.estimate)
     elif args.command == "gaps":
         from cli import gaps
         gaps.run(input_file=args.input)
     elif args.command == "explore":
         from cli import explore
         explore.run(query=args.query)
+    elif args.command == "ask":
+        from cli import ask
+        ask.run(args.question, conversation_name=args.conversation, list_file=args.list, only_estimate=args.estimate)
     elif args.command == "similar":
         from cli import similar
         similar.run(args.input, only_estimate=args.estimate, as_json=args.json)
     elif args.command == "map":
         from cli import map as map_cmd
-        map_cmd.run(n_threads=args.threads)
+        map_cmd.run(n_threads=args.threads, list_file=args.list, only_estimate=args.estimate)
     elif args.command == "threadmap":
         from cli import thread_map
-        thread_map.run(map_file=args.map, thread=args.thread)
+        thread_map.run(map_file=args.map, thread=args.thread, only_estimate=args.estimate)
     elif args.command == "index":
         from cli import index_cmd
         index_cmd.run(force=args.force)
@@ -108,6 +125,9 @@ def main():
             "graph_type": args.graph_type,
             "fmt": args.format,
             "output_dir": args.output,
+            "zotero": args.zotero,
+            "force": args.force,
+            "only_estimate": args.estimate,
         })
 
 

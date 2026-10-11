@@ -2,9 +2,15 @@
 reduction, and consensus clustering across HDBSCAN, k-means, and Ward,
 shared by the corpus map and literature-review selection.
 """
+import os
+
 import numpy as np
 
 import config
+
+# joblib counts physical cores with wmic, which Windows 11 no longer ships, and prints a traceback when
+# it cannot; a limit below the logical count, here the usual physical count, spares it the search.
+os.environ.setdefault("LOKY_MAX_CPU_COUNT", str(max(1, (os.cpu_count() or 2) // 2)))
 
 TFIDF_COMPONENTS = 40
 CTFIDF_TOP_N = 12
@@ -93,7 +99,7 @@ def reduce_dims(features):
     try:
         import umap
         return umap.UMAP(n_components=dim, n_neighbors=min(15, n - 1),
-                         min_dist=0.0, metric="cosine", random_state=42).fit_transform(features)
+                         min_dist=0.0, metric="cosine", random_state=42, n_jobs=1).fit_transform(features)
     except Exception:
         pass
     try:
