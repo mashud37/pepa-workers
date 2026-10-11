@@ -39,7 +39,7 @@ DeepSeek, Kimi, Qwen, or one running on this computer. [Models](models.md) expla
 2. **Process items** opens for the new papers. Press **Run**: they are prepared, summarised and
    indexed for search, and each paper shows its progress.
 3. Click a finished paper's name to read its brief, its paragraph rundown and its quotes.
-4. **Explore** finds papers by author, title, or any word in their briefs, and keeps literature lists.
+4. **Explore** searches the papers, maps them into themes, answers questions about them, writes literature reviews and keeps literature lists.
 
 ## The workers
 
@@ -48,6 +48,6 @@ DeepSeek, Kimi, Qwen, or one running on this computer. [Models](models.md) expla
 | [pepa-prep](pepa-prep.md) | Turns PDFs into clean text |
 | [pepa-sum](pepa-sum.md) | Summarises each paper: a brief, a paragraph rundown and checked quotes |
 | [pepa-read](pepa-read.md) | Searches everything prepared and summarised; keeps literature lists |
-| [pepa-review](pepa-review.md) | Writes a literature review, finds gaps in a draft, maps a field |
+| [pepa-review](pepa-review.md) | Maps a field into themes, answers questions about it, writes literature reviews, finds gaps in a draft, looks up citations |
 | [pepa-plan](pepa-plan.md) | Outlines a paper idea paragraph by paragraph |
 | [pepa-draft](pepa-draft.md) | Drafts sections from an outline and a review |

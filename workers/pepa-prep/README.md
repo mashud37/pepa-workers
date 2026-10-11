@@ -37,5 +37,4 @@ Put the PDFs into `input/`.
 | Grade a book's chapters and set aside junk files | `python manage.py validate` |
 | Repair chapter boundaries from the text | `python manage.py refine` |
 | Correct chapter boundaries by hand | `python manage.py split` |
-| Fetch bibliography metadata | `python manage.py biblio` |
 | Check dependencies | `python manage.py install` |
