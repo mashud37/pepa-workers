@@ -19,7 +19,7 @@ def _cmd_search(args):
         raise SystemExit(str(e))
 
     if args.json:
-        print(json.dumps({"results": results, "total": total, "offset": args.offset}, indent=2))
+        print(json.dumps({"results": results, "total": total, "offset": args.offset}))
         return
     if not results:
         print("no results", file=sys.stderr)
