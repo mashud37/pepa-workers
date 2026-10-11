@@ -22,13 +22,13 @@ def ingest(works_path, citations_path=None, progress_cb=None):
 
     works_path = Path(works_path)
     works_rows = _load_file(works_path)
-    n_works = _upsert_works(con, works_rows, progress_cb)
+    n_works = upsert_works(con, works_rows, progress_cb)
 
     n_citations = 0
     n_resolved = 0
     if citations_path:
         cit_rows = _load_file(Path(citations_path))
-        citation_result = _upsert_citations(con, cit_rows)
+        citation_result = upsert_citations(con, cit_rows)
         n_citations = citation_result["n_citations"]
         n_resolved = citation_result["n_resolved"]
 
@@ -81,7 +81,7 @@ def _read_jsonl(path):
     return rows
 
 
-def _upsert_works(con, rows, progress_cb):
+def upsert_works(con, rows, progress_cb):
     fields = (
         "base",
         "doi",
@@ -121,7 +121,7 @@ def _upsert_works(con, rows, progress_cb):
     return total
 
 
-def _upsert_citations(con, rows):
+def upsert_citations(con, rows):
     sql = """
         INSERT OR IGNORE INTO citations
             (citing_base, cited_ext_id, cited_doi, cited_title, cited_authors, cited_year, cited_base)

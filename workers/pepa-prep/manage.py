@@ -43,29 +43,6 @@ def _add_eval_parsers(sub) -> None:
     sub.add_parser("score-refine", help="Score markdown refinement against corrected gold files")
 
 
-def _add_biblio_parser(sub) -> None:
-    b = sub.add_parser("biblio", help="Fetch bibliography from OpenAlex for pepa-sum papers")
-    b.add_argument("--zotero", metavar="FILE",
-                   help="Zotero CSL-JSON export (omit to auto-detect in input/)")
-    b.add_argument("--corpus", metavar="DIR",
-                   help="pepa-sum output folder (default: biblio_corpus in config.yaml)")
-    b.add_argument("--cite", action="store_true",
-                   help="Also fetch citation networks from OpenCitations")
-    b.add_argument("-f", "--force", action="store_true",
-                   help="Overwrite existing biblio JSON files")
-    b.add_argument("-q", "--quiet", action="store_true",
-                   help="Suppress per-paper detail lines")
-
-
-def _run_biblio(cfg, args) -> None:
-    run_cfg = dict(cfg)
-    if args.corpus:
-        run_cfg["biblio_corpus"] = args.corpus
-    from cli import biblio_cmd
-    biblio_cmd.run(run_cfg, zotero=args.zotero, cite=args.cite,
-                   force=args.force, quiet=args.quiet)
-
-
 def _dispatch(args, cfg) -> None:
     handlers = {
         "extract": lambda: extract_cmd.run(cfg, file=args.file, force=args.force),
@@ -79,7 +56,6 @@ def _dispatch(args, cfg) -> None:
         "score-chapters": lambda: eval_cmd.score_chapters(cfg),
         "label-refine": lambda: eval_cmd.label_refine(cfg),
         "score-refine": lambda: eval_cmd.score_refine(cfg),
-        "biblio": lambda: _run_biblio(cfg, args),
     }
     handlers[args.command]()
 
@@ -94,7 +70,6 @@ def main():
     _add_pipeline_parsers(sub)
     if cfg_mod.EVALUATION_SHIPPED:
         _add_eval_parsers(sub)
-    _add_biblio_parser(sub)
     args = parser.parse_args()
     if args.no_input:
         sys.stdin = io.StringIO()

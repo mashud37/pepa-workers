@@ -63,6 +63,7 @@ MAP_MERGE_TERM_J = 0.5         # plus top-term Jaccard above which two threads m
 # Thread-level map (WS5): re-cluster the works of one thread at finer granularity
 MAP_SUB_MIN_THREADS = 2        # band floor when re-clustering a single thread's works
 MAP_SUB_MAX_THREADS = 12       # band ceiling for the sub-clustering sweep
+MAP_SMALLEST = 6               # fewest papers a list map or a detail map splits into themes
 
 _ENV_OVERRIDE = {
     "corpus_dir":       "PEPAREVIEW_CORPUS_DIR",
@@ -81,6 +82,8 @@ _ENV_OVERRIDE = {
     "embed_provider":   "PEPAREVIEW_EMBED_PROVIDER",
     "embed_base_url":   "PEPAREVIEW_EMBED_BASE_URL",
     "embed_api_key":    "PEPA_EMBED_API_KEY",
+    "openalex_url":     "PEPAREVIEW_OPENALEX_URL",
+    "openalex_api_key": "OPENALEX_API_KEY",
 }
 
 _PLACEHOLDERS = {"", "REPLACE_ME", "changeme"}
@@ -94,6 +97,7 @@ DEFAULTS = {
     "ollama_base_url": "http://localhost:11434",
     "backend": "anthropic",
     "embed_provider": "gemini",
+    "openalex_url": "https://api.openalex.org",
 }
 
 # `anthropic` calls Claude; `openai-compatible` calls any server that accepts OpenAI's
@@ -194,8 +198,8 @@ def model_names():
 
 
 def use_biblio():
-    """True when bibliographic enrichment is enabled and biblio.db exists."""
-    raw = get("use_biblio", "false")
+    """True when biblio.db exists, unless use_biblio turns enrichment off."""
+    raw = get("use_biblio", "true")
     return str(raw).lower() in ("1", "true", "yes") and BIBLIO_DB.exists()
 
 

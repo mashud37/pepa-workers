@@ -1,7 +1,6 @@
 from extract import config as cfg_mod
 
 from . import (
-    biblio_cmd,
     config_cmd,
     extract_cmd,
     install,
@@ -21,11 +20,6 @@ def _actions() -> list:
          split_cmd.run),
         ("Refine chapters", "repair over-/under-split chapter files from text signals",
          _run_refine),
-        ("Fetch bibliography", "match Zotero + OpenAlex metadata for pepa-sum papers",
-         lambda cfg: _run_biblio(cfg, cite=False)),
-        ("Fetch bibliography + citations",
-         "also download citation networks from OpenCitations",
-         lambda cfg: _run_biblio(cfg, cite=True)),
         ("Configure", "set input/output paths and options", config_cmd.main),
         ("Install / check deps", "verify pypdfium2, pdfplumber, pytesseract, Pillow",
          lambda cfg: install.run()),
@@ -69,9 +63,3 @@ def _run_refine(cfg: dict) -> None:
     refine_cmd.run(cfg)
     if ui.confirm("Apply these repairs now?", default_yes=False):
         refine_cmd.run(cfg, apply=True)
-
-
-def _run_biblio(cfg: dict, cite: bool) -> None:
-    zotero = ui.ask("Zotero CSL-JSON file (blank = auto-detect in input/)", None)
-    force = ui.confirm("Overwrite existing biblio files?", default_yes=False)
-    biblio_cmd.run(cfg, zotero=zotero or None, cite=cite, force=force)

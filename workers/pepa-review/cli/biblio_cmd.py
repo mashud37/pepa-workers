@@ -1,6 +1,7 @@
-"""Run bibliographic enrichment subcommands: ingest, export, stats, and
-network, all requiring use_biblio=true in secrets.yaml.
+"""Run the bibliography subcommands: fetch from OpenAlex, ingest files, export, stats, and network.
+Reviews and the console's Citations page read what they store.
 """
+import json
 import sys
 from functools import partial
 from pathlib import Path
@@ -24,7 +25,9 @@ def run(subcmd, options=None):
     fmt = options.get("fmt", "html")
     output_dir = options.get("output_dir")
 
-    if subcmd == "ingest":
+    if subcmd == "fetch":
+        _fetch(options)
+    elif subcmd == "ingest":
         _ingest(works_file, citations_file)
     elif subcmd == "export":
         _export(output_dir)
@@ -34,6 +37,14 @@ def run(subcmd, options=None):
         _network(graph_type, fmt, output_dir)
     else:
         raise SystemExit(f"Unknown biblio subcommand: {subcmd}")
+
+
+def _fetch(options):
+    from biblio import fetch
+    if options.get("only_estimate"):
+        print(json.dumps(fetch.fetch_estimate(options.get("zotero"), options.get("force"))))
+        return
+    fetch.fetch(options.get("zotero"), options.get("force"))
 
 
 def _report_ingest_progress(sp, i, total, label):
@@ -74,7 +85,9 @@ def _ingest(works_file, citations_file):
     if cit_path:
         ui.ok(f"{result['n_citations']} citation edges stored")
         ui.ok(f"{result['n_resolved']} edges resolved to corpus works (internal graph)")
-    ui.info("biblio.db ready: set use_biblio: true in secrets.yaml to activate enrichment")
+    from biblio.fetch import write_citations_file
+    write_citations_file()
+    ui.info("biblio.db ready")
 
 
 def _export(output_dir):
@@ -121,8 +134,6 @@ def _stats():
     enrichment = "on" if config.use_biblio() else "off"
     ui.step("Toggle")
     ui.info(f"use_biblio: {enrichment}")
-    if not config.use_biblio():
-        ui.warn("Enrichment is off: set use_biblio: true in secrets.yaml to activate")
 
 
 def _network(graph_type, fmt, output_dir):

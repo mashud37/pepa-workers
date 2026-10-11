@@ -10,7 +10,6 @@ DATA_ROOT = Path(_PROJECT) / "pepa-prep" if _PROJECT else _ROOT
 INSTALLED = _ROOT.parent.name == "apps"
 COMMAND = "pepa-prep" if INSTALLED else "python manage.py"
 _CONFIG_PATH = DATA_ROOT / "config.yaml"
-_SECRETS_PATH = DATA_ROOT / "secrets.yaml"
 
 # The evaluation harness and its gold data live only in the source repository.
 EVALUATION_SHIPPED = (_ROOT / "evaluate").is_dir()
@@ -27,11 +26,6 @@ _DEFAULT: dict = {
     "tesseract_cmd": "",
     "refine_snap_lines": 0,
     "refine_unit_slack": 1,
-    # Bibliography enrichment (python manage.py biblio)
-    "biblio_corpus": "../pepa-sum/output",
-    "biblio_output": "./output",
-    "biblio_zotero": "",
-    "openalex_email": "",
 }
 
 
@@ -63,8 +57,6 @@ _YES_WORDS = ("1", "true", "yes", "on")
 _FOLDER_KEYS = [
     "input_folder",
     "output_folder",
-    "biblio_corpus",
-    "biblio_output",
 ]
 
 
@@ -94,17 +86,6 @@ def save(cfg: dict) -> None:
     DATA_ROOT.mkdir(parents=True, exist_ok=True)
     with _CONFIG_PATH.open("w", encoding="utf-8") as f:
         yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True)
-
-
-def openalex_api_key() -> str:
-    """Optional OpenAlex premium key: OPENALEX_API_KEY env var wins over secrets.yaml."""
-    if os.environ.get("OPENALEX_API_KEY"):
-        return os.environ["OPENALEX_API_KEY"]
-    if not _SECRETS_PATH.exists():
-        return ""
-    secrets = yaml.safe_load(_SECRETS_PATH.read_text(encoding="utf-8")) or {}
-    key = secrets.get("openalex_api_key", "")
-    return key if key and not key.startswith("<") else ""
 
 
 def tesseract_path(cfg: dict) -> str:
