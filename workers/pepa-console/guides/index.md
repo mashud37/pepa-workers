@@ -36,10 +36,10 @@ DeepSeek, Kimi, Qwen, or one running on this computer. [Models](models.md) expla
 ## A first run
 
 1. On **Library**, drop some PDFs on the page, or press **Copy PDFs in** and choose them.
-2. **Process papers** opens for the new papers. Press **Run**: they are prepared, summarised and
+2. **Process items** opens for the new papers. Press **Run**: they are prepared, summarised and
    indexed for search, and each paper shows its progress.
-3. Press **Read** beside a finished paper to read its brief, its paragraph rundown and its quotes.
-4. **Search** finds papers by author, title, or any word in their briefs.
+3. Click a finished paper's name to read its brief, its paragraph rundown and its quotes.
+4. **Explore** finds papers by author, title, or any word in their briefs, and keeps literature lists.
 
 ## The workers
 

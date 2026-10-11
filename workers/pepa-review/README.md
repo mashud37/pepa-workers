@@ -36,6 +36,7 @@ providers there with `backend` and `embed_provider`.
 | Build or update the index | `python manage.py index` |
 | Assemble a literature review from an outline | `python manage.py review` |
 | Find works a draft is missing | `python manage.py gaps` |
+| Find the indexed papers closest to a text | `python manage.py similar --input FILE` |
 | Ask questions of the literature | `python manage.py explore` |
 | Map the field into themes | `python manage.py map` |
 | Map one theme in finer detail | `python manage.py threadmap` |

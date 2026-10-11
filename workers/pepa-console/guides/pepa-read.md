@@ -13,6 +13,5 @@ paper without a brief is found too; it follows the papers whose brief matches.
 ## Use it
 
 1. Run **index** after new papers are prepared or summarised. **Process papers** on **Library** does this too.
-2. Open **Search** and press **Start**.
-3. Search, open a result, and add it to a literature list. **list-export** writes a list that
-   pepa-review can use.
+2. Open **Explore** and search.
+3. Open a result to read it, or tick results and add them to a literature list. pepa-review reads the same lists.
