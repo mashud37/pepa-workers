@@ -44,7 +44,7 @@
   {% for result in found.results %}
   <li class="row-item ticked-row">
     <input type="checkbox" name="stem" value="{{ result.stem }}" form="add-to-list-form" aria-label="Tick {{ result.title }}">
-    <a class="result" href="{{ url_for('console.paper_page', stem=result.stem, back=request.full_path) }}">
+    <a class="result" href="{{ url_for('explore.paper_page', stem=result.stem, back=request.full_path) }}">
       <span class="result-title">{{ result.title }}</span>
       <span class="result-authors">{{ result.authors }}{% if not result.summarised %}<span class="chip">Full text only</span>{% endif %}</span>
       {% if result.parts | length > 1 %}<span class="result-snippet">{% for part in result.parts %}{% if part.matched %}<mark>{{ part.text }}</mark>{% else %}{{ part.text }}{% endif %}{% endfor %}</span>{% endif %}
@@ -55,8 +55,8 @@
 {% endif %}
 {% if found.pages > 1 %}
 <nav class="pager" aria-label="Pages">
-  {% if found.page > 1 %}<a class="button text" href="{{ url_for('console.explore_page', page=found.page - 1, **asked) }}">{{ icon.back() }}Previous</a>{% endif %}
-  {% if found.page < found.pages %}<a class="button text" href="{{ url_for('console.explore_page', page=found.page + 1, **asked) }}">Next</a>{% endif %}
+  {% if found.page > 1 %}<a class="button text" href="{{ url_for('explore.explore_page', page=found.page - 1, **asked) }}">{{ icon.back() }}Previous</a>{% endif %}
+  {% if found.page < found.pages %}<a class="button text" href="{{ url_for('explore.explore_page', page=found.page + 1, **asked) }}">Next</a>{% endif %}
 </nav>
 {% endif %}
 {% if found.results %}{% with collect_ticked = False, stems = [] %}{% include "_add_to_list.html" %}{% endwith %}{% endif %}

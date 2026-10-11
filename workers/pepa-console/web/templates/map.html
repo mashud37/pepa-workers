@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}{% if field_map %}{{ field_map.title }} · {% endif %}Map · Explore · pepa{% endblock %}
+{% block content %}
+{% include "_explore_tabs.html" %}
+{% include "_shown_run.html" %}
+
+{% if field_map %}
+{% if parent %}
+<nav class="crumbs-nav" aria-label="Breadcrumb">
+  <ol>
+    <li><a href="{{ url_for('explore.map_page', map=parent) }}">The map it came from</a></li>
+    <li aria-current="page">{{ field_map.title }}</li>
+  </ol>
+</nav>
+{% endif %}
+<div class="list-head">
+  <div>
+    <h2 class="section-title">{{ field_map.title }}</h2>
+    <p class="meta">{{ field_map.total_works }} papers in {{ cards | length }} themes · made {{ field_map.generated }}</p>
+  </div>
+  {% if maps | length > 1 %}
+  <form method="get" class="filter map-picker">
+    <label class="field"><span>Show another map</span>
+      <select name="map">
+        {% for each in maps %}<option value="{{ each.file }}" data-detail="{{ each.kind }} · {{ each.themes }} themes"{% if each.file == field_map.file %} selected{% endif %}>{{ each.title }}, {{ each.generated }}</option>{% endfor %}
+      </select>
+    </label>
+    <button class="tonal">Show</button>
+  </form>
+  {% endif %}
+</div>
+<ul class="theme-cards">
+  {% for card in cards %}
+  <li class="card theme-card">
+    <a href="{{ url_for('explore.theme_page', map=field_map.file, theme=card.id) }}">
+      <span class="title">{{ card.name }}</span>
+      {% if card.gist %}<span class="supporting">{{ card.gist }}</span>{% endif %}
+      <span class="meta">{{ card.papers }} paper{% if card.papers != 1 %}s{% endif %}{% if card.shared %} · {{ card.shared }} shared with other themes{% endif %}</span>
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+{% if outliers %}
+<details class="advanced">
+  <summary>{{ outliers | length }} paper{% if outliers | length != 1 %}s{% endif %} that fit no single theme</summary>
+  <ul class="side-list">
+    {% for paper in outliers %}
+    <li><a href="{{ url_for('explore.paper_page', stem=paper.stem, back=request.full_path) }}">{{ paper.title }}</a><span class="meta">{{ paper.authors }}</span></li>
+    {% endfor %}
+  </ul>
+</details>
+{% endif %}
+{% elif not missing %}
+<div class="empty">
+  <h2>No map yet</h2>
+  <p class="supporting">A map sorts the papers into themes and describes each one: what it discusses, its arguments, concepts and methods.</p>
+</div>
+{% endif %}
+
+{% if missing %}
+{% include "_missing.html" %}
+{% else %}
+<section class="card start make-map" aria-labelledby="make-map-title">
+  <h2 class="title" id="make-map-title">Make a map</h2>
+  <form method="get" action="{{ url_for('explore.map_new') }}" class="filter">
+    <label class="field grow"><span>Papers</span>
+      <select name="list">
+        <option value="" data-detail="Every paper in the review index">Everything</option>
+        {% for each in lists %}<option value="{{ each.name }}" data-detail="{{ each.count }} papers">{{ each.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <button class="tonal">Next</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

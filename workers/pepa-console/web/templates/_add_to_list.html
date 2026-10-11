@@ -1,5 +1,5 @@
 <dialog id="add-to-list" class="dialog" aria-labelledby="add-to-list-title">
-  <form method="post" action="{{ url_for('console.lists_add') }}" id="add-to-list-form"{% if collect_ticked %} data-collect-ticked{% endif %}>
+  <form method="post" action="{{ url_for('explore.lists_add') }}" id="add-to-list-form"{% if collect_ticked %} data-collect-ticked{% endif %}>
     <input type="hidden" name="token" value="{{ token }}">
     <input type="hidden" name="back" value="{{ request.full_path }}">
     {% for stem in stems or [] %}<input type="hidden" name="stem" value="{{ stem }}">{% endfor %}

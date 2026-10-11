@@ -8,7 +8,7 @@ from pathlib import Path
 
 from werkzeug.utils import secure_filename
 
-from web import connections, documents, jobs, paths
+from web import connections, documents, estimates, jobs, paths
 
 SEARCH_PAGE_SIZE = 20
 # Advanced search: each box looks in one part of a brief, by the name pepa-read gives that part.
@@ -150,22 +150,12 @@ def saved_text(name):
     return path
 
 
-def cost_words(estimate):
-    """What finding papers for a text costs, as the page says it."""
-    if estimate["dollars"] is None:
-        return f"About {estimate['tokens']:,} tokens with {estimate['model']}, whose price is not known here."
-    if estimate["dollars"] == 0:
-        return "Runs on your computer, at no cost."
-    dollars = "under $0.01" if estimate["dollars"] < 0.01 else f"about ${estimate['dollars']:.2f}"
-    return f"About {estimate['tokens']:,} tokens with {estimate['model']}: {dollars} at list price."
-
-
 def document_estimate(path):
     """The embedding a text needs, worded, or None when pepa-review could not say."""
     reply = jobs.json_reply("pepa-review", "similar", ["--input", str(path), "--estimate"])
     if reply is None:
         return None
-    return {"pieces": reply["pieces"], "words": cost_words(reply)}
+    return {"pieces": reply["pieces"], "words": estimates.cost_words(reply)}
 
 
 def find_document(path):

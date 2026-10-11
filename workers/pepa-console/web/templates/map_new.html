@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Make a map · Explore · pepa{% endblock %}
+{% block content %}
+{% include "_explore_tabs.html" %}
+<nav class="crumbs-nav" aria-label="Breadcrumb">
+  <ol>
+    {% if theme %}
+    <li><a href="{{ url_for('explore.map_page', map=field_map.file) }}">{{ field_map.title }}</a></li>
+    <li><a href="{{ url_for('explore.theme_page', map=field_map.file, theme=theme.id) }}">{{ theme.name }}</a></li>
+    <li aria-current="page">Map in detail</li>
+    {% else %}
+    <li><a href="{{ url_for('explore.map_page') }}">Map</a></li>
+    <li aria-current="page">{% if list_name %}Map of {{ list_name }}{% else %}Map of everything{% endif %}</li>
+    {% endif %}
+  </ol>
+</nav>
+<div class="card start">
+  <p class="title">{% if theme %}Map {{ theme.name }} in detail{% elif list_name %}Map the papers in {{ list_name }}{% else %}Map every paper{% endif %}</p>
+  {% if estimate %}
+  <p class="supporting">{{ estimate.papers }} papers, one call for each theme found. {{ estimate.words }}</p>
+  <form class="form-actions" method="post">
+    <input type="hidden" name="token" value="{{ token }}">
+    {% if theme %}<input type="hidden" name="map" value="{{ field_map.file }}"><input type="hidden" name="theme" value="{{ theme.id }}">{% endif %}
+    {% if list_name %}<input type="hidden" name="list" value="{{ list_name }}">{% endif %}
+    <a class="button text" href="{% if theme %}{{ url_for('explore.theme_page', map=field_map.file, theme=theme.id) }}{% else %}{{ url_for('explore.map_page') }}{% endif %}">Cancel</a>
+    <button class="filled">Make the map</button>
+  </form>
+  {% else %}
+  <p class="supporting">pepa-review could not estimate this map. Run <strong>map</strong> on its <a href="{{ url_for('console.app_page', name='pepa-review') }}">app page</a> to see why.</p>
+  {% endif %}
+</div>
+{% endblock %}

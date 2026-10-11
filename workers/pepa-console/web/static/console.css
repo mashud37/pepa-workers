@@ -531,6 +531,7 @@ button:disabled { opacity: 0.38; cursor: default; pointer-events: none; }
 .start ol { margin: 12px 0; padding-left: 20px; }
 .start li { margin: 6px 0; }
 .start a { text-decoration: underline; }
+.start a.button { text-decoration: none; }
 .guide-layout { display: grid; grid-template-columns: 200px 1fr; gap: 24px; align-items: start; margin-top: 16px; }
 .guide-nav { position: sticky; top: 80px; }
 .guide-nav ul { margin: 0; padding: 0; list-style: none; }
@@ -666,3 +667,17 @@ body.busy .buddy .ink rect { animation: write 1.4s steps(1, end) infinite; anima
 .advanced { margin: 0 0 16px; }
 .advanced > summary { display: inline-flex; align-items: center; min-height: 40px; color: var(--primary); font-weight: 500; cursor: pointer; }
 .advanced[open] > summary { margin-bottom: 4px; }
+.theme-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin: 16px 0 24px; padding: 0; list-style: none; }
+.theme-card a { display: flex; flex-direction: column; gap: 8px; height: 100%; padding: 16px 20px; border-radius: 16px; color: inherit; }
+.theme-card a:hover { background: var(--surface-variant); }
+.theme-card .title { color: var(--primary); }
+.theme-card .supporting { margin: 0; flex: 1; }
+.explore-run { margin-bottom: 24px; }
+.make-map { margin-top: 24px; }
+.map-picker { align-items: flex-end; }
+.list-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+.turn { margin-bottom: 16px; padding: 16px 24px; }
+.turn .title { margin: 0 0 8px; }
+.side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.side-subtitle { margin: 16px 0 8px; font: 500 14px/20px var(--font); }
+.paper-main > .section-title { margin: 24px 0 8px; }

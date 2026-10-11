@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}New review · Explore · pepa{% endblock %}
+{% block content %}
+{% include "_explore_tabs.html" %}
+<nav class="crumbs-nav" aria-label="Breadcrumb">
+  <ol>
+    <li><a href="{{ url_for('explore.reviews_page', list=list_name) }}">Reviews</a></li>
+    <li aria-current="page">{{ text }}</li>
+  </ol>
+</nav>
+<div class="card start">
+  <p class="title">A review of {% if list_name %}the papers in {{ list_name }}{% else %}the papers closest to {{ text }}{% endif %}</p>
+  <p class="supporting">Sections: {{ structure_label }}.</p>
+  {% if estimate %}
+  <p class="supporting">{{ estimate.papers }} papers. {{ estimate.words }}</p>
+  <form class="form-actions" method="post">
+    <input type="hidden" name="token" value="{{ token }}">
+    <input type="hidden" name="text" value="{{ text }}">
+    <input type="hidden" name="list" value="{{ list_name }}">
+    <input type="hidden" name="structure" value="{{ structure }}">
+    <a class="button text" href="{{ url_for('explore.reviews_page', list=list_name) }}">Cancel</a>
+    <button class="filled">Write the review</button>
+  </form>
+  {% else %}
+  <p class="supporting">pepa-review could not estimate this review. Run <strong>review</strong> on its <a href="{{ url_for('console.app_page', name='pepa-review') }}">app page</a> to see why.</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -59,14 +59,8 @@ APPS: list[App] = [
             {"name": "--apply", "type": "bool", "help": "Write the repairs instead of reporting them"},
             {"name": "--book", "type": "text", "help": "Only books whose stem contains this"},
         )),
-        Command("biblio", "heavy", "Fetch bibliography from OpenAlex for pepa-sum papers", fields=(
-            {"name": "--zotero", "type": "file", "help": "Zotero CSL-JSON export (default: found in input/)"},
-            {"name": "--corpus", "type": "folder", "help": "pepa-sum output folder (default: from config.yaml)"},
-            {"name": "--cite", "type": "bool", "help": "Also fetch citation networks from OpenCitations"},
-            {"name": "--force", "type": "bool", "help": "Overwrite existing biblio files"},
-        )),
         Command("install", "safe", "Check dependencies"),
-    ], keys=("OPENALEX_API_KEY",)),
+    ]),
     App("pepa-sum", "Each paper to a brief, a paragraph rundown, and verified quotes", [
         Command("config", "safe", "Print effective config and cost note"),
         Command("summarize", "heavy", "Summarise every PDF in the input folder", fields=(
@@ -119,10 +113,16 @@ APPS: list[App] = [
         Command("index", "heavy", "Build or refresh the embedding index", fields=(
             {"name": "--force", "type": "bool", "help": "Rebuild from scratch"},
         )),
-        Command("review", "heavy", "Assemble a literature review, choosing works as it asks, or by similarity", fields=(
+        Command("review", "heavy", "Assemble a literature review, choosing works as it asks, or by similarity", no_input=True, fields=(
             {"name": "--input", "type": "file", "help": "Outline file"},
             {"name": "--auto", "type": "bool", "help": "Select works by similarity instead of asking"},
-            {"name": "--list", "type": "file", "help": "Stem list exported from pepa-read"},
+            {"name": "--list", "type": "file", "help": "Literature list file"},
+            {"name": "--structure", "type": "choice", "choices": ("follow", "synthesise"), "help": "Follow the outline, or synthesise sections"},
+        )),
+        Command("ask", "heavy", "Answer one question about the literature", no_input=True, fields=(
+            {"name": "--question", "type": "text", "help": "The question"},
+            {"name": "--conversation", "type": "file", "help": "A kept conversation in output/ to follow up"},
+            {"name": "--list", "type": "file", "help": "Answer only from this literature list"},
         )),
         Command("gaps", "heavy", "Gap-check a draft against the corpus", fields=(
             {"name": "--input", "type": "file", "help": "Draft file"},
@@ -132,13 +132,16 @@ APPS: list[App] = [
         )),
         Command("map", "heavy", "Generate the corpus thematic map", fields=(
             {"name": "--threads", "type": "int", "help": "Target thread count (default: auto)"},
+            {"name": "--list", "type": "file", "help": "Map only this literature list"},
         )),
         Command("threadmap", "heavy", "Re-cluster one thread of a saved map", fields=(
             {"name": "--map", "type": "file", "help": "Corpus map file in output/"},
             {"name": "--thread", "type": "text", "help": "Thread number, name substring, or all"},
         )),
-        Command("biblio", "heavy", "Bibliographic enrichment: ingest, export, stats, or network", fields=(
-            {"name": "subcmd", "type": "choice", "choices": ("ingest", "export", "stats", "network"), "help": "What to do"},
+        Command("biblio", "heavy", "Bibliography: fetch from OpenAlex, ingest, export, stats, or network", fields=(
+            {"name": "subcmd", "type": "choice", "choices": ("fetch", "ingest", "export", "stats", "network"), "help": "What to do"},
+            {"name": "--zotero", "type": "file", "help": "With fetch: a Zotero CSL-JSON export, whose DOIs make lookups free"},
+            {"name": "--force", "type": "bool", "help": "With fetch: look up stored papers again"},
             {"name": "--works", "type": "file", "help": "Works metadata file, required for ingest"},
             {"name": "--citations", "type": "file", "help": "Citations edge list, optional for ingest"},
             {"name": "--graph-type", "type": "choice", "choices": ("citation", "coupling"), "help": "Network type"},
@@ -146,7 +149,7 @@ APPS: list[App] = [
         )),
         Command("explore", "terminal", "Interactive discovery over the corpus"),
         Command("install", "safe", "Set up files and check dependencies"),
-    ], keys=("ANTHROPIC_API_KEY", "PEPA_LLM_API_KEY", "GEMINI_API_KEY", "PEPA_EMBED_API_KEY")),
+    ], keys=("ANTHROPIC_API_KEY", "PEPA_LLM_API_KEY", "GEMINI_API_KEY", "PEPA_EMBED_API_KEY", "OPENALEX_API_KEY")),
     App("pepa-plan", "Rhetorical-move labelling and learned skeletons to a paragraph outline", [
         Command("config", "safe", "Show effective configuration"),
         Command("template", "safe", "List plan templates", default_flags=("--list",)),

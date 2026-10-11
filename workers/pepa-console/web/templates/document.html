@@ -6,7 +6,7 @@
 {% if found %}
 <nav class="crumbs-nav" aria-label="Breadcrumb">
   <ol>
-    <li><a href="{{ url_for('console.document_page') }}">Find by document</a></li>
+    <li><a href="{{ url_for('explore.document_page') }}">Find by document</a></li>
     <li aria-current="page">{{ found.input }}</li>
   </ol>
 </nav>
@@ -18,7 +18,7 @@
   {% for paper in found.papers %}
   <li class="row-item ticked-row">
     <input type="checkbox" name="stem" value="{{ paper.stem }}" form="add-to-list-form" aria-label="Tick {{ paper.title }}">
-    <a class="result" href="{{ url_for('console.paper_page', stem=paper.stem, back=request.full_path) }}">
+    <a class="result" href="{{ url_for('explore.paper_page', stem=paper.stem, back=request.full_path) }}">
       <span class="result-title">{{ paper.title }}</span>
       <span class="result-authors">{{ paper.authors }}</span>
     </a>
@@ -44,7 +44,7 @@
 {% elif text %}
 <nav class="crumbs-nav" aria-label="Breadcrumb">
   <ol>
-    <li><a href="{{ url_for('console.document_page') }}">Find by document</a></li>
+    <li><a href="{{ url_for('explore.document_page') }}">Find by document</a></li>
     <li aria-current="page">{{ text }}</li>
   </ol>
 </nav>
@@ -52,10 +52,10 @@
   <p class="title">{{ text }}</p>
   {% if estimate %}
   <p class="supporting">Compared in {{ estimate.pieces }} piece{% if estimate.pieces != 1 %}s{% endif %}. {{ estimate.words }}</p>
-  <form class="form-actions" method="post" action="{{ url_for('console.document_find') }}">
+  <form class="form-actions" method="post" action="{{ url_for('explore.document_find') }}">
     <input type="hidden" name="token" value="{{ token }}">
     <input type="hidden" name="text" value="{{ text }}">
-    <a class="button text" href="{{ url_for('console.document_page') }}">Another text</a>
+    <a class="button text" href="{{ url_for('explore.document_page') }}">Another text</a>
     <button class="filled">Find papers</button>
   </form>
   {% else %}
@@ -63,7 +63,7 @@
   {% endif %}
 </div>
 {% else %}
-<form method="post" action="{{ url_for('console.document_save') }}" enctype="multipart/form-data">
+<form method="post" action="{{ url_for('explore.document_save') }}" enctype="multipart/form-data">
   <input type="hidden" name="token" value="{{ token }}">
   <p class="supporting section-note">Paste a text, such as a draft or an abstract, or choose a file. The papers closest to it come first, and every search is kept below.</p>
   <label class="field"><span>Text</span><textarea name="pasted" rows="12"></textarea></label>
@@ -76,7 +76,7 @@
 <h2 class="section-title">Earlier searches</h2>
 <ul class="list file-list">
   {% for each in earlier %}
-  <li class="row-item"><a class="row-link" href="{{ url_for('console.document_page', find=each.file) }}"><span class="file-name">{{ each.input }}</span><span class="meta">{{ each.when }} · {{ each.count }} paper{% if each.count != 1 %}s{% endif %}</span></a></li>
+  <li class="row-item"><a class="row-link" href="{{ url_for('explore.document_page', find=each.file) }}"><span class="file-name">{{ each.input }}</span><span class="meta">{{ each.when }} · {{ each.count }} paper{% if each.count != 1 %}s{% endif %}</span></a></li>
   {% endfor %}
 </ul>
 {% endif %}

@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icon %}
+{% block title %}{% if conversation %}{{ conversation.title }} · {% endif %}Ask · Explore · pepa{% endblock %}
+{% block content %}
+{% include "_explore_tabs.html" %}
+<nav class="crumbs-nav" aria-label="Breadcrumb">
+  <ol>
+    <li><a href="{{ url_for('explore.ask_page') }}">Ask</a></li>
+    <li aria-current="page">{% if conversation %}{{ conversation.title }}{% else %}New question{% endif %}</li>
+  </ol>
+</nav>
+
+<div class="paper-layout">
+  <div class="paper-main">
+    {% if conversation %}
+    {% for turn in conversation.turns %}
+    <section class="card turn">
+      <h2 class="title">{{ turn.question }}</h2>
+      <div class="prose">{{ turn.answer | safe }}</div>
+      <p class="meta">{{ turn.when }}</p>
+    </section>
+    {% endfor %}
+    {% endif %}
+    {% include "_shown_run.html" %}
+    {% if conversation %}
+    <form method="post" action="{{ url_for('explore.ask_start') }}" data-busy="Asking…">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="conversation" value="{{ conversation.file }}">
+      <label class="field"><span>Follow up</span><textarea name="question" rows="3" required></textarea></label>
+      <div class="form-actions"><button class="filled">Ask</button></div>
+    </form>
+    {% endif %}
+  </div>
+  {% if conversation %}
+  <aside class="paper-side" aria-label="Papers drawn on">
+    <section class="card side-card">
+      <div class="side-head">
+        <h2 class="title">Drawn on</h2>
+        <button type="button" class="text" data-open="add-to-list">{{ icon.plus() }}Add to a list</button>
+      </div>
+      {% if conversation.list %}<p class="meta">From the list {{ conversation.list }}</p>{% endif %}
+      <ul class="side-list">
+        {% for paper in conversation.papers %}
+        <li><a href="{{ url_for('explore.paper_page', stem=paper.stem, back=request.full_path) }}">{{ paper.title }}</a><span class="meta">{{ paper.authors }}</span></li>
+        {% endfor %}
+      </ul>
+    </section>
+  </aside>
+  {% with collect_ticked = False, stems = conversation.papers | map(attribute="stem") | list %}{% include "_add_to_list.html" %}{% endwith %}
+  {% endif %}
+</div>
+{% endblock %}

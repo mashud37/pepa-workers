@@ -51,6 +51,11 @@ document.addEventListener("submit", function (event) {
     return;
   }
   form.dataset.confirmed = "";
+  if (form.dataset.busy) {
+    const button = form.querySelector("button.filled");
+    button.textContent = form.dataset.busy;
+    button.disabled = true;
+  }
   if (form.hasAttribute("data-collect-ticked")) {
     const onPage = [];
     for (const box of form.querySelectorAll('input[name="name"]:checked')) {
@@ -341,7 +346,6 @@ async function loadEstimate(form) {
 
 const ESTIMATE_WORDS = {
   "pepa-sum": {line: "to summarise", ask: "summarise", done: "nothing to summarise: every item is done or skipped", first: "prepared"},
-  "pepa-plan": {line: "to learn writing patterns from", ask: "learn writing patterns from", done: "nothing new to learn from", first: "summarised"},
 };
 
 function showEstimates(form) {
@@ -406,9 +410,8 @@ function describeEstimate(app, data, options) {
   if (limit === null || limit === undefined) {
     return {text: text + ".", papers: data.papers, ask: `${words.ask} ${count}`, cost: 0, limit: null};
   }
-  const cost = limit + (data.blueprints || 0);
-  text += `, about $${cost.toFixed(2)} at list price`;
-  return {text: text + ".", papers: data.papers, ask: `${words.ask} ${count}`, cost: cost, limit: limit};
+  text += `, about $${limit.toFixed(2)} at list price`;
+  return {text: text + ".", papers: data.papers, ask: `${words.ask} ${count}`, cost: limit, limit: limit};
 }
 
 function roughTime(seconds) {
@@ -993,6 +996,9 @@ function showState(panel, data) {
     buddyMood(data.status);
     if (data.status === "ok" && !calm) {
       throwConfetti(status);
+    }
+    if (data.status === "ok" && panel.hasAttribute("data-reload-when-done")) {
+      window.setTimeout(function () { window.location.reload(); }, 800);
     }
   }
   panel.querySelector("[data-elapsed]").textContent = data.elapsed;

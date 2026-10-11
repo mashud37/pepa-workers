@@ -1,0 +1,16 @@
+{% if missing == "index" %}
+<div class="empty">
+  <h2>No review index yet</h2>
+  <p class="supporting">Run <strong>Update review index</strong> from the <a href="{{ url_for('console.library') }}">Library</a> once papers are summarised.</p>
+</div>
+{% elif missing == "models" %}
+<div class="empty">
+  <h2>No embedding model chosen</h2>
+  <p class="supporting"><a href="{{ url_for('console.models_page') }}">Choose an embedding model in Settings first.</a></p>
+</div>
+{% elif missing == "keys" %}
+<div class="empty">
+  <h2>No key for pepa-review</h2>
+  <p class="supporting"><a href="{{ url_for('console.keys_page') }}">Add a key in Settings first.</a></p>
+</div>
+{% endif %}

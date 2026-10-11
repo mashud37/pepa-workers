@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Look up citations · Explore · pepa{% endblock %}
+{% block content %}
+{% include "_explore_tabs.html" %}
+<nav class="crumbs-nav" aria-label="Breadcrumb">
+  <ol>
+    <li><a href="{{ url_for('explore.citations_page') }}">Citations</a></li>
+    <li aria-current="page">Look up</li>
+  </ol>
+</nav>
+<div class="card start">
+  <p class="title">Look up citations on OpenAlex</p>
+  {% if estimate %}
+  <p class="supporting">{{ estimate.words }}</p>
+  {% if estimate.papers %}
+  <form class="form-actions" method="post">
+    <input type="hidden" name="token" value="{{ token }}">
+    <a class="button text" href="{{ url_for('explore.citations_page') }}">Cancel</a>
+    <button class="filled">Look up</button>
+  </form>
+  {% else %}
+  <div class="form-actions"><a class="button text" href="{{ url_for('explore.citations_page') }}">Back to Citations</a></div>
+  {% endif %}
+  {% else %}
+  <p class="supporting">pepa-review could not count the papers. Run <strong>biblio</strong> with <strong>fetch</strong> on its <a href="{{ url_for('console.app_page', name='pepa-review') }}">app page</a> to see why.</p>
+  {% endif %}
+</div>
+{% endblock %}

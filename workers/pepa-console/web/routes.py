@@ -22,9 +22,7 @@ from flask import (
 from registry import get_app
 from web import (
     batches,
-    connections,
     documents,
-    explore,
     folders,
     jobs,
     keys,
@@ -51,13 +49,7 @@ PIPELINE_STEPS = [
     {"app": "pepa-sum", "command": "summarize", "label": "Summarise", "needs": "generation", "estimated": True},
     {"app": "pepa-read", "command": "index", "label": "Update search index", "needs": "", "estimated": False},
     {"app": "pepa-review", "command": "index", "label": "Update review index", "needs": "embedding", "estimated": False},
-    {"app": "pepa-plan", "command": "abstract", "label": "Learn writing patterns", "needs": "generation", "estimated": True},
 ]
-
-# A stage that brings a second command along in the same run.
-FOLLOW_UPS = {
-    "pepa-plan abstract": {"app": "pepa-plan", "command": "blueprint", "label": "Writing blueprints"},
-}
 
 # The Batches card's buttons and the pepa-sum flag each one sends.
 BATCH_ACTIONS = {
@@ -291,11 +283,6 @@ def library_estimate():
         found["pepa-sum"] = jobs.json_reply("pepa-sum", "summarize", ["--estimate", "--more", str(sum_more)], extra)
         if only_file is not None:
             only_file.unlink(missing_ok=True)
-    if "pepa-plan abstract" in ticked:
-        plan_more = 0
-        if found.get("pepa-sum"):
-            plan_more = found["pepa-sum"]["papers"]
-        found["pepa-plan"] = jobs.json_reply("pepa-plan", "abstract", ["--estimate", "--more", str(plan_more)])
     for app_name, estimate in found.items():
         if estimate is None:
             return jsonify({"error": f"{app_name} could not estimate this run."}), 500
@@ -356,9 +343,6 @@ def library_run():
         if step["estimated"]:
             step["values"] = {"--approve-cost": request.form.get(f"limit {step['app']}", "")}
         steps.append(step)
-        follow_up = FOLLOW_UPS.get(f"{step['app']} {step['command']}")
-        if follow_up:
-            steps.append(follow_up)
     chain_id = jobs.start_chain(steps)
     return run_panel(jobs.chain_summary(chain_id), url_for("console.chain_log", chain_id=chain_id))
 
@@ -643,144 +627,6 @@ def guide_page(name):
     if page is None:
         abort(404)
     return render_template("guide.html", page=page, guides=documents.guide_names())
-
-
-# ---- Explore ----
-
-@bp.route("/explore")
-def explore_page():
-    wanted = explore.wanted_search(request.args)
-    page = request.args.get("page", "1")
-    asked = {name: text for name, text in wanted.items() if text}
-    found = None
-    if asked:
-        found = explore.search(wanted, int(page) if page.isdigit() else 1)
-    return render_template(
-        "explore.html",
-        wanted=wanted,
-        asked=asked,
-        advanced=any(name != "q" for name in asked),
-        fields=explore.SEARCH_FIELDS,
-        found=found,
-        indexed=folders.index_built(folders.SEARCH_INDEX),
-        lists=lists.all_lists(),
-    )
-
-
-@bp.route("/explore/document")
-def document_page():
-    found = None
-    if request.args.get("find"):
-        found = explore.kept_find(request.args["find"])
-        if found is None:
-            abort(404)
-    path = explore.saved_text(request.args.get("text", ""))
-    return render_template(
-        "document.html",
-        found=found,
-        text=path.name if path else "",
-        estimate=explore.document_estimate(path) if path else None,
-        earlier=explore.earlier_finds(),
-        indexed=folders.index_built(folders.REVIEW_INDEX),
-        missing=models.missing_choice("pepa-review", "embedding"),
-        lists=lists.all_lists(),
-    )
-
-
-@bp.route("/explore/document", methods=["POST"])
-def document_save():
-    try:
-        name = explore.save_text(request.files.get("file"), request.form.get("pasted", ""))
-    except ValueError as error:
-        flash(str(error))
-        return redirect(url_for("console.document_page"))
-    return redirect(url_for("console.document_page", text=name))
-
-
-@bp.route("/explore/document/find", methods=["POST"])
-def document_find():
-    path = explore.saved_text(request.form.get("text", ""))
-    if path is None:
-        abort(404)
-    kept = explore.find_document(path)
-    if kept is None:
-        flash("pepa-review gave no answer. Run similar on its app page to see why.")
-        return redirect(url_for("console.document_page", text=path.name))
-    return redirect(url_for("console.document_page", find=kept))
-
-
-@bp.route("/paper")
-def paper_page():
-    stem = request.args.get("stem", "")
-    view = documents.paper_view(stem, request.args.get("tab", ""))
-    if view is None:
-        abort(404)
-    return render_template(
-        "paper.html",
-        view=view,
-        name=connections.named(stem),
-        book_name=connections.named(view["book"]),
-        related=connections.related_papers(stem),
-        themes=connections.themes_of(stem),
-        back=request.args.get("back", ""),
-        lists=lists.all_lists(),
-    )
-
-
-# ---- Lists ----
-
-@bp.route("/explore/lists")
-def lists_page():
-    chosen = request.args.get("list", "")
-    papers_in_list = None
-    if chosen:
-        try:
-            papers_in_list = lists.list_papers(chosen)
-        except ValueError:
-            abort(404)
-    return render_template("lists.html", lists=lists.all_lists(), chosen=chosen, papers=papers_in_list)
-
-
-@bp.route("/lists/add", methods=["POST"])
-def lists_add():
-    back = request.form.get("back") or url_for("console.lists_page")
-    stems = request.form.getlist("stem") + lists.stems_of_pdfs(request.form.getlist("name"))
-    target = request.form.get("new_list", "").strip() or request.form.get("list", "")
-    if not stems:
-        flash("Tick at least one item.")
-        return redirect(back)
-    try:
-        added = lists.add_to_list(target, stems)
-    except ValueError as error:
-        flash(str(error))
-        return redirect(back)
-    if added:
-        flash(f"Added {item_count(added)} to {target}.")
-    else:
-        flash(f"Already in {target}.")
-    return redirect(back)
-
-
-@bp.route("/lists/remove", methods=["POST"])
-def lists_remove():
-    name = request.form.get("list", "")
-    try:
-        lists.remove_from_list(name, request.form.get("stem", ""))
-    except ValueError as error:
-        flash(str(error))
-    return redirect(url_for("console.lists_page", list=name))
-
-
-@bp.route("/lists/delete", methods=["POST"])
-def lists_delete():
-    name = request.form.get("list", "")
-    try:
-        lists.delete_list(name)
-    except ValueError as error:
-        flash(str(error))
-        return redirect(url_for("console.lists_page"))
-    flash(f"Deleted the list {name}.")
-    return redirect(url_for("console.lists_page"))
 
 
 # ---- Folders ----

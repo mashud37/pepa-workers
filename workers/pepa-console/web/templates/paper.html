@@ -4,11 +4,8 @@
 {% block content %}
 <nav class="crumbs-nav" aria-label="Breadcrumb">
   <ol>
-    {% if back.startswith('/explore/lists') %}<li><a href="{{ back }}">Lists</a></li>
-    {% elif back.startswith('/explore/document') %}<li><a href="{{ back }}">Find by document</a></li>
-    {% elif back.startswith('/explore') %}<li><a href="{{ back }}">Search</a></li>
-    {% else %}<li><a href="{{ url_for('console.library') }}">Library</a></li>{% endif %}
-    {% if view.book %}<li><a href="{{ url_for('console.paper_page', stem=view.book, back=back) }}">{{ book_name.title }}</a></li>{% endif %}
+    {% if back_label %}<li><a href="{{ back }}">{{ back_label }}</a></li>{% else %}<li><a href="{{ url_for('console.library') }}">Library</a></li>{% endif %}
+    {% if view.book %}<li><a href="{{ url_for('explore.paper_page', stem=view.book, back=back) }}">{{ book_name.title }}</a></li>{% endif %}
     <li aria-current="page">{{ name.title }}</li>
   </ol>
 </nav>
@@ -32,7 +29,7 @@
     {% if view.tabs | length > 1 %}
     <nav class="doc-tabs" aria-label="This paper's documents">
       {% for tab in view.tabs %}
-      <a href="{{ url_for('console.paper_page', stem=view.stem, tab=tab.label, back=back) }}"{% if tab == view.chosen %} aria-current="page"{% endif %}>{{ tab.label }}</a>
+      <a href="{{ url_for('explore.paper_page', stem=view.stem, tab=tab.label, back=back) }}"{% if tab == view.chosen %} aria-current="page"{% endif %}>{{ tab.label }}</a>
       {% endfor %}
     </nav>
     {% endif %}
@@ -61,7 +58,7 @@
       <h2 class="title">Chapters</h2>
       <ol class="side-list">
         {% for chapter in view.chapters %}
-        <li><a href="{{ url_for('console.paper_page', stem=chapter, back=back) }}">Chapter {{ chapter.rpartition("_")[2] | int }}</a></li>
+        <li><a href="{{ url_for('explore.paper_page', stem=chapter, back=back) }}">Chapter {{ chapter.rpartition("_")[2] | int }}</a></li>
         {% endfor %}
       </ol>
     </section>
@@ -73,7 +70,7 @@
       {% elif related %}
       <ul class="side-list">
         {% for paper in related %}
-        <li><a href="{{ url_for('console.paper_page', stem=paper.stem, back=back) }}">{{ paper.title }}</a><span class="meta">{{ paper.authors }}</span></li>
+        <li><a href="{{ url_for('explore.paper_page', stem=paper.stem, back=back) }}">{{ paper.title }}</a><span class="meta">{{ paper.authors }}</span></li>
         {% endfor %}
       </ul>
       {% else %}
@@ -85,9 +82,28 @@
       <h2 class="title">Themes</h2>
       <ul class="side-list">
         {% for theme in themes %}
-        <li>{{ theme.name }}{% if not theme.main %}<span class="meta">also close</span>{% endif %}</li>
+        <li><a href="{{ url_for('explore.theme_page', map=theme_map, theme=theme.id) }}">{{ theme.name }}</a>{% if not theme.main %}<span class="meta">also close</span>{% endif %}</li>
         {% endfor %}
       </ul>
+    </section>
+    {% endif %}
+    {% if facts %}
+    <section class="card side-card">
+      <h2 class="title">Citations</h2>
+      <p class="supporting">{% if facts.year %}{{ facts.year }}{% endif %}{% if facts.venue %}, {{ facts.venue }}{% endif %}</p>
+      <p class="meta">Cited {{ "{:,}".format(facts.cited_by_count) }} times{% if facts.doi %} · <a href="https://doi.org/{{ facts.doi }}" target="_blank" rel="noopener">DOI<span class="visually-hidden"> (new tab)</span></a>{% endif %}</p>
+      {% if facts.cites %}
+      <h3 class="side-subtitle">Cites in your library</h3>
+      <ul class="side-list">
+        {% for paper in facts.cites %}<li><a href="{{ url_for('explore.paper_page', stem=paper.stem, back=back) }}">{{ paper.title }}</a><span class="meta">{{ paper.authors }}</span></li>{% endfor %}
+      </ul>
+      {% endif %}
+      {% if facts.cited_by %}
+      <h3 class="side-subtitle">Cited by in your library</h3>
+      <ul class="side-list">
+        {% for paper in facts.cited_by %}<li><a href="{{ url_for('explore.paper_page', stem=paper.stem, back=back) }}">{{ paper.title }}</a><span class="meta">{{ paper.authors }}</span></li>{% endfor %}
+      </ul>
+      {% endif %}
     </section>
     {% endif %}
   </aside>

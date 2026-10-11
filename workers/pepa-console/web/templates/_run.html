@@ -1,4 +1,4 @@
-<div class="run" data-log="{{ log_url }}" data-poll="{{ poll_ms }}" data-read-url="{{ url_for('console.view_page', name='pepa-sum', slot='results', relative='sum_NAME.md') }}">
+<div class="run" data-log="{{ log_url }}"{% if reload_when_done %} data-reload-when-done{% endif %} data-poll="{{ poll_ms }}" data-read-url="{{ url_for('console.view_page', name='pepa-sum', slot='results', relative='sum_NAME.md') }}">
   <div class="run-head">
     <span class="status status-{{ run.status }}" data-status>{{ run.label }}</span>
     {% if run.steps %}

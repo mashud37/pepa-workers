@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Ask · Explore · pepa{% endblock %}
+{% block content %}
+{% include "_explore_tabs.html" %}
+
+{% if missing %}
+{% include "_missing.html" %}
+{% else %}
+<form method="post" action="{{ url_for('explore.ask_start') }}" data-busy="Asking…">
+  <input type="hidden" name="token" value="{{ token }}">
+  <p class="supporting section-note">Ask about the literature: what a debate turns on, who disagrees with whom, which methods a field uses. The answer draws on the closest papers{% if list_name %} in {{ list_name }}{% endif %}, and you can follow up.</p>
+  <label class="field"><span>Question</span><textarea name="question" rows="3" required></textarea></label>
+  <div class="filter">
+    <label class="field grow"><span>Papers</span>
+      <select name="list">
+        <option value="" data-detail="Every paper in the review index">Everything</option>
+        {% for each in lists %}<option value="{{ each.name }}" data-detail="{{ each.count }} papers"{% if each.name == list_name %} selected{% endif %}>{{ each.name }}</option>{% endfor %}
+      </select>
+    </label>
+  </div>
+  {% if estimate %}<p class="meta">Each question: {{ estimate.words }}</p>{% endif %}
+  <div class="form-actions"><button class="filled">Ask</button></div>
+</form>
+{% endif %}
+
+{% if conversations %}
+<h2 class="section-title">Earlier questions</h2>
+<ul class="list file-list">
+  {% for each in conversations %}
+  <li class="row-item"><a class="row-link" href="{{ url_for('explore.conversation_page', file=each.file) }}"><span class="file-name">{{ each.title }}</span><span class="meta">{{ each.when }}{% if each.questions > 1 %} · {{ each.questions }} questions{% endif %}{% if each.list %} · {{ each.list }}{% endif %}</span></a></li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

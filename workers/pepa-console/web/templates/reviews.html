@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Reviews · Explore · pepa{% endblock %}
+{% block content %}
+{% include "_explore_tabs.html" %}
+{% include "_shown_run.html" %}
+
+{% if missing %}
+{% include "_missing.html" %}
+{% else %}
+<form method="post" action="{{ url_for('explore.reviews_save') }}" enctype="multipart/form-data">
+  <input type="hidden" name="token" value="{{ token }}">
+  <p class="supporting section-note">Write a literature review from an outline: the points you want it to make, in your own words. It draws on a list's papers, or on the papers closest to the outline.</p>
+  <label class="field"><span>Outline</span><textarea name="pasted" rows="8"></textarea></label>
+  <label class="field"><span>Or a file (.md, .txt or .docx)</span><input type="file" name="file" accept=".md,.txt,.docx"></label>
+  <div class="fields">
+    <label class="field"><span>Papers</span>
+      <select name="list">
+        <option value="" data-detail="The papers closest to the outline">Closest to the outline</option>
+        {% for each in lists %}<option value="{{ each.name }}" data-detail="{{ each.count }} papers"{% if each.name == list_name %} selected{% endif %}>{{ each.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="field"><span>Sections</span>
+      <select name="structure">
+        {% for value, label in structures.items() %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+      </select>
+    </label>
+  </div>
+  <div class="form-actions"><button class="filled">Next</button></div>
+</form>
+{% endif %}
+
+{% if reviews %}
+<h2 class="section-title">Reviews</h2>
+<ul class="list file-list">
+  {% for each in reviews %}
+  <li class="row-item"><a class="row-link" href="{{ url_for('explore.review_page', file=each.file) }}"><span class="file-name">{{ each.outline }}</span><span class="meta">{{ each.when }}</span></a></li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

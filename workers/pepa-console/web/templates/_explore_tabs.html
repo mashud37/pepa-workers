@@ -1,8 +1,13 @@
 <div class="page-head">
   <h1>Explore</h1>
 </div>
+{% set explore_tab = request.path.split("/")[2] if request.path.count("/") > 1 else "" %}
 <nav class="sub-tabs" aria-label="Explore">
-  <a href="{{ url_for('console.explore_page') }}"{% if request.endpoint == "console.explore_page" %} aria-current="page"{% endif %}>Search</a>
-  <a href="{{ url_for('console.document_page') }}"{% if request.endpoint.startswith("console.document_") %} aria-current="page"{% endif %}>Find by document</a>
-  <a href="{{ url_for('console.lists_page') }}"{% if request.endpoint == "console.lists_page" %} aria-current="page"{% endif %}>Lists</a>
+  <a href="{{ url_for('explore.explore_page') }}"{% if explore_tab == "" %} aria-current="page"{% endif %}>Search</a>
+  <a href="{{ url_for('explore.map_page') }}"{% if explore_tab == "map" %} aria-current="page"{% endif %}>Map</a>
+  <a href="{{ url_for('explore.ask_page') }}"{% if explore_tab == "ask" %} aria-current="page"{% endif %}>Ask</a>
+  <a href="{{ url_for('explore.document_page') }}"{% if explore_tab == "document" %} aria-current="page"{% endif %}>Find by document</a>
+  <a href="{{ url_for('explore.reviews_page') }}"{% if explore_tab == "reviews" %} aria-current="page"{% endif %}>Reviews</a>
+  <a href="{{ url_for('explore.citations_page') }}"{% if explore_tab == "citations" %} aria-current="page"{% endif %}>Citations</a>
+  <a href="{{ url_for('explore.lists_page') }}"{% if explore_tab == "lists" %} aria-current="page"{% endif %}>Lists</a>
 </nav>

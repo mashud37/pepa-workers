@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icon %}
+{% block title %}{{ review.outline }} · Reviews · Explore · pepa{% endblock %}
+{% block content %}
+{% include "_explore_tabs.html" %}
+<nav class="crumbs-nav" aria-label="Breadcrumb">
+  <ol>
+    <li><a href="{{ url_for('explore.reviews_page') }}">Reviews</a></li>
+    <li aria-current="page">{{ review.outline }}</li>
+  </ol>
+</nav>
+<div class="page-head">
+  <div class="heading"></div>
+  <div class="actions">
+    <a class="button text" href="{{ url_for('console.app_file', name='pepa-review', slot='results', relative=review.file) }}" target="_blank" rel="noopener">{{ icon.open_new() }}Open on its own<span class="visually-hidden"> (new tab)</span></a>
+  </div>
+</div>
+<article class="card document prose">{{ review.html | safe }}</article>
+{% endblock %}

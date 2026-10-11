@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icon %}
+{% block title %}{{ theme.name }} · Map · Explore · pepa{% endblock %}
+{% block content %}
+{% include "_explore_tabs.html" %}
+<nav class="crumbs-nav" aria-label="Breadcrumb">
+  <ol>
+    <li><a href="{{ url_for('explore.map_page', map=field_map.file) }}">{{ field_map.title }}</a></li>
+    <li aria-current="page">{{ theme.name }}</li>
+  </ol>
+</nav>
+{% include "_shown_run.html" %}
+
+<div class="page-head">
+  <div class="heading">
+    <h2 class="document-title">{{ theme.name }}</h2>
+    <p class="supporting">{{ theme.papers | length }} paper{% if theme.papers | length != 1 %}s{% endif %}{% if theme.shared %}, and {{ theme.shared | length }} shared with other themes{% endif %}{% if not theme.can_detail %}. A theme is mapped in detail from {{ theme.detail_smallest }} papers.{% endif %}</p>
+  </div>
+  <div class="actions">
+    <button type="button" class="tonal" data-open="add-to-list">{{ icon.plus() }}Add its papers to a list</button>
+    {% if theme.can_detail %}<a class="button text" href="{{ url_for('explore.theme_detail_new', map=field_map.file, theme=theme.id) }}">Map this theme in detail</a>{% endif %}
+  </div>
+</div>
+{% with collect_ticked = False, stems = (theme.papers + theme.shared) | map(attribute="stem") | list %}{% include "_add_to_list.html" %}{% endwith %}
+
+<div class="paper-layout">
+  <div class="paper-main">
+    <article class="card document prose">
+      {% if theme.discussion %}<h3>Discussion</h3><p>{{ theme.discussion }}</p>{% endif %}
+      {% if theme.arguments %}<h3>Key arguments</h3><ul>{% for item in theme.arguments %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+      {% if theme.concepts %}<h3>Key concepts</h3><ul>{% for item in theme.concepts %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+      {% if theme.methods %}<h3>Methods</h3><p>{{ theme.methods }}</p>{% endif %}
+      {% if theme.empirical %}<h3>Empirical contexts</h3><p>{{ theme.empirical }}</p>{% endif %}
+      {% if not theme.discussion and not theme.arguments %}<p>This map holds no description of its themes. Make a new map to see what each theme discusses.</p>{% endif %}
+    </article>
+    <h3 class="section-title">Papers</h3>
+    <ul class="list file-list">
+      {% for paper in theme.papers %}
+      <li class="row-item"><a class="result" href="{{ url_for('explore.paper_page', stem=paper.stem, back=request.full_path) }}"><span class="result-title">{{ paper.title }}</span><span class="result-authors">{{ paper.authors }}</span></a></li>
+      {% endfor %}
+    </ul>
+    {% if theme.shared %}
+    <h3 class="section-title">Also drawn on, shared with another theme</h3>
+    <ul class="list file-list">
+      {% for paper in theme.shared %}
+      <li class="row-item"><a class="result" href="{{ url_for('explore.paper_page', stem=paper.stem, back=request.full_path) }}"><span class="result-title">{{ paper.title }}</span><span class="result-authors">{{ paper.authors }}</span></a></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+  <aside class="paper-side" aria-label="Connections">
+    <section class="card side-card">
+      <h2 class="title">Neighbouring themes</h2>
+      {% if theme.neighbours %}
+      <ul class="side-list">
+        {% for other in theme.neighbours %}
+        <li><a href="{{ url_for('explore.theme_page', map=field_map.file, theme=other.id) }}">{{ other.name }}</a><span class="meta">{{ other.shared }} paper{% if other.shared != 1 %}s{% endif %} in common</span></li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="supporting">It shares no papers with another theme.</p>
+      {% endif %}
+    </section>
+    {% if theme.detail_maps %}
+    <section class="card side-card">
+      <h2 class="title">Mapped in detail</h2>
+      <ul class="side-list">
+        {% for each in theme.detail_maps %}
+        <li><a href="{{ url_for('explore.map_page', map=each.file) }}">{{ each.themes }} themes</a><span class="meta">{{ each.generated }}</span></li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

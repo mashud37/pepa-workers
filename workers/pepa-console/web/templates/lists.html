@@ -7,7 +7,7 @@
 {% if chosen %}
 <nav class="crumbs-nav" aria-label="Breadcrumb">
   <ol>
-    <li><a href="{{ url_for('console.lists_page') }}">Lists</a></li>
+    <li><a href="{{ url_for('explore.lists_page') }}">Lists</a></li>
     <li aria-current="page">{{ chosen }}</li>
   </ol>
 </nav>
@@ -19,7 +19,7 @@
 {% else %}
 <ul class="list file-list">
   {% for each in lists %}
-  <li class="row-item"><a class="row-link" href="{{ url_for('console.lists_page', list=each.name) }}"><span class="file-name">{{ each.name }}</span><span class="meta">{{ each.count }} paper{% if each.count != 1 %}s{% endif %}</span></a></li>
+  <li class="row-item"><a class="row-link" href="{{ url_for('explore.lists_page', list=each.name) }}"><span class="file-name">{{ each.name }}</span><span class="meta">{{ each.count }} paper{% if each.count != 1 %}s{% endif %}</span></a></li>
   {% endfor %}
 </ul>
 {% endif %}
@@ -27,7 +27,12 @@
 {% if chosen %}
 <div class="list-head">
   <h2 class="section-title">{{ chosen }}</h2>
-  <form method="post" action="{{ url_for('console.lists_delete') }}" data-confirm="Delete the list {{ chosen }}?" data-confirm-detail="Only the list goes; its papers stay in the Library." data-confirm-button="Delete">
+  <span class="list-actions">
+    <a class="button text" href="{{ url_for('explore.map_new', list=chosen) }}">Map this list</a>
+    <a class="button text" href="{{ url_for('explore.ask_page', list=chosen) }}">Ask about it</a>
+    <a class="button text" href="{{ url_for('explore.reviews_page', list=chosen) }}">Write a review</a>
+  </span>
+  <form method="post" action="{{ url_for('explore.lists_delete') }}" data-confirm="Delete the list {{ chosen }}?" data-confirm-detail="Only the list goes; its papers stay in the Library." data-confirm-button="Delete">
     <input type="hidden" name="token" value="{{ token }}">
     <input type="hidden" name="list" value="{{ chosen }}">
     <button class="text danger">Delete list</button>
@@ -37,11 +42,11 @@
 <ul class="list file-list">
   {% for paper in papers %}
   <li class="row-item ticked-row">
-    <a class="result" href="{{ url_for('console.paper_page', stem=paper.stem, back=request.full_path) }}">
+    <a class="result" href="{{ url_for('explore.paper_page', stem=paper.stem, back=request.full_path) }}">
       <span class="result-title">{{ paper.title }}</span>
       <span class="result-authors">{{ paper.authors }}</span>
     </a>
-    <form method="post" action="{{ url_for('console.lists_remove') }}">
+    <form method="post" action="{{ url_for('explore.lists_remove') }}">
       <input type="hidden" name="token" value="{{ token }}">
       <input type="hidden" name="list" value="{{ chosen }}">
       <input type="hidden" name="stem" value="{{ paper.stem }}">
