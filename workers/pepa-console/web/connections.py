@@ -25,10 +25,16 @@ def load_json(path):
 
 
 def named(stem):
-    """A paper's author part and title part, from a file name like `Smith et al_A study of things`."""
+    """A paper's author part and title part, from a file name like `Smith et al_A study of things`.
+
+    A book's chapter, named like `Smith_A book_02`, gets the title `A book, chapter 2`.
+    """
     authors, _, title = stem.partition("_")
     if not title:
         return {"stem": stem, "authors": "", "title": stem}
+    book_title, _, number = title.rpartition("_")
+    if book_title and number.isdigit():
+        title = f"{book_title}, chapter {int(number)}"
     return {"stem": stem, "authors": authors, "title": title}
 
 

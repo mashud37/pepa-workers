@@ -232,6 +232,7 @@ def paper_rows(wanted, length, page, sort="name"):
         stem = Path(row["relative"]).stem
         rows.append({
             "name": leaf,
+            "stem": stem,
             "relative": row["relative"],
             "pages": row["pages"],
             "prepared": progress[stem]["prepared"],

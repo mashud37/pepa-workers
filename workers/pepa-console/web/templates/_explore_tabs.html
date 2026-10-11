@@ -1,0 +1,8 @@
+<div class="page-head">
+  <h1>Explore</h1>
+</div>
+<nav class="sub-tabs" aria-label="Explore">
+  <a href="{{ url_for('console.explore_page') }}"{% if request.endpoint == "console.explore_page" %} aria-current="page"{% endif %}>Search</a>
+  <a href="{{ url_for('console.document_page') }}"{% if request.endpoint.startswith("console.document_") %} aria-current="page"{% endif %}>Find by document</a>
+  <a href="{{ url_for('console.lists_page') }}"{% if request.endpoint == "console.lists_page" %} aria-current="page"{% endif %}>Lists</a>
+</nav>

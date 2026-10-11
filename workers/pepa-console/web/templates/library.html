@@ -34,7 +34,7 @@
   <li><a href="#papers"><span class="count" data-count="{{ summary.pdfs }}"{% if summary.pdfs_capped %} data-suffix="+"{% endif %}>{{ "{:,}".format(summary.pdfs) }}{% if summary.pdfs_capped %}+{% endif %}</span><span class="label">PDFs</span></a></li>
   <li><a href="{{ url_for('console.browse_page', name='pepa-prep', slot='results', **{'in': 'text'}) }}"><span class="count" data-count="{{ summary.prepared }}">{{ "{:,}".format(summary.prepared) }}</span><span class="label">Prepared</span></a></li>
   <li><a href="{{ url_for('console.browse_page', name='pepa-sum', slot='results', q='sum_') }}"><span class="count" data-count="{{ summary.summarised }}">{{ "{:,}".format(summary.summarised) }}</span><span class="label">Summarised</span></a></li>
-  <li><a href="{{ url_for('console.read_page') }}"><span class="count">{{ summary.search_index or "None" }}</span><span class="label">Search index</span></a></li>
+  <li><a href="{{ url_for('console.explore_page') }}"><span class="count">{{ summary.search_index or "None" }}</span><span class="label">Search index</span></a></li>
   <li><a href="{{ url_for('console.app_page', name='pepa-review') }}"><span class="count">{{ summary.review_index or "None" }}</span><span class="label">Review index</span></a></li>
 </ol>
 
@@ -75,6 +75,7 @@
         <button class="text" name="action" value="skip-prep" disabled>Skip when preparing</button>
         <button class="text" name="action" value="skip-sum" disabled>Skip when summarising</button>
         <button class="text" name="action" value="include" disabled>Stop skipping</button>
+        <button type="button" class="text" data-open="add-to-list" disabled>Add to a list</button>
         {% if own_pdfs %}<button class="text danger" form="remove-copies" disabled>Remove PDF copies</button>{% endif %}
       </span>
     </div>
@@ -97,7 +98,7 @@
         {% for row in listing.rows %}
         <tr>
           <td class="tick"><input type="checkbox" name="name" value="{{ row.name }}" aria-label="Select {{ row.name }}"></td>
-          <td class="paper-name" title="{{ row.name }}">{{ row.name }}</td>
+          <td class="paper-name" title="{{ row.name }}">{% if row.prepared %}<a href="{{ url_for('console.paper_page', stem=row.stem) }}">{{ row.name }}</a>{% else %}{{ row.name }}{% endif %}</td>
           <td class="num">{% if row.pages is none %}…{% else %}{{ "{:,}".format(row.pages) }}{% endif %}</td>
           <td{% if row.skip_prep %} class="skipped"{% endif %}>{% if row.skip_prep %}<span class="chip">Skipped</span> {% endif %}{% if row.prepared > 1 %}{{ row.prepared }} chapters{% elif row.prepared == 1 %}One file{% else %}Not yet{% endif %}</td>
           <td{% if row.skip_sum %} class="skipped"{% endif %}>{% if row.skip_sum %}<span class="chip">Skipped</span> {% endif %}{% if row.prepared and row.summarised == row.prepared %}Done{% elif row.in_batch %}In a batch{% elif row.summarised %}{{ row.summarised }} of {{ row.prepared }}{% else %}Not yet{% endif %}</td>
@@ -108,6 +109,7 @@
     </table>
   </div>
 </form>
+{% with collect_ticked = True, stems = [] %}{% include "_add_to_list.html" %}{% endwith %}
 {% if own_pdfs %}
 <form id="remove-copies" method="post" action="{{ url_for('console.papers_remove_copies') }}" data-collect-ticked data-confirm="Remove these PDF copies?" data-confirm-detail="Only papers already prepared lose their copy. Their text, summaries and search stay. To mark chapters or prepare them again, copy the PDFs in again." data-confirm-button="Remove">
   <input type="hidden" name="token" value="{{ token }}">

@@ -376,14 +376,6 @@ def dismiss(kind, record_id):
     save_record(kind, record)
 
 
-def running_service(app_name, command_name):
-    """The id of the running job for this command, or None."""
-    row = latest_job(app_name, command_name)
-    if row is None or row["status"] != "running":
-        return None
-    return row["id"]
-
-
 # ---- Chains ----
 
 def start_chain(steps):

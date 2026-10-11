@@ -16,9 +16,9 @@
   <a class="brand" href="{{ url_for('console.library') }}">pepa</a>
   <nav class="tabs" aria-label="Main">
     <a href="{{ url_for('console.library') }}"{% if section in ["", "papers"] %} aria-current="page"{% endif %}>Library</a>
-    <a href="{{ url_for('console.apps_page') }}"{% if section in ["apps", "view", "browse"] %} aria-current="page"{% endif %}>Apps</a>
-    <a href="{{ url_for('console.read_page') }}"{% if section == "read" %} aria-current="page"{% endif %}>Search</a>
+    <a href="{{ url_for('console.explore_page') }}"{% if section in ["explore", "paper"] %} aria-current="page"{% endif %}>Explore</a>
     <a href="{{ url_for('console.jobs_page') }}"{% if section == "jobs" %} aria-current="page"{% endif %}>Jobs<span class="badge" data-running{% if not running %} hidden{% endif %}><span class="visually-hidden">running: </span>{{ running }}</span></a>
+    <a href="{{ url_for('console.apps_page') }}"{% if section in ["apps", "view", "browse"] %} aria-current="page"{% endif %}>Apps</a>
     <a href="{{ url_for('console.folders_page') }}"{% if section in ["folders", "models", "keys"] %} aria-current="page"{% endif %}>Settings</a>
     <a href="{{ url_for('console.guide_page', name='index') }}"{% if section == "guide" %} aria-current="page"{% endif %}>Guide</a>
   </nav>

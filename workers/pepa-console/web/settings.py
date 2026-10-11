@@ -10,7 +10,6 @@ from pathlib import Path
 DEFAULTS = {
     "host": "127.0.0.1",
     "port": 5190,
-    "read_port": 5151,
     "upload_limit_mb": 500,
     "poll_ms": 700,
 }
@@ -24,7 +23,6 @@ ALLOWED = {
 
 NUMERIC = [
     "port",
-    "read_port",
     "upload_limit_mb",
     "poll_ms",
 ]

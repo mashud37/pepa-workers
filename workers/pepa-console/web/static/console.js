@@ -1422,7 +1422,7 @@ function showSelectMenu(button) {
 
 function showAddressMenu(button) {
   const addresses = JSON.parse(document.getElementById("addresses").textContent);
-  const checked = button.closest(".model-card").querySelector('input[type="radio"]:checked');
+  const checked = button.closest(".model-scope").querySelector('input[type="radio"]:checked');
   const route = checked ? checked.value : "";
   const groups = [];
   for (const name in ADDRESS_GROUPS) {
@@ -1452,7 +1452,7 @@ async function showModelMenu(button) {
   const form = new FormData();
   form.append("token", document.querySelector('input[name="token"]').value);
   form.append("app", button.dataset.app);
-  form.append("base_url", button.closest(".model-card").querySelector("[data-address]").value);
+  form.append("base_url", button.closest(".model-scope").querySelector("[data-address]").value);
   const label = button.textContent;
   button.textContent = "Looking…";
   button.disabled = true;

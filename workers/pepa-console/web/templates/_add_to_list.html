@@ -1,0 +1,25 @@
+<dialog id="add-to-list" class="dialog" aria-labelledby="add-to-list-title">
+  <form method="post" action="{{ url_for('console.lists_add') }}" id="add-to-list-form"{% if collect_ticked %} data-collect-ticked{% endif %}>
+    <input type="hidden" name="token" value="{{ token }}">
+    <input type="hidden" name="back" value="{{ request.full_path }}">
+    {% for stem in stems or [] %}<input type="hidden" name="stem" value="{{ stem }}">{% endfor %}
+    <h2 id="add-to-list-title">Add to a list</h2>
+    <p class="supporting">A list gathers papers for a literature review or a draft.</p>
+    {% if lists %}
+    <label class="field">
+      <span>List</span>
+      <select name="list">
+        {% for each in lists %}<option value="{{ each.name }}">{{ each.name }} ({{ each.count }})</option>{% endfor %}
+      </select>
+    </label>
+    {% endif %}
+    <label class="field">
+      <span>{% if lists %}Or a new list{% else %}New list{% endif %}</span>
+      <input type="text" name="new_list" maxlength="80"{% if not lists %} required{% endif %} placeholder="For example, Platform labour">
+    </label>
+    <div class="actions">
+      <button type="button" class="text" data-close>Cancel</button>
+      <button class="filled">Add</button>
+    </div>
+  </form>
+</dialog>

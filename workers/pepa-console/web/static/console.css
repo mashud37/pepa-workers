@@ -232,11 +232,15 @@ input[type=checkbox] { flex: none; width: 18px; height: 18px; margin: 0; accent-
 .model-card:has(input[value="computer"]:checked) .when-server,
 .model-card:has(input[value="cloud"]:checked) .when-server,
 .embedding-card:has(option[value="openai-compatible"]:checked) .when-embed-server { display: grid; animation: rise 0.25s var(--ease); }
+.embedding-card { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--outline); }
+.embedding-card > .title { margin: 0 0 4px; }
+.embedding-card > .supporting { margin: 0 0 16px; }
+.embedding-note { margin: 16px 0 0; }
 .when-service, .when-computer, .when-cloud { display: none; }
 .model-card:has(input[value="service"]:checked) .when-service,
 .model-card:has(input[value="computer"]:checked) .when-computer,
 .model-card:has(input[value="cloud"]:checked) .when-cloud { display: block; }
-.model-card:has(input[value="cloud"]:checked) [data-pick-address] { display: none; }
+.model-card:has(input[value="cloud"]:checked) .when-server [data-pick-address] { display: none; }
 
 /* The console's own dropdown: a button showing the choice, and a menu of options with a line of detail each. */
 .select-button { justify-content: space-between; width: 100%; height: 44px; padding: 0 10px 0 14px; border: 1px solid var(--outline-strong); border-radius: 8px; background: var(--surface) var(--chevron-down) right 10px center / 20px no-repeat; color: var(--text); font-weight: 400; text-align: left; }
@@ -352,7 +356,6 @@ dialog.dialog.run-window { width: min(1040px, calc(100vw - 32px)); max-height: c
 .pending { color: var(--primary); font-weight: 500; }
 .answer { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--outline); background: var(--surface-variant); }
 .answer input[type=text] { flex: 1; height: 40px; }
-.read { display: block; width: 100%; height: calc(100vh - 176px); border: 1px solid var(--outline); border-radius: 16px; background: #fff; }
 
 .empty { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 64px 24px; text-align: center; }
 .empty form { margin-top: 12px; }
@@ -421,6 +424,7 @@ dialog.dialog .actions { justify-content: flex-end; margin-top: 8px; }
 .bulk-bar .ticked-count { color: var(--text-secondary); font-weight: 500; }
 .list-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 40px; }
 .list-head .reserve { min-width: 14em; justify-content: flex-end; }
+.list-head .section-title { margin: 0; }
 .papers-card { overflow-x: auto; padding: 0; }
 .papers-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .papers-table th, .papers-table td { height: 52px; padding: 0 16px; border-bottom: 1px solid var(--outline); text-align: left; vertical-align: middle; white-space: nowrap; }
@@ -641,3 +645,24 @@ body.busy .buddy .ink rect { animation: write 1.4s steps(1, end) infinite; anima
   @view-transition { navigation: none; }
   *, *::before, *::after, *::backdrop { animation: none !important; transition: none !important; }
 }
+.result { display: flex; flex-direction: column; gap: 4px; padding: 14px 24px; color: inherit; }
+.result:hover { background: var(--surface-variant); }
+.ticked-row { display: flex; align-items: flex-start; }
+.ticked-row > input[type=checkbox] { margin: 16px 0 0 24px; }
+.ticked-row > .result { flex: 1; min-width: 0; padding-left: 16px; }
+.ticked-row > form { flex: none; align-self: center; padding-right: 16px; }
+.result-title { color: var(--primary); font-weight: 500; }
+.result-authors { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 13px; }
+.result-snippet { color: var(--text-secondary); font-size: 13px; line-height: 20px; }
+.result-snippet mark { padding: 0 2px; border-radius: 4px; background: var(--primary-container); color: var(--on-primary-container); }
+.paper-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 24px; align-items: start; }
+.paper-side { display: grid; gap: 12px; }
+.side-card { padding: 16px 20px; }
+.side-card .title { margin: 0 0 8px; }
+.side-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.side-list li { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.side-list .meta { white-space: normal; }
+@media (max-width: 900px) { .paper-layout { grid-template-columns: minmax(0, 1fr); } }
+.advanced { margin: 0 0 16px; }
+.advanced > summary { display: inline-flex; align-items: center; min-height: 40px; color: var(--primary); font-weight: 500; cursor: pointer; }
+.advanced[open] > summary { margin-bottom: 4px; }

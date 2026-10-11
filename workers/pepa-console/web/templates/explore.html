@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icon %}
+{% block title %}{% if wanted.q %}{{ wanted.q }} · {% endif %}Explore · pepa{% endblock %}
+{% block content %}
+{% include "_explore_tabs.html" %}
+
+<form method="get" role="search">
+  <div class="filter">
+    <label class="field grow">
+      <span>Search</span>
+      <input type="search" name="q" value="{{ wanted.q }}"{% if not asked %} autofocus{% endif %}>
+    </label>
+    <button class="tonal">Search</button>
+  </div>
+  <details class="advanced"{% if advanced %} open{% endif %}>
+    <summary>Advanced search</summary>
+    <p class="supporting section-note">Each box looks in one part of the briefs. Papers not yet summarised are found by the plain search only.</p>
+    <div class="fields">
+      <label class="field"><span>Author</span><input type="text" name="author" value="{{ wanted.author }}"></label>
+      {% for field in fields %}
+      <label class="field"><span>{{ field.label }}</span><input type="text" name="{{ field.name }}" value="{{ wanted[field.name] }}"></label>
+      {% endfor %}
+    </div>
+  </details>
+</form>
+
+{% if not indexed %}
+<div class="empty">
+  <h2>No search index yet</h2>
+  <p class="supporting">Run <strong>Update search index</strong> from the <a href="{{ url_for('console.library') }}">Library</a> once papers are prepared.</p>
+</div>
+{% elif found and found.failed %}
+<div class="empty">
+  <h2>This search did not run</h2>
+  <p class="supporting">Plain words work best.</p>
+</div>
+{% elif found %}
+<div class="list-head">
+  <p class="meta result-count" role="status">{{ "{:,}".format(found.total) }} item{% if found.total != 1 %}s{% endif %} found{% if found.pages > 1 %} · page {{ found.page }} of {{ found.pages }}{% endif %}</p>
+  {% if found.results %}<button type="button" class="text" data-open="add-to-list">Add ticked to a list</button>{% endif %}
+</div>
+{% if found.results %}
+<ul class="list file-list">
+  {% for result in found.results %}
+  <li class="row-item ticked-row">
+    <input type="checkbox" name="stem" value="{{ result.stem }}" form="add-to-list-form" aria-label="Tick {{ result.title }}">
+    <a class="result" href="{{ url_for('console.paper_page', stem=result.stem, back=request.full_path) }}">
+      <span class="result-title">{{ result.title }}</span>
+      <span class="result-authors">{{ result.authors }}{% if not result.summarised %}<span class="chip">Full text only</span>{% endif %}</span>
+      {% if result.parts | length > 1 %}<span class="result-snippet">{% for part in result.parts %}{% if part.matched %}<mark>{{ part.text }}</mark>{% else %}{{ part.text }}{% endif %}{% endfor %}</span>{% endif %}
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% if found.pages > 1 %}
+<nav class="pager" aria-label="Pages">
+  {% if found.page > 1 %}<a class="button text" href="{{ url_for('console.explore_page', page=found.page - 1, **asked) }}">{{ icon.back() }}Previous</a>{% endif %}
+  {% if found.page < found.pages %}<a class="button text" href="{{ url_for('console.explore_page', page=found.page + 1, **asked) }}">Next</a>{% endif %}
+</nav>
+{% endif %}
+{% if found.results %}{% with collect_ticked = False, stems = [] %}{% include "_add_to_list.html" %}{% endwith %}{% endif %}
+{% endif %}
+{% endblock %}

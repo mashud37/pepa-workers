@@ -11,7 +11,7 @@
 <form method="post" action="{{ url_for('console.models_save') }}">
   <input type="hidden" name="token" value="{{ token }}">
   {% for app in page.apps %}
-  <section class="card model-card" aria-labelledby="{{ app.name }}-title">
+  <section class="card model-card model-scope" aria-labelledby="{{ app.name }}-title">
     <h2 class="title" id="{{ app.name }}-title">{{ app.name }}</h2>
     <div class="routes" role="radiogroup" aria-label="Where {{ app.name }}'s model runs">
       <label class="route"><input type="radio" name="{{ app.name }}|route" value=""{% if not app.chosen.route %} checked{% endif %}><span class="route-name">Its own settings</span><span class="route-detail">Whatever its settings file says</span></label>
@@ -52,36 +52,39 @@
       </div>
       {% endfor %}
     </div>
+    {% if app.name == "pepa-review" %}
+    <div class="embedding-card model-scope">
+      <h3 class="title">Embeddings</h3>
+      <p class="supporting">Turn each summary into numbers, so papers can be found by meaning. pepa-draft uses the same choice. After a change, run the index with Rebuild from scratch ticked.</p>
+      <div class="fields">
+        <label class="field"><span>Provider</span>
+          <select name="embedding|provider">
+            <option value="" data-detail="Whatever their settings files say">Their own settings</option>
+            {% for provider in page.embed_providers %}<option value="{{ provider.value }}" data-detail="{{ provider.detail }}"{% if provider.value == page.embedding.provider %} selected{% endif %}>{{ provider.label }}</option>{% endfor %}
+          </select>
+        </label>
+      </div>
+      <div class="route-fields when-embed-server">
+        <div class="field wide"><span>Server address</span>
+          <div class="combo">
+            <input type="text" name="embedding|base_url" value="{{ page.embedding.base_url }}" placeholder="https://… ending in /v1" data-address>
+            <button type="button" class="text" data-pick-address>Choose</button>
+          </div>
+          <small class="hint">A hosted provider's key goes on the Keys page as PEPA_EMBED_API_KEY.</small>
+        </div>
+        <div class="field"><span>Model</span>
+          <div class="combo">
+            <input type="text" name="embedding|model" value="{{ page.embedding.model }}" placeholder="For example bge-m3" data-model-name>
+            <button type="button" class="text" data-list-models data-app="embedding" data-list-url="{{ url_for('console.models_list') }}">Show models</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% elif app.name == "pepa-draft" %}
+    <p class="supporting embedding-note">Finds papers with the embeddings chosen under pepa-review.</p>
+    {% endif %}
   </section>
   {% endfor %}
-
-  <section class="card model-card embedding-card" aria-labelledby="embedding-title">
-    <h2 class="title" id="embedding-title">Embeddings for pepa-review and pepa-draft</h2>
-    <p class="supporting">pepa-draft searches the index pepa-review builds, so both use this one choice. After a change, run pepa-review's index with Rebuild from scratch ticked.</p>
-    <div class="fields">
-      <label class="field"><span>Provider</span>
-        <select name="embedding|provider">
-          <option value="" data-detail="Whatever their settings files say">Their own settings</option>
-          {% for provider in page.embed_providers %}<option value="{{ provider.value }}" data-detail="{{ provider.detail }}"{% if provider.value == page.embedding.provider %} selected{% endif %}>{{ provider.label }}</option>{% endfor %}
-        </select>
-      </label>
-    </div>
-    <div class="route-fields when-embed-server">
-      <div class="field wide"><span>Server address</span>
-        <div class="combo">
-          <input type="text" name="embedding|base_url" value="{{ page.embedding.base_url }}" placeholder="https://… ending in /v1" data-address>
-          <button type="button" class="text" data-pick-address>Choose</button>
-        </div>
-        <small class="hint">A hosted provider's key goes on the Keys page as PEPA_EMBED_API_KEY.</small>
-      </div>
-      <div class="field"><span>Model</span>
-        <div class="combo">
-          <input type="text" name="embedding|model" value="{{ page.embedding.model }}" placeholder="For example bge-m3" data-model-name>
-          <button type="button" class="text" data-list-models data-app="embedding" data-list-url="{{ url_for('console.models_list') }}">Show models</button>
-        </div>
-      </div>
-    </div>
-  </section>
 
   <div class="form-actions"><button class="filled">Save</button></div>
 </form>

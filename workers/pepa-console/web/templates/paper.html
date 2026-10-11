@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icon %}
+{% block title %}{{ name.title }} · pepa{% endblock %}
+{% block content %}
+<nav class="crumbs-nav" aria-label="Breadcrumb">
+  <ol>
+    {% if back.startswith('/explore/lists') %}<li><a href="{{ back }}">Lists</a></li>
+    {% elif back.startswith('/explore/document') %}<li><a href="{{ back }}">Find by document</a></li>
+    {% elif back.startswith('/explore') %}<li><a href="{{ back }}">Search</a></li>
+    {% else %}<li><a href="{{ url_for('console.library') }}">Library</a></li>{% endif %}
+    {% if view.book %}<li><a href="{{ url_for('console.paper_page', stem=view.book, back=back) }}">{{ book_name.title }}</a></li>{% endif %}
+    <li aria-current="page">{{ name.title }}</li>
+  </ol>
+</nav>
+
+<div class="page-head">
+  <div class="heading">
+    <h1 class="document-title">{{ name.title }}</h1>
+    {% if name.authors %}<p class="supporting">{{ name.authors }}</p>{% endif %}
+  </div>
+  <div class="actions">
+    <button type="button" class="tonal" data-open="add-to-list">{{ icon.plus() }}Add to a list</button>
+    {% if view.chosen %}
+    <a class="button text" href="{{ url_for('console.app_file', name=view.chosen.app, slot=view.chosen.slot, relative=view.chosen.relative) }}" target="_blank" rel="noopener">{{ icon.open_new() }}Open on its own<span class="visually-hidden"> (new tab)</span></a>
+    {% endif %}
+  </div>
+</div>
+{% with collect_ticked = False, stems = view.chapters or [view.stem] %}{% include "_add_to_list.html" %}{% endwith %}
+
+<div class="paper-layout">
+  <div class="paper-main">
+    {% if view.tabs | length > 1 %}
+    <nav class="doc-tabs" aria-label="This paper's documents">
+      {% for tab in view.tabs %}
+      <a href="{{ url_for('console.paper_page', stem=view.stem, tab=tab.label, back=back) }}"{% if tab == view.chosen %} aria-current="page"{% endif %}>{{ tab.label }}</a>
+      {% endfor %}
+    </nav>
+    {% endif %}
+    {% set document = view.document %}
+    {% if document %}
+    {% set raw_url = url_for('console.app_file', name=view.chosen.app, slot=view.chosen.slot, relative=view.chosen.relative) %}
+    {% if document.cut %}<p class="notice">This file is long, so only its first part is shown here. Open it on its own to see all of it.</p>{% endif %}
+    {% if document.kind == "markdown" %}
+    <article class="card document prose">{{ document.html | safe }}</article>
+    {% elif document.kind == "pdf" %}
+    <iframe class="document-frame" src="{{ raw_url }}" title="{{ document.name }}"></iframe>
+    {% else %}
+    <pre class="card document plain">{{ document.text }}</pre>
+    {% endif %}
+    {% elif view.chapters %}
+    <div class="empty">
+      <h2>Prepared as chapters</h2>
+      <p class="supporting">Open a chapter to read it.</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <aside class="paper-side" aria-label="Connections">
+    {% if view.chapters %}
+    <section class="card side-card">
+      <h2 class="title">Chapters</h2>
+      <ol class="side-list">
+        {% for chapter in view.chapters %}
+        <li><a href="{{ url_for('console.paper_page', stem=chapter, back=back) }}">Chapter {{ chapter.rpartition("_")[2] | int }}</a></li>
+        {% endfor %}
+      </ol>
+    </section>
+    {% endif %}
+    <section class="card side-card">
+      <h2 class="title">Similar papers</h2>
+      {% if related is none %}
+      <p class="supporting">Shown once the review index is built.</p>
+      {% elif related %}
+      <ul class="side-list">
+        {% for paper in related %}
+        <li><a href="{{ url_for('console.paper_page', stem=paper.stem, back=back) }}">{{ paper.title }}</a><span class="meta">{{ paper.authors }}</span></li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="supporting">None found.</p>
+      {% endif %}
+    </section>
+    {% if themes %}
+    <section class="card side-card">
+      <h2 class="title">Themes</h2>
+      <ul class="side-list">
+        {% for theme in themes %}
+        <li>{{ theme.name }}{% if not theme.main %}<span class="meta">also close</span>{% endif %}</li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

@@ -23,7 +23,7 @@ LOCAL_HOSTS = [
 BROWSER_DELAY_SECONDS = 0.8
 CONTENT_POLICY = (
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
-    f"frame-src 'self' http://127.0.0.1:{SETTINGS['read_port']} http://localhost:{SETTINGS['read_port']}; "
+    "frame-src 'self'; "
     "object-src 'self'; base-uri 'none'; form-action 'self'"
 )
 BYTES_PER_MEGABYTE = 1024 * 1024

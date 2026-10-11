@@ -1,7 +1,6 @@
 """Serve the web console's pages and form actions. Each handler reads the registry, folders,
 jobs, or key store, then renders a template, answers with JSON, or redirects.
 """
-import socket
 import threading
 import time
 from pathlib import Path
@@ -21,8 +20,21 @@ from flask import (
 )
 
 from registry import get_app
-from web import batches, documents, folders, jobs, keys, mascot, models, options, papers, paths
-from web.settings import SETTINGS
+from web import (
+    batches,
+    connections,
+    documents,
+    explore,
+    folders,
+    jobs,
+    keys,
+    lists,
+    mascot,
+    models,
+    options,
+    papers,
+    paths,
+)
 
 MISSING_NOTE = {
     "keys": "Add a key in Settings first.",
@@ -87,8 +99,6 @@ SHOWN_AS_IS = [
 # Any other file, such as a saved web page, may carry its own script; it runs walled off from the console.
 WALLED_POLICY = "sandbox allow-scripts"
 
-PORT_CHECK_SECONDS = 0.3
-
 bp = Blueprint("console", __name__)
 
 
@@ -100,15 +110,6 @@ def find_app(name):
     if app is None:
         abort(404)
     return app
-
-
-def port_is_open(port):
-    """True when something on this machine already answers on the port."""
-    try:
-        with socket.create_connection((SETTINGS["host"], port), timeout=PORT_CHECK_SECONDS):
-            return True
-    except OSError:
-        return False
 
 
 def copy_step(results, back_to):
@@ -242,6 +243,7 @@ def library():
         length=length,
         lengths=papers.LENGTHS,
         book_pages=papers.book_pages(),
+        lists=lists.all_lists(),
     )
 
 
@@ -643,37 +645,142 @@ def guide_page(name):
     return render_template("guide.html", page=page, guides=documents.guide_names())
 
 
-# ---- Read ----
+# ---- Explore ----
 
-@bp.route("/read")
-def read_page():
-    port = SETTINGS["read_port"]
+@bp.route("/explore")
+def explore_page():
+    wanted = explore.wanted_search(request.args)
+    page = request.args.get("page", "1")
+    asked = {name: text for name, text in wanted.items() if text}
+    found = None
+    if asked:
+        found = explore.search(wanted, int(page) if page.isdigit() else 1)
     return render_template(
-        "read.html",
-        job_id=jobs.running_service("pepa-read", "serve"),
-        last=jobs.latest_job("pepa-read", "serve"),
-        answering=port_is_open(port),
-        url=f"http://{SETTINGS['host']}:{port}/",
+        "explore.html",
+        wanted=wanted,
+        asked=asked,
+        advanced=any(name != "q" for name in asked),
+        fields=explore.SEARCH_FIELDS,
+        found=found,
+        indexed=folders.index_built(folders.SEARCH_INDEX),
+        lists=lists.all_lists(),
     )
 
 
-@bp.route("/read/start", methods=["POST"])
-def read_start():
-    already_running = jobs.running_service("pepa-read", "serve") is not None
-    if not already_running and not port_is_open(SETTINGS["read_port"]):
+@bp.route("/explore/document")
+def document_page():
+    found = None
+    if request.args.get("find"):
+        found = explore.kept_find(request.args["find"])
+        if found is None:
+            abort(404)
+    path = explore.saved_text(request.args.get("text", ""))
+    return render_template(
+        "document.html",
+        found=found,
+        text=path.name if path else "",
+        estimate=explore.document_estimate(path) if path else None,
+        earlier=explore.earlier_finds(),
+        indexed=folders.index_built(folders.REVIEW_INDEX),
+        missing=models.missing_choice("pepa-review", "embedding"),
+        lists=lists.all_lists(),
+    )
+
+
+@bp.route("/explore/document", methods=["POST"])
+def document_save():
+    try:
+        name = explore.save_text(request.files.get("file"), request.form.get("pasted", ""))
+    except ValueError as error:
+        flash(str(error))
+        return redirect(url_for("console.document_page"))
+    return redirect(url_for("console.document_page", text=name))
+
+
+@bp.route("/explore/document/find", methods=["POST"])
+def document_find():
+    path = explore.saved_text(request.form.get("text", ""))
+    if path is None:
+        abort(404)
+    kept = explore.find_document(path)
+    if kept is None:
+        flash("pepa-review gave no answer. Run similar on its app page to see why.")
+        return redirect(url_for("console.document_page", text=path.name))
+    return redirect(url_for("console.document_page", find=kept))
+
+
+@bp.route("/paper")
+def paper_page():
+    stem = request.args.get("stem", "")
+    view = documents.paper_view(stem, request.args.get("tab", ""))
+    if view is None:
+        abort(404)
+    return render_template(
+        "paper.html",
+        view=view,
+        name=connections.named(stem),
+        book_name=connections.named(view["book"]),
+        related=connections.related_papers(stem),
+        themes=connections.themes_of(stem),
+        back=request.args.get("back", ""),
+        lists=lists.all_lists(),
+    )
+
+
+# ---- Lists ----
+
+@bp.route("/explore/lists")
+def lists_page():
+    chosen = request.args.get("list", "")
+    papers_in_list = None
+    if chosen:
         try:
-            jobs.start_job("pepa-read", "serve", {"--port": str(SETTINGS["read_port"])})
-        except ValueError as error:
-            flash(str(error))
-    return redirect(url_for("console.read_page"))
+            papers_in_list = lists.list_papers(chosen)
+        except ValueError:
+            abort(404)
+    return render_template("lists.html", lists=lists.all_lists(), chosen=chosen, papers=papers_in_list)
 
 
-@bp.route("/read/stop", methods=["POST"])
-def read_stop():
-    job_id = jobs.running_service("pepa-read", "serve")
-    if job_id is not None:
-        jobs.cancel_job(job_id)
-    return redirect(url_for("console.read_page"))
+@bp.route("/lists/add", methods=["POST"])
+def lists_add():
+    back = request.form.get("back") or url_for("console.lists_page")
+    stems = request.form.getlist("stem") + lists.stems_of_pdfs(request.form.getlist("name"))
+    target = request.form.get("new_list", "").strip() or request.form.get("list", "")
+    if not stems:
+        flash("Tick at least one item.")
+        return redirect(back)
+    try:
+        added = lists.add_to_list(target, stems)
+    except ValueError as error:
+        flash(str(error))
+        return redirect(back)
+    if added:
+        flash(f"Added {item_count(added)} to {target}.")
+    else:
+        flash(f"Already in {target}.")
+    return redirect(back)
+
+
+@bp.route("/lists/remove", methods=["POST"])
+def lists_remove():
+    name = request.form.get("list", "")
+    try:
+        lists.remove_from_list(name, request.form.get("stem", ""))
+    except ValueError as error:
+        flash(str(error))
+    return redirect(url_for("console.lists_page", list=name))
+
+
+@bp.route("/lists/delete", methods=["POST"])
+def lists_delete():
+    name = request.form.get("list", "")
+    try:
+        lists.delete_list(name)
+    except ValueError as error:
+        flash(str(error))
+        return redirect(url_for("console.lists_page"))
+    flash(f"Deleted the list {name}.")
+    return redirect(url_for("console.lists_page"))
 
 
 # ---- Folders ----

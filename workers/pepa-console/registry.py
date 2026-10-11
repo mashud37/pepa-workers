@@ -127,6 +127,9 @@ APPS: list[App] = [
         Command("gaps", "heavy", "Gap-check a draft against the corpus", fields=(
             {"name": "--input", "type": "file", "help": "Draft file"},
         )),
+        Command("similar", "heavy", "Find the indexed papers closest to a document", fields=(
+            {"name": "--input", "type": "file", "help": "A text or markdown file, such as a draft"},
+        )),
         Command("map", "heavy", "Generate the corpus thematic map", fields=(
             {"name": "--threads", "type": "int", "help": "Target thread count (default: auto)"},
         )),

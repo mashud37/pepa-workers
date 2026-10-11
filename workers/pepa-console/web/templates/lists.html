@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icon %}
+{% block title %}{% if chosen %}{{ chosen }} · {% endif %}Lists · pepa{% endblock %}
+{% block content %}
+{% include "_explore_tabs.html" %}
+
+{% if chosen %}
+<nav class="crumbs-nav" aria-label="Breadcrumb">
+  <ol>
+    <li><a href="{{ url_for('console.lists_page') }}">Lists</a></li>
+    <li aria-current="page">{{ chosen }}</li>
+  </ol>
+</nav>
+{% elif not lists %}
+<div class="empty">
+  <h2>No lists yet</h2>
+  <p class="supporting">Tick papers in the <a href="{{ url_for('console.library') }}">Library</a> or in search results, then press <strong>Add to a list</strong>.</p>
+</div>
+{% else %}
+<ul class="list file-list">
+  {% for each in lists %}
+  <li class="row-item"><a class="row-link" href="{{ url_for('console.lists_page', list=each.name) }}"><span class="file-name">{{ each.name }}</span><span class="meta">{{ each.count }} paper{% if each.count != 1 %}s{% endif %}</span></a></li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+{% if chosen %}
+<div class="list-head">
+  <h2 class="section-title">{{ chosen }}</h2>
+  <form method="post" action="{{ url_for('console.lists_delete') }}" data-confirm="Delete the list {{ chosen }}?" data-confirm-detail="Only the list goes; its papers stay in the Library." data-confirm-button="Delete">
+    <input type="hidden" name="token" value="{{ token }}">
+    <input type="hidden" name="list" value="{{ chosen }}">
+    <button class="text danger">Delete list</button>
+  </form>
+</div>
+{% if papers %}
+<ul class="list file-list">
+  {% for paper in papers %}
+  <li class="row-item ticked-row">
+    <a class="result" href="{{ url_for('console.paper_page', stem=paper.stem, back=request.full_path) }}">
+      <span class="result-title">{{ paper.title }}</span>
+      <span class="result-authors">{{ paper.authors }}</span>
+    </a>
+    <form method="post" action="{{ url_for('console.lists_remove') }}">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="list" value="{{ chosen }}">
+      <input type="hidden" name="stem" value="{{ paper.stem }}">
+      <button class="text">Remove<span class="visually-hidden"> {{ paper.title }}</span></button>
+    </form>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="supporting">This list is empty.</p>
+{% endif %}
+{% endif %}
+{% endblock %}

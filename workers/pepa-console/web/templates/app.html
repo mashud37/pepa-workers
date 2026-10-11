@@ -62,6 +62,12 @@
 
 {% block content %}
 {% set assigned = key_sources | selectattr("key") | map(attribute="key") | unique | list %}
+<nav class="crumbs-nav" aria-label="Breadcrumb">
+  <ol>
+    <li><a href="{{ url_for('console.apps_page') }}">Apps</a></li>
+    <li aria-current="page">{{ app.name }}</li>
+  </ol>
+</nav>
 <div class="page-head">
   <div class="heading">
     <h1>{{ app.name }}</h1>
@@ -85,15 +91,13 @@
     <summary>
       <span class="name">{{ command.name }}</span>
       <span class="supporting">{{ command.help }}</span>
-      {% if command.kind == "terminal" %}<span class="chip">Terminal</span>{% elif command.kind == "service" %}<span class="chip">Service</span>{% endif %}
+      {% if command.kind in ["terminal", "service"] %}<span class="chip">Terminal</span>{% endif %}
       <span class="dot{% if job %} dot-{{ job.status }}{% endif %}" data-dot role="img" aria-label="{% if job %}{{ job.label }}{% endif %}"{% if not job %} hidden{% endif %}></span>
       {{ icon.chevron() }}
     </summary>
     <div class="row-body">
-      {% if command.kind == "terminal" %}
+      {% if command.kind in ["terminal", "service"] %}
       <code class="command-line">{% if installed %}{{ app.name }} {{ command.name }}{% else %}cd "{{ app.path }}"; python manage.py {{ command.name }}{% endif %}</code>
-      {% elif command.kind == "service" %}
-      <a class="button tonal" href="{{ url_for('console.read_page') }}">Open Read</a>
       {% else %}
       <form method="post" action="{{ url_for('console.app_run', name=app.name, command_name=command.name) }}" data-fetch="run" data-slot="run-{{ command.name }}"{% if command.kind == "heavy" %} data-confirm="Run {{ app.name }} {{ command.name }}?" data-confirm-detail="This does real work and may incur API costs."{% elif command.kind == "destructive" %} data-confirm="{{ command.help }}?" data-confirm-detail="This cannot be undone." data-confirm-button="Delete"{% endif %}>
         <input type="hidden" name="token" value="{{ token }}">

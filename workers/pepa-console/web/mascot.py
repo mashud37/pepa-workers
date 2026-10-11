@@ -86,8 +86,8 @@ TIPS = {
         "Every app works on its own. Open one to see what it can do.",
         "Each app page has a Settings card for how it runs.",
     ],
-    "read": [
-        "Search one part of a brief: methods:interviews author:smith.",
+    "explore": [
+        "Advanced search looks in one part of the briefs, such as their methods.",
         "Plain words search the whole text too.",
     ],
     "jobs": [
