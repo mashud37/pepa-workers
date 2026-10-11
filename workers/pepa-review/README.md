@@ -2,8 +2,8 @@
 
 Works with the literature pepa-sum has summarised: assemble a literature review from an outline,
 find works a draft is missing, ask questions of the literature, map how a field clusters into
-themes, and look papers up on OpenAlex for their citations. Only the model, embedding and OpenAlex
-calls leave the machine.
+themes, and look papers up on OpenAlex for their citations. Only the model, embedding, OpenAlex and
+Crossref calls leave the machine.
 
 ## How it works
 

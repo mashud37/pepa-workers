@@ -13,6 +13,7 @@ DATA_ROOT = Path(PROJECT) / "pepa-review" if PROJECT else ROOT
 INSTALLED = ROOT.parent.name == "apps"
 COMMAND = "pepa-review" if INSTALLED else "python manage.py"
 CORPUS_DIR_DEFAULT = DATA_ROOT.parent / "pepa-sum" / "output"
+TEXT_DIR = Path(os.environ.get("PEPAREVIEW_TEXT_DIR", str(DATA_ROOT.parent / "pepa-prep" / "output" / "text")))
 DATA_DIR = DATA_ROOT / "data"
 INPUT_DIR = Path(os.environ.get("PEPAREVIEW_INPUT_DIR", str(DATA_ROOT / "input")))
 OUTPUT_DIR = Path(os.environ.get("PEPAREVIEW_OUTPUT_DIR", str(DATA_ROOT / "output")))
@@ -83,6 +84,7 @@ _ENV_OVERRIDE = {
     "embed_base_url":   "PEPAREVIEW_EMBED_BASE_URL",
     "embed_api_key":    "PEPA_EMBED_API_KEY",
     "openalex_url":     "PEPAREVIEW_OPENALEX_URL",
+    "crossref_url":     "PEPAREVIEW_CROSSREF_URL",
     "openalex_api_key": "OPENALEX_API_KEY",
 }
 
@@ -98,6 +100,7 @@ DEFAULTS = {
     "backend": "anthropic",
     "embed_provider": "gemini",
     "openalex_url": "https://api.openalex.org",
+    "crossref_url": "https://api.crossref.org/works",
 }
 
 # `anthropic` calls Claude; `openai-compatible` calls any server that accepts OpenAI's

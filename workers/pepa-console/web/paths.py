@@ -20,6 +20,7 @@ PLACES = [
     {"app": "pepa-read", "slot": "texts", "role": "reads", "label": "Prepared text to index", "variable": "PEPA_READER_TEXT_DIR", "default": "pepa-prep/output/text"},
     {"app": "pepa-read", "slot": "summaries", "role": "reads", "label": "Summaries to index", "variable": "PEPA_READER_SUM_DIR", "default": "pepa-sum/output"},
     {"app": "pepa-review", "slot": "corpus", "role": "reads", "label": "Summary corpus", "variable": "PEPAREVIEW_CORPUS_DIR", "default": "pepa-sum/output"},
+    {"app": "pepa-review", "slot": "texts", "role": "reads", "label": "Prepared text, for each paper's own DOI", "variable": "PEPAREVIEW_TEXT_DIR", "default": "pepa-prep/output/text"},
     {"app": "pepa-review", "slot": "drafts", "role": "reads", "label": "Outlines and drafts", "variable": "PEPAREVIEW_INPUT_DIR", "default": "pepa-review/input"},
     {"app": "pepa-review", "slot": "results", "role": "writes", "label": "Reviews, gaps and maps", "variable": "PEPAREVIEW_OUTPUT_DIR", "default": "pepa-review/output"},
     {"app": "pepa-plan", "slot": "corpus", "role": "reads", "label": "Summary corpus", "variable": "PEPAPLAN_CORPUS_DIR", "default": "pepa-sum/output"},

@@ -1,120 +1,117 @@
-"""Look each summarised paper up on OpenAlex, by DOI from a Zotero export or else by title, into biblio.db.
+"""Look each summarised paper up on OpenAlex, free sources first, and store what it finds in biblio.db.
 Reviews anchor debates on it; the console reads citations.json.
 """
 import json
-import time
-import urllib.error
-import urllib.parse
-import urllib.request
-from pathlib import Path
 
 import config
 from biblio.ingest import upsert_citations, upsert_works
+from biblio.references import TITLE_SHARE, export_doi, has_author, load_references, same_title
 from biblio.schema import connect, ensure_schema
+from biblio.sources import crossref_dois, openalex_by_doi, openalex_by_title, own_dois
 from cli import ui
 from corpus.metadata import work_list
 
-OPENALEX_FIELDS = "id,doi,title,authorships,publication_year,primary_location,cited_by_count,referenced_works,type"
-# OpenAlex list prices: a lookup by DOI is free, a title search costs $1 per thousand.
+# OpenAlex list price for one title search; lookups by DOI and Crossref searches are free.
 SEARCH_DOLLARS = 0.001
-PAUSE_SECONDS = 0.12
-TIMEOUT_SECONDS = 20
-# A Zotero record matches a paper when at least this many of the paper name's words are in its title or authors.
-ZOTERO_MATCH_WORDS = 2
 CITATIONS_FILE = config.DATA_DIR / "citations.json"
 
 
-# ---- Zotero ----
+# ---- Which papers ----
 
-def load_zotero(zotero_file):
-    """The records of a Zotero CSL-JSON export, or an empty list when no file is given."""
-    if not zotero_file:
-        return []
-    path = Path(zotero_file)
-    if not path.exists():
-        raise SystemExit(f"Zotero file not found: {zotero_file}")
-    records = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(records, list):
-        raise SystemExit(f"Expected a CSL-JSON list in {zotero_file}; export from Zotero as CSL JSON.")
-    return records
+def work_of(base):
+    """The work a paper belongs to: a book for one of its chapters, which pepa-prep names `<book>_<number>`."""
+    head, _, tail = base.rpartition("_")
+    if tail.isdigit() and "_" in head:
+        return head
+    return base
 
 
-def name_words(base):
-    """The words of a paper name longer than two letters, lower case."""
-    words = []
-    for word in base.replace("_", " ").replace("-", " ").lower().split():
-        if len(word) > 2:
-            words.append(word)
-    return words
+def works_to_fetch(force):
+    """Each work still to look up, with the paper names it covers: a book once for all its chapters."""
+    known = set()
+    if config.BIBLIO_DB.exists() and not force:
+        con = connect()
+        ensure_schema(con)
+        known = {row["base"] for row in con.execute("SELECT base FROM works").fetchall()}
+        con.close()
+    works = {}
+    for paper in work_list():
+        if paper["base"] not in known:
+            works.setdefault(work_of(paper["base"]), []).append(paper["base"])
+    return works
 
 
-def zotero_doi(base, records):
-    """The DOI of the Zotero record that best matches this paper name, or "" when none matches well enough."""
-    words = name_words(base)
-    best_doi = ""
-    best_count = ZOTERO_MATCH_WORDS - 1
-    for record in records:
-        title = record.get("title", "").lower()
-        authors = ""
-        for author in record.get("author", []):
-            authors += " " + author.get("family", "").lower()
-        count = 0
-        for word in words:
-            if word in title or word in authors:
-                count += 1
-        if count > best_count:
-            best_count = count
-            best_doi = (record.get("DOI") or "").strip()
-    return best_doi
+def text_paths(work):
+    """The prepared text a work's own DOI is read from: the paper, or a book's first chapter."""
+    paths = []
+    for name in [f"text_{work}.md", f"text_{work}_01.md"]:
+        if (config.TEXT_DIR / name).exists():
+            paths.append(config.TEXT_DIR / name)
+    return paths
 
 
-# ---- OpenAlex ----
+# ---- Finding each work ----
 
-def openalex_get(path, parameters):
-    """One OpenAlex reply as a dict, or None when it has no such work or cannot be reached."""
-    query = dict(parameters, select=OPENALEX_FIELDS)
-    if config.setting("openalex_api_key"):
-        query["api_key"] = config.setting("openalex_api_key")
-    url = config.setting("openalex_url").rstrip("/") + path + "?" + urllib.parse.urlencode(query)
-    time.sleep(PAUSE_SECONDS)
-    try:
-        with urllib.request.urlopen(url, timeout=TIMEOUT_SECONDS) as reply:
-            return json.loads(reply.read())
-    except urllib.error.HTTPError as error:
-        if error.code == 404:
-            return None
-        if error.code == 429:
-            raise SystemExit("OpenAlex says today's budget is used up. Try again tomorrow, or add an OpenAlex key.")
-        raise SystemExit(f"OpenAlex answered with error {error.code}.")
-    except urllib.error.URLError:
+def author_names(found):
+    """The author names of an OpenAlex work."""
+    names = []
+    for authorship in found.get("authorships", []):
+        names.append(authorship.get("author", {}).get("display_name", ""))
+    return names
+
+
+def first_confirmed(work, dois, need_author):
+    """The first DOI whose OpenAlex work has the paper's title, and its author when asked, with how sure the match is, or None.
+
+    Args:
+        need_author: True for DOIs found by a search, where only the author tells a namesake apart.
+    """
+    title = work.partition("_")[2]
+    for doi in dois:
+        found = openalex_by_doi(doi)
+        if found is None:
+            continue
+        share = same_title(title, found.get("title") or "")
+        if share < TITLE_SHARE:
+            continue
+        if need_author and not has_author(work, author_names(found)):
+            continue
+        return {"work": found, "confidence": round(share, 2)}
+    return None
+
+
+def free_match(work, records):
+    """The OpenAlex work for a paper from the free sources, with the source that gave its DOI, or None."""
+    from_export = export_doi(work, records)
+    sources = [
+        {"name": "its own pages", "dois": own_dois(text_paths(work))},
+        {"name": "the export", "dois": [from_export] if from_export else []},
+    ]
+    for source in sources:
+        match = first_confirmed(work, source["dois"], False)
+        if match:
+            return dict(match, source=source["name"])
+    match = first_confirmed(work, crossref_dois(work), True)
+    if match:
+        return dict(match, source="Crossref")
+    return None
+
+
+def paid_match(work):
+    """The OpenAlex work for a paper from a paid title search, or None when the best result has another title."""
+    title = work.partition("_")[2]
+    found = openalex_by_title(title)
+    if found is None:
         return None
-
-
-def look_up(base, doi):
-    """The OpenAlex work for a paper and how sure the match is: 1.0 by DOI, the share of title words matched by title."""
-    if doi:
-        found = openalex_get("/works/https://doi.org/" + urllib.parse.quote(doi, safe="/"), {})
-        if found:
-            return {"work": found, "confidence": 1.0}
-    title = base.split("_", 1)[-1]
-    reply = openalex_get("/works", {"search": title, "per-page": 1})
-    if not reply or not reply.get("results"):
-        return {"work": None, "confidence": 0.0}
-    found = reply["results"][0]
-    wanted = name_words(title)
-    found_title = (found.get("title") or "").lower()
-    matched = 0
-    for word in wanted:
-        if word in found_title:
-            matched += 1
-    return {"work": found, "confidence": round(matched / max(1, len(wanted)), 2)}
+    share = same_title(title, found.get("title") or "")
+    if share < TITLE_SHARE or not has_author(work, author_names(found)):
+        return None
+    return {"work": found, "confidence": round(share, 2), "source": "a paid title search"}
 
 
 def work_row(base, found, confidence):
     """One works-table row from an OpenAlex work."""
-    names = []
-    for authorship in found.get("authorships", []):
-        names.append(authorship.get("author", {}).get("display_name", ""))
+    names = author_names(found)
     source = (found.get("primary_location") or {}).get("source") or {}
     return {
         "base": base,
@@ -133,55 +130,75 @@ def work_row(base, found, confidence):
 
 # ---- The run ----
 
-def papers_to_fetch(force):
-    """Every summarised paper, less those biblio.db already holds unless `force`."""
-    bases = [work["base"] for work in work_list()]
-    if force or not config.BIBLIO_DB.exists():
-        return bases
-    con = connect()
-    ensure_schema(con)
-    known = {row["base"] for row in con.execute("SELECT base FROM works").fetchall()}
-    con.close()
-    return [base for base in bases if base not in known]
-
-
-def fetch_estimate(zotero_file, force):
-    """How many lookups a fetch makes, by DOI (free) and by title (paid), and their cost at list price."""
-    records = load_zotero(zotero_file)
-    bases = papers_to_fetch(force)
+def fetch_estimate(export_file, force):
+    """How many works the free sources should find and the most a paid title search for the rest could cost."""
+    records = load_references(export_file)
+    works = works_to_fetch(force)
     by_doi = 0
-    for base in bases:
-        if zotero_doi(base, records):
+    for work in works:
+        if own_dois(text_paths(work)) or export_doi(work, records):
             by_doi += 1
-    by_title = len(bases) - by_doi
-    return {"papers": len(bases), "by_doi": by_doi, "by_title": by_title, "dollars": by_title * SEARCH_DOLLARS, "model": "OpenAlex"}
+    by_search = len(works) - by_doi
+    return {
+        "papers": sum(len(bases) for bases in works.values()),
+        "works": len(works),
+        "by_doi": by_doi,
+        "by_search": by_search,
+        "dollars": 0.0,
+        "paid_upto": by_search * SEARCH_DOLLARS,
+        "model": "OpenAlex",
+    }
 
 
-def fetch(zotero_file, force):
-    """Look every paper still missing up on OpenAlex, store each one as it arrives, and rewrite citations.json."""
-    records = load_zotero(zotero_file)
-    bases = papers_to_fetch(force)
-    ui.header("Look up citations on OpenAlex")
-    ui.info(f"{len(bases)} paper(s) to look up; {len(records)} Zotero record(s) to match DOIs from")
-    con = connect()
-    ensure_schema(con)
-    found_count = 0
-    for number, base in enumerate(bases, start=1):
-        ui.info(f"[{number}/{len(bases)}] {base}")
-        result = look_up(base, zotero_doi(base, records))
-        if result["work"] is None:
-            ui.warn("  not found on OpenAlex")
-            continue
-        upsert_works(con, [work_row(base, result["work"], result["confidence"])], None)
+def store(con, bases, match):
+    """Store one found work for every paper it covers, with the works it cites."""
+    for base in bases:
+        upsert_works(con, [work_row(base, match["work"], match["confidence"])], None)
         con.execute("DELETE FROM citations WHERE citing_base = ?", (base,))
         cited = []
-        for reference in result["work"].get("referenced_works", []):
+        for reference in match["work"].get("referenced_works", []):
             cited.append({"citing_base": base, "cited_ext_id": reference})
         upsert_citations(con, cited)
-        found_count += 1
+
+
+def forget(con, bases):
+    """Drop what an earlier lookup stored for these papers, so a match no longer found does not linger."""
+    for base in bases:
+        con.execute("DELETE FROM works WHERE base = ?", (base,))
+        con.execute("DELETE FROM citations WHERE citing_base = ?", (base,))
+    con.commit()
+
+
+def fetch(export_file, force, paid_search):
+    """Look every work still missing up, free sources first and a paid title search only when asked, then rewrite citations.json."""
+    records = load_references(export_file)
+    works = works_to_fetch(force)
+    ui.header("Look up citations on OpenAlex")
+    ui.info(f"{len(works)} work(s) to look up; {len(records)} record(s) in the export")
+    order = "the DOI on its own pages, the export, Crossref"
+    if paid_search:
+        order += ", then a paid OpenAlex title search"
+    ui.info(f"Order: {order}")
+    con = connect()
+    ensure_schema(con)
+    counts = {}
+    for number, work in enumerate(works, start=1):
+        ui.info(f"[{number}/{len(works)}] {work}")
+        match = free_match(work, records)
+        if match is None and paid_search:
+            match = paid_match(work)
+        source = match["source"] if match else "not found"
+        counts[source] = counts.get(source, 0) + 1
+        if match is None:
+            ui.warn("  not found")
+            forget(con, works[work])
+            continue
+        ui.info(f"  found through {source}")
+        store(con, works[work], match)
     con.close()
     write_citations_file()
-    ui.ok(f"{found_count} of {len(bases)} found; citations.json written")
+    summary = ", ".join(f"{count} {source}" for source, count in counts.items())
+    ui.ok(f"{summary}; citations.json written")
 
 
 def write_citations_file():

@@ -44,7 +44,7 @@ def _fetch(options):
     if options.get("only_estimate"):
         print(json.dumps(fetch.fetch_estimate(options.get("zotero"), options.get("force"))))
         return
-    fetch.fetch(options.get("zotero"), options.get("force"))
+    fetch.fetch(options.get("zotero"), options.get("force"), options.get("paid_search"))
 
 
 def _report_ingest_progress(sp, i, total, label):
