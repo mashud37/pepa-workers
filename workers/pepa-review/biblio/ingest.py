@@ -94,6 +94,7 @@ def upsert_works(con, rows, progress_cb):
         "cited_by_count",
         "concepts",
         "match_confidence",
+        "found_through",
     )
     sql = f"""
         INSERT OR REPLACE INTO works ({', '.join(fields)})
@@ -113,6 +114,7 @@ def upsert_works(con, rows, progress_cb):
             _int(row, "cited_by_count"),
             _str(row, "concepts"),
             _float(row, "match_confidence", 1.0),
+            _str(row, "found_through"),
         )
         con.execute(sql, vals)
         if progress_cb:

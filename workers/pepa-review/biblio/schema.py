@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS works (
     type             TEXT,
     cited_by_count   INTEGER,
     concepts         TEXT,
-    match_confidence REAL DEFAULT 1.0
+    match_confidence REAL DEFAULT 1.0,
+    found_through    TEXT
 );
 
 CREATE INDEX IF NOT EXISTS works_ext_id ON works(ext_id);
@@ -53,4 +54,7 @@ def connect(path=None):
 
 def ensure_schema(con):
     con.executescript(DDL)
+    columns = [row["name"] for row in con.execute("PRAGMA table_info(works)").fetchall()]
+    if "found_through" not in columns:
+        con.execute("ALTER TABLE works ADD COLUMN found_through TEXT")
     con.commit()

@@ -14,6 +14,13 @@ from corpus.metadata import work_list
 # OpenAlex list price for one title search; lookups by DOI and Crossref searches are free.
 SEARCH_DOLLARS = 0.001
 CITATIONS_FILE = config.DATA_DIR / "citations.json"
+# How a work was found, as stored in biblio.db, and how the run log words it.
+SOURCE_NAMES = {
+    "own_doi": "the DOI on its own pages",
+    "export": "the reference export",
+    "crossref": "a Crossref title search",
+    "paid_search": "a paid OpenAlex title search",
+}
 
 
 # ---- Which papers ----
@@ -84,16 +91,16 @@ def free_match(work, records):
     """The OpenAlex work for a paper from the free sources, with the source that gave its DOI, or None."""
     from_export = export_doi(work, records)
     sources = [
-        {"name": "its own pages", "dois": own_dois(text_paths(work))},
-        {"name": "the export", "dois": [from_export] if from_export else []},
+        {"key": "own_doi", "dois": own_dois(text_paths(work))},
+        {"key": "export", "dois": [from_export] if from_export else []},
     ]
     for source in sources:
         match = first_confirmed(work, source["dois"], False)
         if match:
-            return dict(match, source=source["name"])
+            return dict(match, source=source["key"])
     match = first_confirmed(work, crossref_dois(work), True)
     if match:
-        return dict(match, source="Crossref")
+        return dict(match, source="crossref")
     return None
 
 
@@ -106,11 +113,12 @@ def paid_match(work):
     share = same_title(title, found.get("title") or "")
     if share < TITLE_SHARE or not has_author(work, author_names(found)):
         return None
-    return {"work": found, "confidence": round(share, 2), "source": "a paid title search"}
+    return {"work": found, "confidence": round(share, 2), "source": "paid_search"}
 
 
-def work_row(base, found, confidence):
-    """One works-table row from an OpenAlex work."""
+def work_row(base, match):
+    """One works-table row from a found OpenAlex work, with how it was found."""
+    found = match["work"]
     names = author_names(found)
     source = (found.get("primary_location") or {}).get("source") or {}
     return {
@@ -124,7 +132,8 @@ def work_row(base, found, confidence):
         "type": found.get("type", ""),
         "cited_by_count": found.get("cited_by_count", 0),
         "concepts": "",
-        "match_confidence": confidence,
+        "match_confidence": match["confidence"],
+        "found_through": match["source"],
     }
 
 
@@ -153,7 +162,7 @@ def fetch_estimate(export_file, force):
 def store(con, bases, match):
     """Store one found work for every paper it covers, with the works it cites."""
     for base in bases:
-        upsert_works(con, [work_row(base, match["work"], match["confidence"])], None)
+        upsert_works(con, [work_row(base, match)], None)
         con.execute("DELETE FROM citations WHERE citing_base = ?", (base,))
         cited = []
         for reference in match["work"].get("referenced_works", []):
@@ -187,12 +196,13 @@ def fetch(export_file, force, paid_search):
         match = free_match(work, records)
         if match is None and paid_search:
             match = paid_match(work)
-        source = match["source"] if match else "not found"
-        counts[source] = counts.get(source, 0) + 1
         if match is None:
+            counts["not found"] = counts.get("not found", 0) + 1
             ui.warn("  not found")
             forget(con, works[work])
             continue
+        source = SOURCE_NAMES[match["source"]]
+        counts[f"by {source}"] = counts.get(f"by {source}", 0) + 1
         ui.info(f"  found through {source}")
         store(con, works[work], match)
     con.close()
@@ -207,7 +217,12 @@ def write_citations_file():
     ensure_schema(con)
     papers = {}
     for row in con.execute("SELECT * FROM works WHERE match_confidence >= ?", (config.BIBLIO_MIN_CONFIDENCE,)).fetchall():
+        authors = row["authors"].split("; ") if row["authors"] else []
         papers[row["base"]] = {
+            "title": row["title"] or "",
+            "authors": authors,
+            "type": row["type"] or "",
+            "found_through": row["found_through"] or "",
             "year": row["year"],
             "venue": row["venue"] or "",
             "doi": row["doi"] or "",

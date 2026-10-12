@@ -47,8 +47,17 @@ def review_estimate(outline_file, list_file, structure):
     return result
 
 
-def run(outline_file=None, auto=False, list_file=None, structure=None, only_estimate=False):
-    if only_estimate:
+def run(options):
+    """Assemble a literature review and write it to output/.
+
+    Args:
+        options: "outline_file", "auto", "list_file", "structure", "only_estimate" and "output_name", as manage.py parses them.
+    """
+    outline_file = options["outline_file"]
+    list_file = options["list_file"]
+    structure = options["structure"]
+    auto = options["auto"]
+    if options["only_estimate"]:
         print(json.dumps(review_estimate(outline_file, list_file, structure or "synthesise")))
         return
     ui.header("Literature review")
@@ -84,7 +93,10 @@ def run(outline_file=None, auto=False, list_file=None, structure=None, only_esti
     else:
         review_text = _draft_synthesise(outline, selected, debates)
 
-    out_path = _write_review(review_text, selected, sig, outline_stem)
+    output_name = options["output_name"]
+    if output_name is None:
+        output_name = f"review_{outline_stem}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+    out_path = _write_review(review_text, selected, sig, Path(output_name).name)
     ui.ok(f"saved to {out_path}")
     ui.rule()
     print(review_text)
@@ -611,9 +623,9 @@ def _parse_map_threads(path):
 
 # ---- Output ----
 
-def _write_review(text, selected, sig=None, outline_stem="review"):
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out = config.OUTPUT_DIR / f"review_{outline_stem}_{ts}.md"
+def _write_review(text, selected, sig, file_name):
+    """Write the review with the works it drew on, and those works' names beside it in a .json of the same name."""
+    out = config.OUTPUT_DIR / file_name
     rows = []
     for w in selected:
         line = f"- {w['authors']} - {w['title']}"
@@ -624,4 +636,6 @@ def _write_review(text, selected, sig=None, outline_stem="review"):
     footer = "\n\n---\n\n## Works drawn on\n\n" + "\n".join(rows) + "\n"
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     out.write_text(text + footer, encoding="utf-8")
+    bases = [w["base"] for w in selected]
+    out.with_suffix(".json").write_text(json.dumps({"works": bases}, indent=2), encoding="utf-8")
     return out

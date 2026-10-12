@@ -13,22 +13,18 @@ def _build_parser():
     sub = parser.add_subparsers(dest="command")
 
     r = sub.add_parser("review", help="Assemble a literature review")
-    r.add_argument("--input", default=None, metavar="FILE",
-                   help="Path to outline file (default: pick from input/ or editor)")
-    r.add_argument("--auto", action="store_true",
-                   help="Auto-select works by similarity instead of prompting")
-    r.add_argument("--list", default=None, metavar="FILE",
-                   help="Path to a stem list (e.g. exported from pepa-reader) to select works from")
+    r.add_argument("--input", default=None, metavar="FILE", help="Path to outline file (default: pick from input/ or editor)")
+    r.add_argument("--auto", action="store_true", help="Auto-select works by similarity instead of prompting")
+    r.add_argument("--list", default=None, metavar="FILE", help="Path to a stem list (e.g. exported from pepa-reader) to select works from")
     r.add_argument("--structure", default=None, choices=["follow", "synthesise"], help="Follow the outline, or synthesise sections from the works (default: ask)")
+    r.add_argument("-o", "--output", default=None, metavar="NAME", help="File name for the review in output/ (default: from the outline and the time)")
     r.add_argument("--estimate", action="store_true", help="Print the cost as JSON, and stop")
 
     g = sub.add_parser("gaps", help="Gap-check a draft against the corpus")
-    g.add_argument("--input", default=None, metavar="FILE",
-                   help="Path to draft file (default: pick from input/)")
+    g.add_argument("--input", default=None, metavar="FILE", help="Path to draft file (default: pick from input/)")
 
     e = sub.add_parser("explore", help="Interactive discovery over the corpus")
-    e.add_argument("--query", default=None, metavar="QUERY",
-                   help="Initial query (default: interactive prompt)")
+    e.add_argument("--query", default=None, metavar="QUERY", help="Initial query (default: interactive prompt)")
 
     ak = sub.add_parser("ask", help="Answer one question about the literature, kept in output/")
     ak.add_argument("--question", default="", metavar="TEXT", help="The question")
@@ -42,16 +38,13 @@ def _build_parser():
     si.add_argument("--json", action="store_true", help="Print the papers as JSON instead of a table")
 
     mp = sub.add_parser("map", help="Generate corpus thematic map")
-    mp.add_argument("--threads", type=int, default=None, metavar="N",
-                    help="Target thread count for k-means fallback (default: auto)")
+    mp.add_argument("--threads", type=int, default=None, metavar="N", help="Target thread count for k-means fallback (default: auto)")
     mp.add_argument("--list", default=None, metavar="FILE", help="Map only the papers in this literature list")
     mp.add_argument("--estimate", action="store_true", help="Print the cost as JSON, and stop")
 
     tm = sub.add_parser("threadmap", help="Re-cluster one thread of a saved map in detail")
-    tm.add_argument("--map", default=None, metavar="FILE",
-                    help="Corpus map file in output/ (default: pick interactively)")
-    tm.add_argument("--thread", default=None, metavar="N|NAME|all",
-                    help="Thread number, name substring, or 'all' (default: pick interactively)")
+    tm.add_argument("--map", default=None, metavar="FILE", help="Corpus map file in output/ (default: pick interactively)")
+    tm.add_argument("--thread", default=None, metavar="N|NAME|all", help="Thread number, name substring, or 'all' (default: pick interactively)")
     tm.add_argument("--estimate", action="store_true", help="Print the cost as JSON, and stop")
 
     ix = sub.add_parser("index", help="Build/refresh the embedding index")
@@ -61,22 +54,16 @@ def _build_parser():
     sub.add_parser("install", help="Set up files and check dependencies")
 
     bi = sub.add_parser("biblio", help="Bibliography: fetch from OpenAlex, ingest, export, stats, network")
-    bi.add_argument("subcmd", choices=["fetch", "ingest", "export", "stats", "network"],
-                    help="fetch | ingest | export | stats | network")
+    bi.add_argument("subcmd", choices=["fetch", "ingest", "export", "stats", "network"], help="fetch | ingest | export | stats | network")
     bi.add_argument("--zotero", default=None, metavar="FILE", help="With fetch: a reference export (CSL JSON, BibTeX or RIS) whose DOIs are tried first")
     bi.add_argument("--paid-search", action="store_true", help="With fetch: search OpenAlex by title, at a cost, for papers the free sources miss")
     bi.add_argument("--force", action="store_true", help="With fetch: look up papers already stored again")
     bi.add_argument("--estimate", action="store_true", help="With fetch: print the lookups and their cost as JSON, and stop")
-    bi.add_argument("--works", default=None, metavar="FILE",
-                    help="Works metadata file (CSV or JSONL), required for ingest")
-    bi.add_argument("--citations", default=None, metavar="FILE",
-                    help="Citations edge-list file (CSV or JSONL), optional for ingest")
-    bi.add_argument("--graph-type", default="citation", choices=["citation", "coupling"],
-                    metavar="TYPE", help="citation (default) or coupling")
-    bi.add_argument("--format", default="html", choices=["html", "graphml"],
-                    metavar="FMT", help="html (default) or graphml")
-    bi.add_argument("--output", default=None, metavar="DIR",
-                    help="Output directory (default: output/)")
+    bi.add_argument("--works", default=None, metavar="FILE", help="Works metadata file (CSV or JSONL), required for ingest")
+    bi.add_argument("--citations", default=None, metavar="FILE", help="Citations edge-list file (CSV or JSONL), optional for ingest")
+    bi.add_argument("--graph-type", default="citation", choices=["citation", "coupling"], metavar="TYPE", help="citation (default) or coupling")
+    bi.add_argument("--format", default="html", choices=["html", "graphml"], metavar="FMT", help="html (default) or graphml")
+    bi.add_argument("--output", default=None, metavar="DIR", help="Output directory (default: output/)")
 
     return parser
 
@@ -91,7 +78,14 @@ def main():
         return menu.main()
     if args.command == "review":
         from cli import review
-        review.run(outline_file=args.input, auto=args.auto, list_file=args.list, structure=args.structure, only_estimate=args.estimate)
+        review.run({
+            "outline_file": args.input,
+            "auto": args.auto,
+            "list_file": args.list,
+            "structure": args.structure,
+            "only_estimate": args.estimate,
+            "output_name": args.output,
+        })
     elif args.command == "gaps":
         from cli import gaps
         gaps.run(input_file=args.input)
