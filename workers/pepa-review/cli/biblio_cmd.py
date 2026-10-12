@@ -41,10 +41,18 @@ def run(subcmd, options=None):
 
 def _fetch(options):
     from biblio import fetch
+    from biblio.references import load_references
+    from biblio.zotero import update_copy, zotero_records
     if options.get("only_estimate"):
-        print(json.dumps(fetch.fetch_estimate(options.get("zotero"), options.get("force"))))
+        records = zotero_records() if options.get("zotero_local") else load_references(options.get("zotero"))
+        print(json.dumps(fetch.fetch_estimate(records, options.get("force"))))
         return
-    fetch.fetch(options.get("zotero"), options.get("force"), options.get("paid_search"))
+    if options.get("zotero_local"):
+        update_copy()
+        records = zotero_records()
+    else:
+        records = load_references(options.get("zotero"))
+    fetch.fetch(records, options.get("force"), options.get("paid_search"))
 
 
 def _report_ingest_progress(sp, i, total, label):

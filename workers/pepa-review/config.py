@@ -85,6 +85,7 @@ _ENV_OVERRIDE = {
     "embed_api_key":    "PEPA_EMBED_API_KEY",
     "openalex_url":     "PEPAREVIEW_OPENALEX_URL",
     "crossref_url":     "PEPAREVIEW_CROSSREF_URL",
+    "zotero_url":       "PEPAREVIEW_ZOTERO_URL",
     "openalex_api_key": "OPENALEX_API_KEY",
 }
 
@@ -101,6 +102,7 @@ DEFAULTS = {
     "embed_provider": "gemini",
     "openalex_url": "https://api.openalex.org",
     "crossref_url": "https://api.crossref.org/works",
+    "zotero_url": "http://localhost:23119/api",
 }
 
 # `anthropic` calls Claude; `openai-compatible` calls any server that accepts OpenAI's

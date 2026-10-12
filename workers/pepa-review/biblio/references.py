@@ -55,10 +55,10 @@ def same_title(name_title, found):
     return max(title_share(name_title, found), title_share(found, name_title))
 
 
-def csl_records(text):
-    """Records from a CSL JSON export, Zotero's "CSL JSON" format."""
+def csl_records(entries):
+    """Records from CSL JSON entries, as Zotero's "CSL JSON" export and its local API give them."""
     records = []
-    for entry in json.loads(text):
+    for entry in entries:
         families = [author.get("family", "") for author in entry.get("author", [])]
         records.append({"title": entry.get("title", ""), "doi": entry.get("DOI", ""), "authors": families})
     return records
@@ -126,7 +126,7 @@ def load_references(path_text):
     text = path.read_text(encoding="utf-8", errors="replace")
     suffix = path.suffix.lower()
     if suffix == ".json":
-        return csl_records(text)
+        return csl_records(json.loads(text))
     if suffix == ".bib":
         return bibtex_records(text)
     if suffix == ".ris":

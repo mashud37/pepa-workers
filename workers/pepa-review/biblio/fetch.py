@@ -5,7 +5,7 @@ import json
 
 import config
 from biblio.ingest import upsert_citations, upsert_works
-from biblio.references import TITLE_SHARE, export_doi, has_author, load_references, same_title
+from biblio.references import TITLE_SHARE, export_doi, has_author, same_title
 from biblio.schema import connect, ensure_schema
 from biblio.sources import crossref_dois, openalex_by_doi, openalex_by_title, own_dois
 from cli import ui
@@ -17,7 +17,7 @@ CITATIONS_FILE = config.DATA_DIR / "citations.json"
 # How a work was found, as stored in biblio.db, and how the run log words it.
 SOURCE_NAMES = {
     "own_doi": "the DOI on its own pages",
-    "export": "the reference export",
+    "export": "your Zotero references",
     "crossref": "a Crossref title search",
     "paid_search": "a paid OpenAlex title search",
 }
@@ -139,9 +139,8 @@ def work_row(base, match):
 
 # ---- The run ----
 
-def fetch_estimate(export_file, force):
+def fetch_estimate(records, force):
     """How many works the free sources should find and the most a paid title search for the rest could cost."""
-    records = load_references(export_file)
     works = works_to_fetch(force)
     by_doi = 0
     for work in works:
@@ -178,13 +177,12 @@ def forget(con, bases):
     con.commit()
 
 
-def fetch(export_file, force, paid_search):
+def fetch(records, force, paid_search):
     """Look every work still missing up, free sources first and a paid title search only when asked, then rewrite citations.json."""
-    records = load_references(export_file)
     works = works_to_fetch(force)
     ui.header("Look up citations on OpenAlex")
-    ui.info(f"{len(works)} work(s) to look up; {len(records)} record(s) in the export")
-    order = "the DOI on its own pages, the export, Crossref"
+    ui.info(f"{len(works)} work(s) to look up; {len(records)} reference record(s)")
+    order = "the DOI on its own pages, your Zotero references, Crossref"
     if paid_search:
         order += ", then a paid OpenAlex title search"
     ui.info(f"Order: {order}")

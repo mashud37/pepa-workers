@@ -56,6 +56,7 @@ def _build_parser():
     bi = sub.add_parser("biblio", help="Bibliography: fetch from OpenAlex, ingest, export, stats, network")
     bi.add_argument("subcmd", choices=["fetch", "ingest", "export", "stats", "network"], help="fetch | ingest | export | stats | network")
     bi.add_argument("--zotero", default=None, metavar="FILE", help="With fetch: a reference export (CSL JSON, BibTeX or RIS) whose DOIs are tried first")
+    bi.add_argument("--zotero-local", action="store_true", help="With fetch: read the reference records from the running Zotero app instead of a file")
     bi.add_argument("--paid-search", action="store_true", help="With fetch: search OpenAlex by title, at a cost, for papers the free sources miss")
     bi.add_argument("--force", action="store_true", help="With fetch: look up papers already stored again")
     bi.add_argument("--estimate", action="store_true", help="With fetch: print the lookups and their cost as JSON, and stop")
@@ -121,6 +122,7 @@ def main():
             "fmt": args.format,
             "output_dir": args.output,
             "zotero": args.zotero,
+            "zotero_local": args.zotero_local,
             "force": args.force,
             "only_estimate": args.estimate,
             "paid_search": args.paid_search,
