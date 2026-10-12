@@ -5,9 +5,9 @@
 {% include "_explore_tabs.html" %}
 {% include "_shown_run.html" %}
 
-<section class="card start" aria-labelledby="lookup-title">
-  <h2 class="title" id="lookup-title">Look up citations</h2>
-  <p class="supporting">Finds each paper's year, journal and citation count on OpenAlex, and which of your papers it cites. Papers already looked up are skipped.</p>
+<section class="card start" aria-labelledby="sources-title">
+  <h2 class="title" id="sources-title">Where DOIs come from</h2>
+  <p class="supporting"><strong>Look up citations</strong> in the <a href="{{ url_for('console.library') }}">Library</a> finds each paper on OpenAlex by the DOI printed in it, then by your Zotero references, then by a free title search on Crossref.</p>
   <div class="zotero-row">
     {% if zotero.state == "connected" %}
     <span class="status status-ok">Zotero connected</span>
@@ -17,14 +17,22 @@
     <button type="button" class="tonal" data-open="connect-zotero">Connect Zotero</button>
     {% endif %}
   </div>
+  {% if zotero.state != "connected" %}
   <form method="post" action="{{ url_for('explore.citations_next') }}" enctype="multipart/form-data">
     <input type="hidden" name="token" value="{{ token }}">
-    {% if zotero.state != "connected" %}
     {{ files.file_field("file", "Or a Zotero export file", ".json,.bib,.ris", export.name if export else "", "In Zotero, File › Export Library, as CSL JSON, BibTeX or RIS.") }}
-    {% endif %}
-    <div class="form-actions"><button class="filled">Next</button></div>
+    <div class="form-actions"><button class="tonal">Keep this file</button></div>
   </form>
+  {% endif %}
 </section>
+
+{% if missing %}
+<section class="card start" aria-labelledby="missing-title">
+  <h2 class="title" id="missing-title">{{ missing }} work{% if missing != 1 %}s{% endif %} not found for free</h2>
+  <p class="supporting">OpenAlex can search them by title, at a cost shown before it runs.</p>
+  <div class="form-actions"><a class="button tonal" href="{{ url_for('explore.citations_new') }}">Search OpenAlex by title</a></div>
+</section>
+{% endif %}
 
 {% if zotero.state != "connected" %}
 <dialog id="connect-zotero" class="dialog wide" aria-labelledby="connect-zotero-title"{% if checking %} data-open-on-load{% endif %}>
@@ -46,7 +54,9 @@
 </dialog>
 {% endif %}
 
-{% if overview %}
+{% if not overview %}
+<p class="supporting">Nothing is looked up yet. Run <strong>Look up citations</strong> in the <a href="{{ url_for('console.library') }}">Library</a>.</p>
+{% else %}
 <div class="paper-layout">
   <section class="paper-main" aria-labelledby="most-cited-title">
     <h2 class="section-title" id="most-cited-title">Most cited</h2>

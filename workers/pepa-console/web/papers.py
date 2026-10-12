@@ -239,6 +239,7 @@ def paper_rows(wanted, length, page, sort="name"):
             "summarised": progress[stem]["summarised"],
             "skip_prep": leaf in excluded["pepa-prep"],
             "skip_sum": leaf in excluded["pepa-sum"],
+            "skip_cite": leaf in excluded["pepa-review"],
             "in_batch": stem in waiting or any(name.startswith(stem + "_") for name in waiting),
             "marked": marks_file(stem).exists(),
             "removed": row["relative"] not in present,

@@ -35,5 +35,5 @@ def estimate(app_name, command_name, flags):
         return None
     reply["words"] = cost_words(reply)
     if "paid_upto" in reply:
-        reply["paid_words"] = dollars_words(reply["paid_upto"])
+        reply["paid_words"] = dollars_words(reply["paid_upto"]).replace("about", "at most")
     return reply

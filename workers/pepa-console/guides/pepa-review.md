@@ -22,9 +22,11 @@ before it runs.
 3. **Explore › Ask** answers a question from the closest papers; follow-up questions keep the same
    papers.
 4. **Explore › Reviews** writes a review from your outline, from a list's papers or from the papers
-   closest to the outline.
-5. **Explore › Citations** looks the papers up on OpenAlex for free, by the DOI printed in each
-   paper, a reference export from Zotero, or a title search on Crossref. Papers none of these find
-   can be searched on OpenAlex by title, at a cost shown first. Reviews then build their debates
-   around the most cited papers.
+   closest to the outline. The papers it drew on are listed beside it, to add to a list or export
+   as references.
+5. **Look up citations** on **Library** finds each paper on OpenAlex for free: by the DOI printed
+   in it, in your Zotero library, then by a title search on Crossref. **Explore › Citations**
+   connects Zotero or keeps an export file, shows the most cited papers and how each was found,
+   and offers a paid title search for papers the free sources miss, at a cost shown first.
+   Reviews then build their debates around the most cited papers.
 6. For gaps, put a draft in **Outlines and drafts** and run **gaps** on the app page.

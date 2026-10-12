@@ -48,6 +48,7 @@ REMOVED_FILE_NAME = "removed-pdfs.json"
 EXCLUDING_APPS = [
     "pepa-prep",
     "pepa-sum",
+    "pepa-review",
 ]
 DRIVE_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 MAX_ENTRIES = 500

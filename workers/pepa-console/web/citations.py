@@ -9,6 +9,7 @@ from pathlib import Path
 from web import connections, estimates, jobs, paths
 
 CITATIONS_FILE = Path("pepa-review") / "data" / "citations.json"
+NOT_FOUND_FILE = Path("pepa-review") / "data" / "not_found.json"
 # The reference export the lookup takes DOIs from, kept in the project so the next lookup finds it again.
 EXPORT_FILE = Path("pepa-console") / "references"
 EXPORT_SUFFIXES = [
@@ -154,17 +155,42 @@ def lookup_estimate(source):
     return estimates.estimate("pepa-review", "biblio", flags)
 
 
-def start_lookup(paid_search):
-    """Start pepa-review looking the papers up as a job, with a paid title search for the rest when asked, and return the job's id."""
+def free_lookup_values():
+    """The form values a free lookup runs with: Zotero when it can be read, else the kept export."""
     source = reference_source()
     values = {"subcmd": "fetch"}
     if source["zotero"]:
         values["--zotero-local"] = "on"
     elif source["export"]:
         values["--zotero"] = str(source["export"])
-    if paid_search:
-        values["--paid-search"] = "on"
+    return values
+
+
+def start_paid_lookup():
+    """Start pepa-review looking up the papers the free sources missed, by a paid OpenAlex title search, and return the job's id."""
+    values = free_lookup_values()
+    values["--paid-search"] = "on"
     return jobs.start_job("pepa-review", "biblio", values)
+
+
+def work_of(stem):
+    """The work a paper belongs to: a book for one of its chapters, named `<book>_<number>`, as pepa-review groups them."""
+    head, _, tail = stem.rpartition("_")
+    if tail.isdigit() and "_" in head:
+        return head
+    return stem
+
+
+def looked_up_works():
+    """The works the lookup found, and those the free sources could not find, each by its PDF's name."""
+    found = set()
+    for stem in citation_data() or {}:
+        found.add(work_of(stem))
+    missing = []
+    path = paths.project_folder() / NOT_FOUND_FILE
+    if path.exists():
+        missing = connections.load_json(path)
+    return {"found": found, "missing": set(missing)}
 
 
 def ris_record(stem, facts):

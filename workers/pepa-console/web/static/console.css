@@ -134,11 +134,11 @@ button:focus-visible, .button:focus-within, a:focus-visible, summary:focus-visib
 
 /* ---- Pipeline ---- */
 
-.flow { display: grid; grid-template-columns: repeat(5, 1fr); margin: 0; padding: 0; overflow: hidden; list-style: none; background: var(--surface); border: 1px solid var(--outline); border-radius: 24px; }
+.flow { display: grid; grid-template-columns: repeat(6, 1fr); margin: 0; padding: 0; overflow: hidden; list-style: none; background: var(--surface); border: 1px solid var(--outline); border-radius: 24px; }
 .flow li { position: relative; z-index: calc(5 - var(--n, 0)); }
 .flow li + li { border-left: 1px solid var(--outline); }
 .flow li:not(:last-child)::after { content: ""; position: absolute; top: 50%; right: -12px; z-index: 1; width: 24px; height: 24px; border: 1px solid var(--outline); border-radius: 50%; background: var(--surface) var(--chevron-right) center / 16px no-repeat; transform: translateY(-50%); }
-.flow a { display: flex; flex-direction: column; gap: 6px; height: 100%; padding: 28px 28px 24px; color: inherit; transition: background 0.15s; }
+.flow a { display: flex; flex-direction: column; gap: 6px; height: 100%; padding: 28px 24px 24px; color: inherit; transition: background 0.15s; }
 .flow a:hover { background: var(--surface-variant); }
 .flow .count { font: 400 34px/44px var(--font-display); font-variant-numeric: tabular-nums; letter-spacing: -0.5px; }
 .flow .label { color: var(--text-secondary); }

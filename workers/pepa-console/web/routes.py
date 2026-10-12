@@ -22,6 +22,7 @@ from flask import (
 from registry import get_app
 from web import (
     batches,
+    citations,
     documents,
     folders,
     jobs,
@@ -41,14 +42,18 @@ MISSING_NOTE = {
 SET_ASIDE_ACTIONS = {
     "skip-prep": {"apps": ["pepa-prep"], "wanted": True, "message": "{items} will be skipped when preparing."},
     "skip-sum": {"apps": ["pepa-sum"], "wanted": True, "message": "{items} will be skipped when summarising."},
-    "include": {"apps": ["pepa-prep", "pepa-sum"], "wanted": False, "message": "Back in every stage: {items}."},
+    "skip-cite": {"apps": ["pepa-review"], "wanted": True, "message": "{items} will be skipped when looking up citations."},
+    "include": {"apps": ["pepa-prep", "pepa-sum", "pepa-review"], "wanted": False, "message": "Back in every stage: {items}."},
 }
 # The Library's stages in the order a run takes them. An estimated stage shows its cost before it runs.
+# A stage with "card" shows its app's settings in the run dialog; pepa-review's card goes with its index.
+# A stage with "ticked" starts ticked; the citation lookup sends titles to Crossref, so it waits to be asked.
 PIPELINE_STEPS = [
-    {"app": "pepa-prep", "command": "extract", "label": "Prepare PDFs", "needs": "", "estimated": False},
-    {"app": "pepa-sum", "command": "summarize", "label": "Summarise", "needs": "generation", "estimated": True},
-    {"app": "pepa-read", "command": "index", "label": "Update search index", "needs": "", "estimated": False},
-    {"app": "pepa-review", "command": "index", "label": "Update review index", "needs": "embedding", "estimated": False},
+    {"app": "pepa-prep", "command": "extract", "label": "Prepare PDFs", "needs": "", "estimated": False, "card": True, "ticked": True},
+    {"app": "pepa-sum", "command": "summarize", "label": "Summarise", "needs": "generation", "estimated": True, "card": True, "ticked": False},
+    {"app": "pepa-read", "command": "index", "label": "Update search index", "needs": "", "estimated": False, "card": True, "ticked": True},
+    {"app": "pepa-review", "command": "index", "label": "Update review index", "needs": "embedding", "estimated": False, "card": True, "ticked": False},
+    {"app": "pepa-review", "command": "biblio", "label": "Look up citations", "needs": "", "estimated": False, "card": False, "ticked": False},
 ]
 
 # The Batches card's buttons and the pepa-sum flag each one sends.
@@ -64,6 +69,7 @@ BATCH_CHECK = threading.Lock()
 ONLY_APPS = [
     "pepa-prep",
     "pepa-sum",
+    "pepa-review",
 ]
 
 PDF_APPS = [
@@ -236,6 +242,7 @@ def library():
         lengths=papers.LENGTHS,
         book_pages=papers.book_pages(),
         lists=lists.all_lists(),
+        cited=citations.looked_up_works(),
     )
 
 
@@ -256,7 +263,10 @@ def pipeline_steps():
         missing = ""
         if step["needs"]:
             missing = models.missing_choice(step["app"], step["needs"])
-        steps.append({**step, "missing": missing, "settings": options.card_view(step["app"])})
+        settings = []
+        if step["card"]:
+            settings = options.card_view(step["app"])
+        steps.append({**step, "missing": missing, "settings": settings})
     return steps
 
 
@@ -342,6 +352,8 @@ def library_run():
             step["only"] = only
         if step["estimated"]:
             step["values"] = {"--approve-cost": request.form.get(f"limit {step['app']}", "")}
+        if step["command"] == "biblio":
+            step["values"] = citations.free_lookup_values()
         steps.append(step)
     chain_id = jobs.start_chain(steps)
     return run_panel(jobs.chain_summary(chain_id), url_for("console.chain_log", chain_id=chain_id))

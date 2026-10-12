@@ -81,6 +81,7 @@ TIPS = {
         "Copy PDFs in, or link a folder you already keep them in.",
         "Tick items to process only those, or to skip them in a stage.",
         "Mark chapters splits a book where you say.",
+        "Look up citations finds each paper's DOI for free: in the paper, in Zotero, or on Crossref.",
     ],
     "apps": [
         "Every app works on its own. Open one to see what it can do.",
@@ -110,7 +111,7 @@ TIPS = {
         "Export references gives a file Zotero can import.",
     ],
     "explore/citations": [
-        "Looking papers up by DOI and on Crossref is free.",
+        "Looking papers up by DOI and on Crossref is free. Run it from the Library.",
         "Connect Zotero and I read your DOIs straight from it.",
         "Each paper page shows how it was found.",
     ],

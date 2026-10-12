@@ -36,6 +36,7 @@
   <li><a href="{{ url_for('console.browse_page', name='pepa-sum', slot='results', q='sum_') }}"><span class="count" data-count="{{ summary.summarised }}">{{ "{:,}".format(summary.summarised) }}</span><span class="label">Summarised</span></a></li>
   <li><a href="{{ url_for('explore.explore_page') }}"><span class="count">{{ summary.search_index or "None" }}</span><span class="label">Search index</span></a></li>
   <li><a href="{{ url_for('console.app_page', name='pepa-review') }}"><span class="count">{{ summary.review_index or "None" }}</span><span class="label">Review index</span></a></li>
+  <li><a href="{{ url_for('explore.citations_page') }}"><span class="count" data-count="{{ cited.found | length }}">{{ "{:,}".format(cited.found | length) }}</span><span class="label">Citations</span></a></li>
 </ol>
 
 <section class="batches" id="batches" aria-label="Batches at Anthropic" data-batches-url="{{ url_for('console.library_batches') }}"{% if has_batches %} data-has-batches{% endif %}></section>
@@ -74,6 +75,7 @@
       <span class="bulk-actions">
         <button class="text" name="action" value="skip-prep" disabled>Skip when preparing</button>
         <button class="text" name="action" value="skip-sum" disabled>Skip when summarising</button>
+        <button class="text" name="action" value="skip-cite" disabled>Skip when looking up citations</button>
         <button class="text" name="action" value="include" disabled>Stop skipping</button>
         <button type="button" class="text" data-open="add-to-list" disabled>Add to a list</button>
         {% if own_pdfs %}<button class="text danger" form="remove-copies" disabled>Remove PDF copies</button>{% endif %}
@@ -91,6 +93,7 @@
               {% for value, words in lengths.items() %}<option value="{{ value }}"{% if value == length %} selected{% endif %}>{{ words }}</option>{% endfor %}
             </select>{% endif %}<a class="sort-link" href="{{ url_for('console.library', q=wanted, length=length, sort=('-' + column) if ascending else column) }}#papers">{{ label }}<span class="sort-arrow" aria-hidden="true">{% if ascending %}↑{% elif descending %}↓{% endif %}</span></a></span></th>
           {% endfor %}
+          <th>Citations</th>
           <th><span class="visually-hidden">Chapters</span></th>
         </tr>
       </thead>
@@ -102,6 +105,7 @@
           <td class="num">{% if row.pages is none %}…{% else %}{{ "{:,}".format(row.pages) }}{% endif %}</td>
           <td{% if row.skip_prep %} class="skipped"{% endif %}>{% if row.skip_prep %}<span class="chip">Skipped</span> {% endif %}{% if row.prepared > 1 %}{{ row.prepared }} chapters{% elif row.prepared == 1 %}One file{% else %}Not yet{% endif %}</td>
           <td{% if row.skip_sum %} class="skipped"{% endif %}>{% if row.skip_sum %}<span class="chip">Skipped</span> {% endif %}{% if row.prepared and row.summarised == row.prepared %}Done{% elif row.in_batch %}In a batch{% elif row.summarised %}{{ row.summarised }} of {{ row.prepared }}{% else %}Not yet{% endif %}</td>
+          <td{% if row.skip_cite %} class="skipped"{% endif %}>{% if row.skip_cite %}<span class="chip">Skipped</span> {% endif %}{% if row.stem in cited.found %}Found{% elif row.stem in cited.missing %}Not found{% else %}Not yet{% endif %}</td>
           <td class="row-action">{% if row.removed %}<span class="chip">PDF removed</span>{% else %}<a class="button text" href="{{ url_for('console.chapters_page', file=row.relative) }}">{% if row.marked %}Chapters marked{% else %}Mark chapters{% endif %}</a>{% endif %}</td>
         </tr>
         {% endfor %}
@@ -149,7 +153,7 @@
     <div data-only-names></div>
     <div class="checklist">
       {% for step in steps %}
-      <label class="check"><input type="checkbox" name="step" value="{{ step.app }} {{ step.command }}"{% if step.missing %} disabled{% elif not step.needs %} checked{% endif %}{% if step.estimated %} data-estimate-step="{{ step.app }}"{% endif %}><span class="grow">{{ step.label }}{% if step.missing == "keys" %}<a class="check-note" href="{{ url_for('console.keys_page') }}">Add a key in Settings first.</a>{% elif step.missing == "models" %}<a class="check-note" href="{{ url_for('console.models_page') }}">Choose an embedding model in Settings first.</a>{% endif %}</span>{% if step.needs %}<span class="chip">API costs</span>{% endif %}</label>
+      <label class="check"><input type="checkbox" name="step" value="{{ step.app }} {{ step.command }}"{% if step.missing %} disabled{% elif step.ticked %} checked{% endif %}{% if step.estimated %} data-estimate-step="{{ step.app }}"{% endif %}><span class="grow">{{ step.label }}{% if step.missing == "keys" %}<a class="check-note" href="{{ url_for('console.keys_page') }}">Add a key in Settings first.</a>{% elif step.missing == "models" %}<a class="check-note" href="{{ url_for('console.models_page') }}">Choose an embedding model in Settings first.</a>{% endif %}</span>{% if step.needs %}<span class="chip">API costs</span>{% endif %}</label>
       {% if not step.missing and step.settings %}
       <div class="step-options"{% if step.estimated %} data-step-options="{{ step.app }}" hidden{% endif %}>
         {% for field in step.settings if field.main %}

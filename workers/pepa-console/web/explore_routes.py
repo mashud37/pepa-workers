@@ -366,6 +366,7 @@ def citations_page():
         overview=citations.overview(),
         export=citations.export_file(),
         zotero=citations.zotero_status(),
+        missing=len(citations.looked_up_works()["missing"]),
         checking=request.args.get("check") == "1",
         shown=shown_run("biblio"),
     )
@@ -374,13 +375,16 @@ def citations_page():
 @bp.route("/explore/citations", methods=["POST"])
 def citations_next():
     upload = request.files.get("file")
-    if upload is not None and upload.filename:
-        try:
-            citations.save_export(upload)
-        except ValueError as error:
-            flash(str(error))
-            return redirect(url_for("explore.citations_page"))
-    return redirect(url_for("explore.citations_new"))
+    if upload is None or not upload.filename:
+        flash("Choose an export file first.")
+        return redirect(url_for("explore.citations_page"))
+    try:
+        citations.save_export(upload)
+    except ValueError as error:
+        flash(str(error))
+        return redirect(url_for("explore.citations_page"))
+    flash(f"Kept {upload.filename}. The next lookup reads its DOIs.")
+    return redirect(url_for("explore.citations_page"))
 
 
 @bp.route("/explore/citations/new")
@@ -392,7 +396,7 @@ def citations_new():
 @bp.route("/explore/citations/new", methods=["POST"])
 def citations_run():
     try:
-        citations.start_lookup(request.form.get("paid") == "on")
+        citations.start_paid_lookup()
     except ValueError as error:
         flash(str(error))
     return redirect(url_for("explore.citations_page"))
