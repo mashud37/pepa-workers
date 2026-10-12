@@ -97,9 +97,10 @@ function tipsData() {
 }
 
 function nextTip() {
-  const section = window.location.pathname.split("/")[1];
+  const parts = window.location.pathname.split("/");
+  const page = parts.slice(1, 3).join("/");
   const pages = tipsData().pages;
-  const tips = pages[section] || pages[""];
+  const tips = pages[page] || pages[parts[1]] || pages[""];
   const tip = tips[buddyState.tip % tips.length];
   buddyState.tip += 1;
   return tip;

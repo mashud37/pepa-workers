@@ -8,12 +8,43 @@
 <section class="card start" aria-labelledby="lookup-title">
   <h2 class="title" id="lookup-title">Look up citations</h2>
   <p class="supporting">Finds each paper's year, journal and citation count on OpenAlex, and which of your papers it cites. Papers already looked up are skipped.</p>
+  <div class="zotero-row">
+    {% if zotero.state == "connected" %}
+    <span class="status status-ok">Zotero connected</span>
+    <span class="meta">{{ zotero.count }} item{% if zotero.count != 1 %}s{% endif %}. Their DOIs are tried first.</span>
+    {% else %}
+    <span class="status">Zotero not connected</span>
+    <button type="button" class="tonal" data-open="connect-zotero">Connect Zotero</button>
+    {% endif %}
+  </div>
   <form method="post" action="{{ url_for('explore.citations_next') }}" enctype="multipart/form-data">
     <input type="hidden" name="token" value="{{ token }}">
-    {{ files.file_field("file", "Zotero export, optional", ".json,.bib,.ris", export.name if export else "", "In Zotero, File › Export Library, as CSL JSON, BibTeX or RIS.") }}
+    {% if zotero.state != "connected" %}
+    {{ files.file_field("file", "Or a Zotero export file", ".json,.bib,.ris", export.name if export else "", "In Zotero, File › Export Library, as CSL JSON, BibTeX or RIS.") }}
+    {% endif %}
     <div class="form-actions"><button class="filled">Next</button></div>
   </form>
 </section>
+
+{% if zotero.state != "connected" %}
+<dialog id="connect-zotero" class="dialog wide" aria-labelledby="connect-zotero-title"{% if checking %} data-open-on-load{% endif %}>
+  <form method="get" action="{{ url_for('explore.citations_page') }}">
+    <h2 id="connect-zotero-title">Connect Zotero</h2>
+    <p class="supporting">pepa reads the DOIs in your Zotero library directly, so there is no file to export. Zotero lets it read only, never change anything.</p>
+    <ol class="connect-steps">
+      <li{% if zotero.state == "closed" %} class="current"{% endif %}>Open Zotero 7 or later on this computer.</li>
+      <li{% if zotero.state == "off" %} class="current"{% endif %}>In Zotero, open <strong>Edit › Settings</strong>, then <strong>Advanced</strong>.</li>
+      <li{% if zotero.state == "off" %} class="current"{% endif %}>Tick <strong>Allow other applications on this computer to communicate with Zotero</strong>.</li>
+      <li>Press <strong>Check again</strong>.</li>
+    </ol>
+    <p class="meta" role="status">{% if zotero.state == "closed" %}Zotero is not running.{% else %}Zotero is running, but does not let other applications read it yet.{% endif %}</p>
+    <div class="actions">
+      <button type="button" class="text" data-close>Cancel</button>
+      <button class="filled" name="check" value="1">Check again</button>
+    </div>
+  </form>
+</dialog>
+{% endif %}
 
 {% if overview %}
 <div class="paper-layout">

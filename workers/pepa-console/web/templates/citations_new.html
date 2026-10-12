@@ -12,7 +12,7 @@
   <p class="title">Look up citations on OpenAlex</p>
   {% if estimate %}
   <p class="supporting">{{ estimate.words }}</p>
-  {% if export %}<p class="meta">Using your export {{ export.name }}.</p>{% endif %}
+  {% if source.words %}<p class="meta">{{ source.words }}</p>{% endif %}
   {% if estimate.works %}
   <form class="form-actions" method="post">
     <input type="hidden" name="token" value="{{ token }}">

@@ -1,6 +1,9 @@
 """Read the citation facts pepa-review stores after looking papers up on OpenAlex, and start a lookup.
 The Citations tab and each paper page show them.
 """
+import os
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 from web import connections, estimates, jobs, paths
@@ -14,10 +17,13 @@ EXPORT_SUFFIXES = [
     ".ris",
 ]
 SHOWN = 20
+# Zotero's local API, which pepa-review reads the library through; the same variable moves both.
+ZOTERO_URL = os.environ.get("PEPAREVIEW_ZOTERO_URL", "http://localhost:23119/api")
+ZOTERO_TIMEOUT_SECONDS = 2
 # How pepa-review found each paper, as it stores it, worded for the page.
 FOUND_THROUGH = {
     "own_doi": "The DOI printed in the paper",
-    "export": "Your reference export",
+    "export": "Your Zotero references",
     "crossref": "A Crossref title search",
     "paid_search": "A paid OpenAlex title search",
 }
@@ -114,19 +120,48 @@ def save_export(upload):
     upload.save(path)
 
 
-def lookup_estimate():
+def zotero_status():
+    """How Zotero answers: "connected" with its number of items, "off" when its local API is not enabled, or "closed"."""
+    url = ZOTERO_URL.rstrip("/") + "/users/0/items/top?limit=1&format=keys"
+    try:
+        with urllib.request.urlopen(url, timeout=ZOTERO_TIMEOUT_SECONDS) as reply:
+            return {"state": "connected", "count": int(reply.headers.get("Total-Results", "0"))}
+    except urllib.error.HTTPError:
+        return {"state": "off", "count": 0}
+    except (urllib.error.URLError, TimeoutError):
+        return {"state": "closed", "count": 0}
+
+
+def reference_source():
+    """Where the lookup reads reference records from: the running Zotero app when it can, else the kept export, else nowhere."""
+    status = zotero_status()
+    if status["state"] == "connected":
+        noun = "item" if status["count"] == 1 else "items"
+        return {"zotero": True, "export": None, "words": f"Using your Zotero library, {status['count']:,} {noun}."}
+    kept = export_file()
+    if kept is not None:
+        return {"zotero": False, "export": kept, "words": f"Using your export {kept.name}."}
+    return {"zotero": False, "export": None, "words": ""}
+
+
+def lookup_estimate(source):
     """What looking the papers up will cost, worded, or None when pepa-review could not say."""
     flags = ["fetch"]
-    if export_file():
-        flags = flags + ["--zotero", str(export_file())]
+    if source["zotero"]:
+        flags = flags + ["--zotero-local"]
+    elif source["export"]:
+        flags = flags + ["--zotero", str(source["export"])]
     return estimates.estimate("pepa-review", "biblio", flags)
 
 
 def start_lookup(paid_search):
     """Start pepa-review looking the papers up as a job, with a paid title search for the rest when asked, and return the job's id."""
+    source = reference_source()
     values = {"subcmd": "fetch"}
-    if export_file():
-        values["--zotero"] = str(export_file())
+    if source["zotero"]:
+        values["--zotero-local"] = "on"
+    elif source["export"]:
+        values["--zotero"] = str(source["export"])
     if paid_search:
         values["--paid-search"] = "on"
     return jobs.start_job("pepa-review", "biblio", values)

@@ -142,6 +142,7 @@ APPS: list[App] = [
         Command("biblio", "heavy", "Bibliography: fetch from OpenAlex, ingest, export, stats, or network", fields=(
             {"name": "subcmd", "type": "choice", "choices": ("fetch", "ingest", "export", "stats", "network"), "help": "What to do"},
             {"name": "--zotero", "type": "file", "help": "With fetch: a reference export (CSL JSON, BibTeX or RIS) whose DOIs are tried first"},
+            {"name": "--zotero-local", "type": "bool", "help": "With fetch: read the references from the running Zotero app instead of a file"},
             {"name": "--force", "type": "bool", "help": "With fetch: look up stored papers again"},
             {"name": "--paid-search", "type": "bool", "help": "With fetch: search OpenAlex by title, at a cost, for papers the free sources miss"},
             {"name": "--works", "type": "file", "help": "Works metadata file, required for ingest"},

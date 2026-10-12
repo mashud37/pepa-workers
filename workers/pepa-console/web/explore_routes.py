@@ -365,6 +365,8 @@ def citations_page():
         "citations.html",
         overview=citations.overview(),
         export=citations.export_file(),
+        zotero=citations.zotero_status(),
+        checking=request.args.get("check") == "1",
         shown=shown_run("biblio"),
     )
 
@@ -383,7 +385,8 @@ def citations_next():
 
 @bp.route("/explore/citations/new")
 def citations_new():
-    return render_template("citations_new.html", estimate=citations.lookup_estimate(), export=citations.export_file())
+    source = citations.reference_source()
+    return render_template("citations_new.html", estimate=citations.lookup_estimate(source), source=source)
 
 
 @bp.route("/explore/citations/new", methods=["POST"])

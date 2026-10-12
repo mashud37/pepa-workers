@@ -534,6 +534,9 @@ button:disabled { opacity: 0.38; cursor: default; pointer-events: none; }
 .start a.button { text-decoration: none; }
 .start > * + * { margin-top: 12px; }
 .field-hint { white-space: normal; }
+.zotero-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.connect-steps { display: grid; gap: 8px; margin: 0; padding-left: 20px; }
+.connect-steps .current { color: var(--primary); font-weight: 500; }
 .guide-layout { display: grid; grid-template-columns: 200px 1fr; gap: 24px; align-items: start; margin-top: 16px; }
 .guide-nav { position: sticky; top: 80px; }
 .guide-nav ul { margin: 0; padding: 0; list-style: none; }

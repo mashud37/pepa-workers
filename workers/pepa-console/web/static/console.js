@@ -630,6 +630,10 @@ if (runWindow) {
   }
 }
 
+for (const dialog of document.querySelectorAll("dialog.dialog[data-open-on-load]:not(.run-window)")) {
+  dialog.showModal();
+}
+
 const liveRegion = document.querySelector("[data-live]");
 if (liveRegion) {
   keepRegionFresh(liveRegion);

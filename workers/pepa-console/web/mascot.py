@@ -90,6 +90,38 @@ TIPS = {
         "Advanced search looks in one part of the briefs, such as their methods.",
         "Plain words search the whole text too.",
     ],
+    "explore/map": [
+        "A map sorts your papers into themes. Open a theme for its papers and its neighbours.",
+        "A theme of six or more papers can be mapped in detail.",
+        "Map a list to see how just its papers fall into themes.",
+    ],
+    "explore/ask": [
+        "Follow-up questions keep the same papers.",
+        "Ask about a list and I answer only from its papers.",
+        "Every conversation is kept here to reopen.",
+    ],
+    "explore/document": [
+        "Give me a draft and I find the papers closest to it.",
+        "Every find is kept, so you can reopen it later.",
+    ],
+    "explore/reviews": [
+        "Follow my outline keeps your sections. Otherwise I find the sections in the papers.",
+        "The papers a review drew on are listed beside it.",
+        "Export references gives a file Zotero can import.",
+    ],
+    "explore/citations": [
+        "Looking papers up by DOI and on Crossref is free.",
+        "Connect Zotero and I read your DOIs straight from it.",
+        "Each paper page shows how it was found.",
+    ],
+    "explore/lists": [
+        "Map, ask about or review a list from its page.",
+        "Export references gives a file for your reference manager.",
+    ],
+    "paper": [
+        "The cards beside the paper show its themes, related papers and citations.",
+        "Add this paper to a list to review it with others.",
+    ],
     "jobs": [
         "Every run keeps its log here, finished or not.",
     ],
