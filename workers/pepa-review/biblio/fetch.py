@@ -2,6 +2,8 @@
 Reviews anchor debates on it; the console reads citations.json.
 """
 import json
+import os
+from pathlib import Path
 
 import config
 from biblio.ingest import upsert_citations, upsert_works
@@ -14,6 +16,7 @@ from corpus.metadata import work_list
 # OpenAlex list price for one title search; lookups by DOI and Crossref searches are free.
 SEARCH_DOLLARS = 0.001
 CITATIONS_FILE = config.DATA_DIR / "citations.json"
+NOT_FOUND_FILE = config.DATA_DIR / "not_found.json"
 # How a work was found, as stored in biblio.db, and how the run log words it.
 SOURCE_NAMES = {
     "own_doi": "the DOI on its own pages",
@@ -33,8 +36,22 @@ def work_of(base):
     return base
 
 
+def listed_works(variable):
+    """The works named in the PDF list the console passes in this environment variable, or None when it passes none."""
+    listed = os.environ.get(variable, "")
+    if not listed or not Path(listed).exists():
+        return None
+    names = json.loads(Path(listed).read_text(encoding="utf-8"))
+    return {Path(name).stem for name in names}
+
+
 def works_to_fetch(force):
-    """Each work still to look up, with the paper names it covers: a book once for all its chapters."""
+    """Each work still to look up, with the paper names it covers: a book once for all its chapters.
+
+    The console's lists leave out the works set aside, and keep only the ticked ones when it names them.
+    """
+    skipped = listed_works("PEPA_EXCLUDE_FILE") or set()
+    only = listed_works("PEPA_ONLY_FILE")
     known = set()
     if config.BIBLIO_DB.exists() and not force:
         con = connect()
@@ -43,8 +60,12 @@ def works_to_fetch(force):
         con.close()
     works = {}
     for paper in work_list():
-        if paper["base"] not in known:
-            works.setdefault(work_of(paper["base"]), []).append(paper["base"])
+        work = work_of(paper["base"])
+        if paper["base"] in known or work in skipped:
+            continue
+        if only is not None and work not in only:
+            continue
+        works.setdefault(work, []).append(paper["base"])
     return works
 
 
@@ -153,7 +174,7 @@ def fetch_estimate(records, force):
         "by_doi": by_doi,
         "by_search": by_search,
         "dollars": 0.0,
-        "paid_upto": by_search * SEARCH_DOLLARS,
+        "paid_upto": len(works) * SEARCH_DOLLARS,
         "model": "OpenAlex",
     }
 
@@ -189,6 +210,9 @@ def fetch(records, force, paid_search):
     con = connect()
     ensure_schema(con)
     counts = {}
+    not_found = set()
+    if NOT_FOUND_FILE.exists():
+        not_found = set(json.loads(NOT_FOUND_FILE.read_text(encoding="utf-8")))
     for number, work in enumerate(works, start=1):
         ui.info(f"[{number}/{len(works)}] {work}")
         match = free_match(work, records)
@@ -198,14 +222,19 @@ def fetch(records, force, paid_search):
             counts["not found"] = counts.get("not found", 0) + 1
             ui.warn("  not found")
             forget(con, works[work])
+            not_found.add(work)
             continue
+        not_found.discard(work)
         source = SOURCE_NAMES[match["source"]]
         counts[f"by {source}"] = counts.get(f"by {source}", 0) + 1
         ui.info(f"  found through {source}")
         store(con, works[work], match)
     con.close()
+    NOT_FOUND_FILE.write_text(json.dumps(sorted(not_found), indent=2, ensure_ascii=False), encoding="utf-8")
     write_citations_file()
     summary = ", ".join(f"{count} {source}" for source, count in counts.items())
+    if not counts:
+        summary = "Nothing new to look up"
     ui.ok(f"{summary}; citations.json written")
 
 

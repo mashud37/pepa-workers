@@ -48,7 +48,10 @@ def _fetch(options):
         print(json.dumps(fetch.fetch_estimate(records, options.get("force"))))
         return
     if options.get("zotero_local"):
-        update_copy()
+        try:
+            update_copy()
+        except SystemExit as reason:
+            ui.warn(f"{reason} Using the Zotero copy kept from the last read.")
         records = zotero_records()
     else:
         records = load_references(options.get("zotero"))
