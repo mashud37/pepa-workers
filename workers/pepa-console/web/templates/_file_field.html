@@ -1,10 +1,11 @@
 {% import "_icons.html" as icon %}
-{% macro file_field(name, label, accept, current="") %}
+{% macro file_field(name, label, accept, current="", hint="") %}
 <div class="field file-field">
   <span id="{{ name }}-label">{{ label }}</span>
   <div class="file-pick">
     <label class="button tonal file-button">{{ icon.attach() }}Choose a file<input type="file" name="{{ name }}" accept="{{ accept }}" class="visually-hidden" aria-labelledby="{{ name }}-label" data-file-chosen></label>
     <span class="meta" data-file-name>{{ current or "No file chosen" }}</span>
   </div>
+  {% if hint %}<span class="meta field-hint">{{ hint }}</span>{% endif %}
 </div>
 {% endmacro %}

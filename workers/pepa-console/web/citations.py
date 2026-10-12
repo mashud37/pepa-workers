@@ -14,6 +14,19 @@ EXPORT_SUFFIXES = [
     ".ris",
 ]
 SHOWN = 20
+# How pepa-review found each paper, as it stores it, worded for the page.
+FOUND_THROUGH = {
+    "own_doi": "The DOI printed in the paper",
+    "export": "Your reference export",
+    "crossref": "A Crossref title search",
+    "paid_search": "A paid OpenAlex title search",
+}
+# The RIS type of each OpenAlex work type; any other type is exported as generic.
+RIS_TYPES = {
+    "article": "JOUR",
+    "book": "BOOK",
+    "book-chapter": "CHAP",
+}
 
 
 def citation_data():
@@ -30,6 +43,7 @@ def paper_facts(stem):
     if data is None or stem not in data:
         return None
     facts = dict(data[stem])
+    facts["found_through"] = FOUND_THROUGH.get(facts.get("found_through", ""), "")
     facts["cites"] = [connections.named(other) for other in facts["cites"]]
     facts["cited_by"] = [connections.named(other) for other in facts["cited_by"]]
     return facts
@@ -48,13 +62,27 @@ def ranked(data, key):
     return rows[:SHOWN]
 
 
+def found_counts(data):
+    """How many papers each source found, most first, with the source worded for the page."""
+    counts = {}
+    for facts in data.values():
+        source = FOUND_THROUGH.get(facts.get("found_through", ""), "Not recorded")
+        counts[source] = counts.get(source, 0) + 1
+    rows = []
+    for source, count in counts.items():
+        rows.append({"source": source, "count": count})
+    rows.sort(key=lambda row: -row["count"])
+    return rows
+
+
 def overview():
-    """What the Citations tab shows: how many papers are looked up, the most cited, and the most cited here."""
+    """What the Citations tab shows: how many papers are looked up and how, the most cited, and the most cited here."""
     data = citation_data()
     if data is None:
         return None
     return {
         "papers": len(data),
+        "found": found_counts(data),
         "most_cited": ranked(data, key=lambda facts: facts["cited_by_count"]),
         "most_cited_here": ranked(data, key=lambda facts: len(facts["cited_by"])),
     }
@@ -102,3 +130,30 @@ def start_lookup(paid_search):
     if paid_search:
         values["--paid-search"] = "on"
     return jobs.start_job("pepa-review", "biblio", values)
+
+
+def ris_record(stem, facts):
+    """One paper as an RIS record, from what OpenAlex holds on it, or from its file name when it was not looked up."""
+    name = connections.named(stem)
+    authors = facts.get("authors") or [name["authors"]]
+    lines = [f"TY  - {RIS_TYPES.get(facts.get('type', ''), 'GEN')}"]
+    for author in authors:
+        lines.append(f"AU  - {author}")
+    lines.append(f"TI  - {facts.get('title') or name['title']}")
+    if facts.get("year"):
+        lines.append(f"PY  - {facts['year']}")
+    if facts.get("venue"):
+        lines.append(f"T2  - {facts['venue']}")
+    if facts.get("doi"):
+        lines.append(f"DO  - {facts['doi']}")
+    lines.append("ER  - ")
+    return "\n".join(lines)
+
+
+def ris_text(stems):
+    """The papers as an RIS file that Zotero, EndNote or Mendeley can import."""
+    data = citation_data() or {}
+    records = []
+    for stem in stems:
+        records.append(ris_record(stem, data.get(stem, {})))
+    return "\n\n".join(records) + "\n"

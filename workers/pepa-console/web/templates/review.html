@@ -1,19 +1,47 @@
 {% extends "base.html" %}
 {% import "_icons.html" as icon %}
-{% block title %}{{ review.outline }} · Reviews · Explore · pepa{% endblock %}
+{% import "_references.html" as references with context %}
+{% block title %}{% if review %}{{ review.outline }} · {% endif %}Reviews · Explore · pepa{% endblock %}
 {% block content %}
 {% include "_explore_tabs.html" %}
 <nav class="crumbs-nav" aria-label="Breadcrumb">
   <ol>
     <li><a href="{{ url_for('explore.reviews_page') }}">Reviews</a></li>
-    <li aria-current="page">{{ review.outline }}</li>
+    <li aria-current="page">{% if review %}{{ review.outline }}{% else %}New review{% endif %}</li>
   </ol>
 </nav>
-<div class="page-head">
-  <div class="heading"></div>
-  <div class="actions">
-    <a class="button text" href="{{ url_for('console.app_file', name='pepa-review', slot='results', relative=review.file) }}" target="_blank" rel="noopener">{{ icon.open_new() }}Open on its own<span class="visually-hidden"> (new tab)</span></a>
+
+<div class="paper-layout">
+  <div class="paper-main">
+    {% include "_shown_run.html" %}
+    {% if review %}
+    <article class="card document prose">{{ review.html | safe }}</article>
+    {% endif %}
   </div>
+  {% if review %}
+  <aside class="paper-side" aria-label="Papers drawn on">
+    <section class="card side-card">
+      <a class="button text" href="{{ url_for('console.app_file', name='pepa-review', slot='results', relative=review.file) }}" target="_blank" rel="noopener">{{ icon.open_new() }}Open on its own<span class="visually-hidden"> (new tab)</span></a>
+    </section>
+    {% if review.papers %}
+    {% set stems = review.papers | map(attribute="stem") | list %}
+    <section class="card side-card">
+      <h2 class="title">Drawn on</h2>
+      <div class="side-actions">
+        <button type="button" class="text" data-open="add-to-list">{{ icon.plus() }}Add to a list</button>
+        {{ references.export_button(review.outline, stems) }}
+      </div>
+      <ul class="side-list">
+        {% for paper in review.papers %}
+        <li><a href="{{ url_for('explore.paper_page', stem=paper.stem, back=request.full_path) }}">{{ paper.title }}</a><span class="meta">{{ paper.authors }}</span></li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+  </aside>
+  {% if review.papers %}
+  {% with collect_ticked = False, stems = review.papers | map(attribute="stem") | list %}{% include "_add_to_list.html" %}{% endwith %}
+  {% endif %}
+  {% endif %}
 </div>
-<article class="card document prose">{{ review.html | safe }}</article>
 {% endblock %}

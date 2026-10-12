@@ -1,0 +1,9 @@
+{% import "_icons.html" as icon %}
+{% macro export_button(name, stems) %}
+<form method="post" action="{{ url_for('explore.lists_references') }}">
+  <input type="hidden" name="token" value="{{ token }}">
+  <input type="hidden" name="name" value="{{ name }}">
+  {% for stem in stems %}<input type="hidden" name="stem" value="{{ stem }}">{% endfor %}
+  <button class="text">{{ icon.download() }}Export references</button>
+</form>
+{% endmacro %}

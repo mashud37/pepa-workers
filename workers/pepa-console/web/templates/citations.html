@@ -7,17 +7,15 @@
 
 <section class="card start" aria-labelledby="lookup-title">
   <h2 class="title" id="lookup-title">Look up citations</h2>
-  <p class="supporting">Finds each summarised paper on OpenAlex: its year, journal, how often it is cited, and which papers in your library it cites. Reviews then build their debates around the most cited papers. Papers already looked up are skipped.</p>
-  <p class="supporting">Each paper is found by the DOI printed on its first pages, by your reference export, or by a title search on Crossref, all free. Papers none of these find can be searched on OpenAlex by title, at a cost shown first.</p>
+  <p class="supporting">Finds each paper's year, journal and citation count on OpenAlex, and which of your papers it cites. Papers already looked up are skipped.</p>
   <form method="post" action="{{ url_for('explore.citations_next') }}" enctype="multipart/form-data">
     <input type="hidden" name="token" value="{{ token }}">
-    {{ files.file_field("file", "Reference export, optional: in Zotero, File, Export Library, as CSL JSON, BibTeX or RIS", ".json,.bib,.ris", export.name if export else "") }}
+    {{ files.file_field("file", "Zotero export, optional", ".json,.bib,.ris", export.name if export else "", "In Zotero, File › Export Library, as CSL JSON, BibTeX or RIS.") }}
     <div class="form-actions"><button class="filled">Next</button></div>
   </form>
 </section>
 
 {% if overview %}
-<p class="meta result-count">{{ overview.papers }} paper{% if overview.papers != 1 %}s{% endif %} looked up</p>
 <div class="paper-layout">
   <section class="paper-main" aria-labelledby="most-cited-title">
     <h2 class="section-title" id="most-cited-title">Most cited</h2>
@@ -31,18 +29,31 @@
     <p class="supporting">OpenAlex counts no citations for these papers.</p>
     {% endif %}
   </section>
-  <aside class="paper-side" aria-labelledby="cited-here-title">
-    <section class="card side-card">
-      <h2 class="title" id="cited-here-title">Most cited in your library</h2>
-      {% if overview.most_cited_here %}
-      <ul class="side-list">
-        {% for paper in overview.most_cited_here %}
-        <li><a href="{{ url_for('explore.paper_page', stem=paper.stem, back=request.full_path) }}">{{ paper.title }}</a><span class="meta">cited by {{ paper.count }} of your papers</span></li>
-        {% endfor %}
-      </ul>
-      {% else %}
-      <p class="supporting">None of your papers cites another one of them.</p>
-      {% endif %}
+  <aside class="paper-side">
+    <section aria-labelledby="found-title">
+      <h2 class="section-title" id="found-title">How they were found</h2>
+      <div class="card side-card">
+        <p class="supporting">{{ overview.papers }} paper{% if overview.papers != 1 %}s{% endif %} found on OpenAlex, which counts their citations.</p>
+        <ul class="side-list counts">
+          {% for row in overview.found %}
+          <li><span>{{ row.source }}</span><span class="meta">{{ row.count }}</span></li>
+          {% endfor %}
+        </ul>
+      </div>
+    </section>
+    <section aria-labelledby="cited-here-title">
+      <h2 class="section-title" id="cited-here-title">Most cited in your library</h2>
+      <div class="card side-card">
+        {% if overview.most_cited_here %}
+        <ul class="side-list">
+          {% for paper in overview.most_cited_here %}
+          <li><a href="{{ url_for('explore.paper_page', stem=paper.stem, back=request.full_path) }}">{{ paper.title }}</a><span class="meta">cited by {{ paper.count }} of your papers</span></li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="supporting">None of your papers cites another one of them.</p>
+        {% endif %}
+      </div>
     </section>
   </aside>
 </div>

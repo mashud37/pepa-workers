@@ -1,7 +1,8 @@
 """Serve the Explore pages: search, maps, questions, find by document, reviews, citations, lists and papers.
 Each paid step shows its cost, runs as a job, and is kept.
 """
-from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask import Blueprint, Response, abort, flash, redirect, render_template, request, url_for
+from werkzeug.utils import secure_filename
 
 from web import (
     asking,
@@ -334,19 +335,26 @@ def review_make():
     path = explore.saved_text(request.form.get("text", ""))
     if path is None:
         abort(404)
+    name = reviews.new_name(path)
     try:
-        reviews.start_review(path, wanted_list(), request.form.get("structure", ""))
+        reviews.start_review(path, wanted_list(), request.form.get("structure", ""), name)
     except ValueError as error:
         flash(str(error))
-    return redirect(url_for("explore.reviews_page"))
+        return redirect(url_for("explore.reviews_page"))
+    return redirect(url_for("explore.review_page", file=name))
 
 
 @bp.route("/explore/reviews/read")
 def review_page():
-    review = reviews.review_view(request.args.get("file", ""))
-    if review is None:
+    name = request.args.get("file", "")
+    review = reviews.review_view(name)
+    running = reviews.running_review(name)
+    if review is None and running is None:
         abort(404)
-    return render_template("review.html", review=review)
+    shown = None
+    if running is not None and review is None:
+        shown = {"run": running, "log_url": url_for("console.job_log", job_id=running["id"])}
+    return render_template("review.html", review=review, shown=shown, lists=lists.all_lists())
 
 
 # ---- Citations ----
@@ -442,6 +450,19 @@ def lists_add():
     else:
         flash(f"Already in {target}.")
     return redirect(back)
+
+
+@bp.route("/lists/references", methods=["POST"])
+def lists_references():
+    stems = request.form.getlist("stem")
+    if not stems:
+        abort(400)
+    file_name = secure_filename(request.form.get("name", "")) or "references"
+    return Response(
+        citations.ris_text(stems),
+        mimetype="application/x-research-info-systems",
+        headers={"Content-Disposition": f'attachment; filename="{file_name}.ris"'},
+    )
 
 
 @bp.route("/lists/remove", methods=["POST"])

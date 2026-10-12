@@ -91,7 +91,8 @@
     <section class="card side-card">
       <h2 class="title">Citations</h2>
       <p class="supporting">{% if facts.year %}{{ facts.year }}{% endif %}{% if facts.venue %}, {{ facts.venue }}{% endif %}</p>
-      <p class="meta">Cited {{ "{:,}".format(facts.cited_by_count) }} times{% if facts.doi %} · <a href="https://doi.org/{{ facts.doi }}" target="_blank" rel="noopener">DOI<span class="visually-hidden"> (new tab)</span></a>{% endif %}</p>
+      <p class="meta">Cited {{ "{:,}".format(facts.cited_by_count) }} times on OpenAlex{% if facts.doi %} · <a href="https://doi.org/{{ facts.doi }}" target="_blank" rel="noopener">DOI<span class="visually-hidden"> (new tab)</span></a>{% endif %}</p>
+      {% if facts.found_through %}<p class="meta">Found by: {{ facts.found_through }}</p>{% endif %}
       {% if facts.cites %}
       <h3 class="side-subtitle">Cites in your library</h3>
       <ul class="side-list">

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% import "_icons.html" as icon %}
+{% import "_references.html" as references with context %}
 {% block title %}{% if chosen %}{{ chosen }} · {% endif %}Lists · pepa{% endblock %}
 {% block content %}
 {% include "_explore_tabs.html" %}
@@ -31,6 +32,7 @@
     <a class="button text" href="{{ url_for('explore.map_new', list=chosen) }}">Map this list</a>
     <a class="button text" href="{{ url_for('explore.ask_page', list=chosen) }}">Ask about it</a>
     <a class="button text" href="{{ url_for('explore.reviews_page', list=chosen) }}">Write a review</a>
+    {% if papers %}{{ references.export_button(chosen, papers | map(attribute="stem") | list) }}{% endif %}
   </span>
   <form method="post" action="{{ url_for('explore.lists_delete') }}" data-confirm="Delete the list {{ chosen }}?" data-confirm-detail="Only the list goes; its papers stay in the Library." data-confirm-button="Delete">
     <input type="hidden" name="token" value="{{ token }}">

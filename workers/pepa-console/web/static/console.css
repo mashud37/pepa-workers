@@ -532,6 +532,8 @@ button:disabled { opacity: 0.38; cursor: default; pointer-events: none; }
 .start li { margin: 6px 0; }
 .start a { text-decoration: underline; }
 .start a.button { text-decoration: none; }
+.start > * + * { margin-top: 12px; }
+.field-hint { white-space: normal; }
 .guide-layout { display: grid; grid-template-columns: 200px 1fr; gap: 24px; align-items: start; margin-top: 16px; }
 .guide-nav { position: sticky; top: 80px; }
 .guide-nav ul { margin: 0; padding: 0; list-style: none; }
@@ -681,5 +683,10 @@ body.busy .buddy .ink rect { animation: write 1.4s steps(1, end) infinite; anima
 .side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .side-subtitle { margin: 16px 0 8px; font: 500 14px/20px var(--font); }
 .paper-main > .section-title { margin: 24px 0 8px; }
+.paper-main > .section-title:first-child,
+.paper-side > section > .section-title { margin: 0 0 12px; }
+.side-card > .supporting + .side-list { margin-top: 12px; }
+.side-list.counts li { flex-direction: row; justify-content: space-between; gap: 12px; }
+.side-actions { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 8px; }
 .file-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .file-pick .meta { min-width: 0; overflow-wrap: anywhere; }

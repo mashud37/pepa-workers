@@ -118,6 +118,7 @@ APPS: list[App] = [
             {"name": "--auto", "type": "bool", "help": "Select works by similarity instead of asking"},
             {"name": "--list", "type": "file", "help": "Literature list file"},
             {"name": "--structure", "type": "choice", "choices": ("follow", "synthesise"), "help": "Follow the outline, or synthesise sections"},
+            {"name": "--output", "type": "text", "help": "File name for the review in output/"},
         )),
         Command("ask", "heavy", "Answer one question about the literature", no_input=True, fields=(
             {"name": "--question", "type": "text", "help": "The question"},
