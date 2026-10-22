@@ -691,5 +691,38 @@ body.busy .buddy .ink rect { animation: write 1.4s steps(1, end) infinite; anima
 .side-card > .supporting + .side-list { margin-top: 12px; }
 .side-list.counts li { flex-direction: row; justify-content: space-between; gap: 12px; }
 .side-actions { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 8px; }
+.side-actions .button.tonal { margin-right: 4px; }
+.revise { margin-top: 16px; }
+.revise .form-actions { margin-top: 4px; }
 .file-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .file-pick .meta { min-width: 0; overflow-wrap: anywhere; }
+
+/* ---- Run progress: the current stage, a bar while it works ---- */
+.run-stage { margin: 0; padding: 12px 16px 0; font-weight: 500; }
+.run-stage[hidden] { display: none; }
+.run-bar { display: block; height: 4px; margin: 8px 16px 0; overflow: hidden; border-radius: 2px; background: var(--outline); }
+.run-bar[hidden] { display: none; }
+.run-bar span { display: block; width: 30%; height: 100%; border-radius: 2px; background: var(--primary); animation: indeterminate 1.6s var(--ease) infinite; }
+@keyframes indeterminate { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+
+/* ---- Reading: tools that stay in view beside a long text, and a copy button on each part ---- */
+@media (min-width: 761px) { .paper-side { position: sticky; top: 80px; max-height: calc(100vh - 96px); overflow-y: auto; } }
+.prose h2 .copy-part { margin-left: 8px; vertical-align: middle; font-size: 14px; line-height: 20px; opacity: 0; }
+.prose h2:hover .copy-part, .prose h2 .copy-part:focus-visible { opacity: 1; }
+@media (hover: none) { .prose h2 .copy-part { opacity: 1; } }
+
+/* ---- Structures: each move as a bar of its usual share ---- */
+.structure { margin-bottom: 24px; padding: 20px 24px; }
+.structure .title .chip { margin-left: 8px; vertical-align: middle; }
+.stages { display: grid; gap: 4px 12px; grid-template-columns: minmax(120px, max-content) 1fr 48px; align-items: center; margin: 16px 0; padding: 0; list-style: none; }
+.stages li { display: contents; }
+.stage-bar { display: block; height: 8px; overflow: hidden; border-radius: 4px; background: var(--surface-variant); }
+.stage-bar span { display: block; height: 100%; border-radius: 4px; background: var(--primary); }
+.stage-intent { grid-column: 1 / -1; margin: -2px 0 8px; color: var(--text-secondary); font-size: 13px; }
+.structure-detail { margin-top: 8px; }
+.structure-detail > summary { padding: 8px 0; color: var(--primary); cursor: pointer; font-weight: 500; }
+@media (prefers-reduced-motion: reduce) { .run-bar span { width: 100%; opacity: 0.4; } }
+@media (forced-colors: active) {
+  .run-bar, .items-bar, .stage-bar { border: 1px solid CanvasText; }
+  .run-bar span, .items-bar span, .stage-bar span { background: Highlight; }
+}

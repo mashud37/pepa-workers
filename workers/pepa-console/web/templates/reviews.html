@@ -11,7 +11,7 @@
 <form method="post" action="{{ url_for('explore.reviews_save') }}" enctype="multipart/form-data">
   <input type="hidden" name="token" value="{{ token }}">
   <p class="supporting section-note">Write a literature review from an outline: the points you want it to make, in your own words. It draws on a list's papers, or on the papers closest to the outline.</p>
-  <label class="field"><span>Outline</span><textarea name="pasted" rows="8"></textarea></label>
+  <label class="field"><span>Outline</span><textarea name="pasted" rows="8" data-keep="reviews"></textarea></label>
   {{ files.file_field("file", "Or a file (.md, .txt or .docx)", ".md,.txt,.docx") }}
   <div class="fields">
     <label class="field"><span>Papers</span>

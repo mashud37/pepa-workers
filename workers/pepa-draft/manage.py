@@ -14,8 +14,17 @@ def _handle_draft(args):
         skip.add("retrieval")
     if args.no_style:
         skip.add("style")
-    paths = {"review_file": args.review, "plan_file": args.plan, "sections_file": args.sections}
-    draft_cmd.run(paths=paths, backend=args.backend, skip=skip, style_profile=args.style_profile)
+    draft_cmd.run({
+        "review_file": args.review,
+        "plan_file": args.plan,
+        "sections_file": args.sections,
+        "backend": args.backend,
+        "skip": skip,
+        "style_profile": args.style_profile,
+        "accept_sections": args.accept_sections,
+        "only_estimate": args.estimate,
+        "output_name": args.output,
+    })
 
 
 def _handle_sections(args):
@@ -28,14 +37,19 @@ def _handle_style(args):
     style_cmd.run(action=args.action, file_path=args.file, profile=args.profile)
 
 
-def _handle_config(_args):
+def _handle_config(args):
     from cli import config_cmd
-    config_cmd.run()
+    config_cmd.run(as_json=args.json)
 
 
-def _handle_setup(_args):
+def _handle_setup(args):
     from cli import setup_cmd
-    setup_cmd.run()
+    setup_cmd.run({
+        "llm_base_url": args.llm_base_url,
+        "llm_model": args.llm_model,
+        "ollama_base_url": args.ollama_base_url,
+        "review_index": args.review_index,
+    })
 
 
 _HANDLERS = {
@@ -61,6 +75,9 @@ def main():
     dr.add_argument("--no-retrieval", action="store_true")
     dr.add_argument("--no-style", action="store_true")
     dr.add_argument("--style-profile", default=None, metavar="PROFILE")
+    dr.add_argument("--accept-sections", action="store_true", help="Draft with the outline's sections as its move labels place them, without asking")
+    dr.add_argument("-o", "--output", default=None, metavar="NAME", help="File name for the draft in output/ (default: from the time)")
+    dr.add_argument("--estimate", action="store_true", help="Print the most the draft can cost as JSON, and stop")
 
     sc = sub.add_parser("sections", help="Assign plan paragraphs to manuscript sections")
     sc.add_argument("--plan", default=None, metavar="FILE")
@@ -71,8 +88,14 @@ def main():
     st.add_argument("--file", default=None, metavar="FILE")
     st.add_argument("--profile", default=None, metavar="PROFILE")
 
-    sub.add_parser("config", help="Show effective configuration")
-    sub.add_parser("setup", help="Configure API keys and paths interactively")
+    cf = sub.add_parser("config", help="Show effective configuration")
+    cf.add_argument("--json", action="store_true", help="Print the settings as one JSON line")
+
+    su = sub.add_parser("setup", help="Configure API keys and paths; any flag saves without asking (keys only interactively or from the environment)")
+    su.add_argument("--llm-base-url", default=None, metavar="URL", help="OpenAI-compatible server address")
+    su.add_argument("--llm-model", default=None, metavar="NAME", help="OpenAI-compatible model name")
+    su.add_argument("--ollama-base-url", default=None, metavar="URL", help="Ollama base URL for embeddings")
+    su.add_argument("--review-index", default=None, metavar="FILE", help="Path to pepa-review index.json")
     sub.add_parser("install", help="Set up files and check dependencies")
 
     args = parser.parse_args()
@@ -82,14 +105,14 @@ def main():
         return menu.main()
     handler = _HANDLERS.get(args.command)
     if handler:
-        handler(args)
+        return handler(args)
 
 
 if __name__ == "__main__":
     try:
         sys.exit(main())
     except KeyboardInterrupt:
-        print("\n\n  Interrupted.")
+        print("\n\n  Interrupted.", file=sys.stderr)
         sys.exit(0)
     except SystemExit as e:
         if isinstance(e.code, str):

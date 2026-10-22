@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 import config
 from backends import anthropic_client, llm, prompt
-from cli import ui
+from cli import costs, items, ui
 from cli.progress import StepSpinner
 from corpus.load import paper_count, para_files
 from corpus.parse_para import parse as parse_para
@@ -196,21 +196,24 @@ def run_cost(sentence_counts, chosen):
     label_in = label_out = 0
     for count in sentence_counts:
         label_in += 500 + 20 * count
-        label_out += 16 * count + 64
+        label_out += 16 * count + 64 + costs.thinking_tokens(names["fast"])
     labelling = label_in / 1e6 * fast[0] + label_out / 1e6 * fast[1]
     if chosen == "batch":
         labelling *= 0.5
     synthesis_in = SYNTH_PROMPT_TOKENS + SYNTH_CHAR_BUDGET / CHARS_PER_TOKEN
-    synthesis = synthesis_in / 1e6 * quality[0] + SYNTH_OUTPUT_TOKENS / 1e6 * quality[1]
+    synthesis_out = SYNTH_OUTPUT_TOKENS + costs.thinking_tokens(names["quality"])
+    synthesis = synthesis_in / 1e6 * quality[0] + synthesis_out / 1e6 * quality[1]
     return labelling + synthesis
 
 
 def blueprint_cost():
     """List-price dollars for the most the blueprint calls after a new library can spend, or None without a price."""
-    quality = config.price_per_mtok(config.model_names()["quality"])
+    model = config.model_names()["quality"]
+    quality = config.price_per_mtok(model)
     if config.load()["backend"] != "anthropic" or quality is None:
         return None
-    one_call = BLUEPRINT_INPUT_TOKENS / 1e6 * quality[0] + BLUEPRINT_OUTPUT_TOKENS / 1e6 * quality[1]
+    output_tokens = BLUEPRINT_OUTPUT_TOKENS + costs.thinking_tokens(model)
+    one_call = BLUEPRINT_INPUT_TOKENS / 1e6 * quality[0] + output_tokens / 1e6 * quality[1]
     return BLUEPRINT_CALLS_AT_MOST * one_call
 
 
@@ -241,17 +244,24 @@ def _preflight_cost_check(sentence_counts, chosen, approved, threshold=COST_WARN
 def _label_serial(parsed):
     sequences = []
     n = len(parsed)
+    items.stage("Reading the moves in each paper")
+    items.announce("total", n)
     for done, (base, sentences) in enumerate(parsed, 1):
         ui.info(f"[{done}/{n}] labelling {base}")
+        items.announce("start", base)
         try:
             sequences.append({"base": base, "moves": moves.label(sentences)})
+            items.announce("ok", base)
         except Exception as e:  # transient exhaustion for one paper: skip it
             ui.error(f"[{done}/{n}] {base}: {e}")
+            items.announce("failed", base, str(e))
     return sequences
 
 
 def _label_parallel(parsed):
     n = len(parsed)
+    items.stage("Reading the moves in each paper")
+    items.announce("total", n)
     workers = min(config.load()["concurrency"], n)
     ui.info(f"parallel: up to {workers} labelling calls in flight  ·  "
             "Ctrl-C to stop")
@@ -265,8 +275,10 @@ def _label_parallel(parsed):
             ui.info(f"[{done}/{n}] labelled {base}")
             try:
                 sequences.append({"base": base, "moves": future.result()})
+                items.announce("ok", base)
             except Exception as e:  # transient exhaustion for one paper: skip it
                 ui.error(f"[{done}/{n}] {base}: {e}")
+                items.announce("failed", base, str(e))
     return sequences
 
 
@@ -373,7 +385,7 @@ def synthesise(sequences):
     prepared = prepare_synthesis(sequences)
     compact = prepared["compact"]
     n_total = prepared["n_total"]
-    ui.step("Synthesising skeleton library")
+    items.stage("Learning the structures the papers share")
     if len(compact) != n_total:
         ui.info(f"synthesising over a representative sample of {len(compact)} "
                 f"of {n_total} papers (corpus too large for one call)")

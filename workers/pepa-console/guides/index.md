@@ -40,6 +40,7 @@ DeepSeek, Kimi, Qwen, or one running on this computer. [Models](models.md) expla
    indexed for search, and each paper shows its progress.
 3. Click a finished paper's name to read its brief, its paragraph rundown and its quotes.
 4. **Explore** searches the papers, maps them into themes, answers questions about them, writes literature reviews and keeps literature lists.
+5. **Draft** outlines an idea, writes a first draft, gives feedback on an argument and checks a text for papers it misses.
 
 ## The workers
 

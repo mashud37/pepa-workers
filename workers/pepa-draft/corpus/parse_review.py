@@ -1,4 +1,5 @@
 """Parse a pepa-review output markdown file into structured sections."""
+import json
 from pathlib import Path
 
 
@@ -51,7 +52,8 @@ def parse(path: Path) -> dict:
         path: Path to the review markdown file.
 
     Returns:
-        dict with keys: sections, works, full_text.
+        dict with keys: sections, works, full_text. The works are the paper names in the
+        review's .json beside it, empty when pepa-review wrote none.
     """
     sections, works, text_parts = [], [], []
     sec, sub, in_works = None, None, False
@@ -61,7 +63,11 @@ def parse(path: Path) -> dict:
     _flush_sub(sub, sec, sections, text_parts)
     if sec:
         sections.append(sec)
-    return {"sections": sections, "works": works, "full_text": "\n\n".join(text_parts)}
+    bases = []
+    works_file = path.with_suffix(".json")
+    if works_file.is_file():
+        bases = json.loads(works_file.read_text(encoding="utf-8"))["works"]
+    return {"sections": sections, "works": bases, "full_text": "\n\n".join(text_parts)}
 
 
 def full_prose(parsed: dict) -> str:

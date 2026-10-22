@@ -10,7 +10,7 @@
 </div>
 {% elif missing == "keys" %}
 <div class="empty">
-  <h2>No key for pepa-review</h2>
+  <h2>No key for {{ missing_app | default("pepa-review") }}</h2>
   <p class="supporting"><a href="{{ url_for('console.keys_page') }}">Add a key in Settings first.</a></p>
 </div>
 {% endif %}

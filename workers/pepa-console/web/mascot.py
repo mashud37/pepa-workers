@@ -109,6 +109,7 @@ TIPS = {
         "Follow my outline keeps your sections. Otherwise I find the sections in the papers.",
         "The papers a review drew on are listed beside it.",
         "Export references gives a file Zotero can import.",
+        "Open a review to copy a section, or take it to Word.",
     ],
     "explore/citations": [
         "Looking papers up by DOI and on Crossref is free. Run it from the Library.",
@@ -118,6 +119,37 @@ TIPS = {
     "explore/lists": [
         "Map, ask about or review a list from its page.",
         "Export references gives a file for your reference manager.",
+    ],
+    "draft": [
+        "Learn how papers here are structured, and outlines follow your field's shape.",
+        "An outline can draw on a literature review from Explore.",
+    ],
+    "draft/outline": [
+        "Learn how papers here are structured, and outlines follow your field's shape.",
+        "An outline can draw on a literature review from Explore.",
+        "Open an outline to revise it, or to write a first draft from it.",
+    ],
+    "draft/draft": [
+        "A first draft needs an outline and a literature review.",
+        "Each paragraph goes into the section its move belongs to.",
+    ],
+    "draft/feedback": [
+        "Feedback reads how your argument builds, part by part.",
+        "Give me an outline, a draft or any text of your own.",
+    ],
+    "draft/gaps": [
+        "Check against a list or a theme to keep to one debate.",
+        "The papers a check names can go straight into a list.",
+    ],
+    "draft/read": [
+        "Made from shows what this came from. Next is what it can become.",
+        "Every output is kept, so you can come back to it.",
+        "Copy one part, or take the whole text to Word.",
+    ],
+    "draft/structures": [
+        "Each bar is how much of a paper that move usually takes.",
+        "Open a part to see how its paragraphs usually run.",
+        "Outline with a structure to make your paper follow it.",
     ],
     "paper": [
         "The cards beside the paper show its themes, related papers and citations.",

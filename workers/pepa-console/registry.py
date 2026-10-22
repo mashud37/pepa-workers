@@ -125,8 +125,10 @@ APPS: list[App] = [
             {"name": "--conversation", "type": "file", "help": "A kept conversation in output/ to follow up"},
             {"name": "--list", "type": "file", "help": "Answer only from this literature list"},
         )),
-        Command("gaps", "heavy", "Gap-check a draft against the corpus", fields=(
+        Command("gaps", "heavy", "Gap-check a draft against the corpus", no_input=True, fields=(
             {"name": "--input", "type": "file", "help": "Draft file"},
+            {"name": "--list", "type": "file", "help": "Check only against this literature list"},
+            {"name": "--output", "type": "text", "help": "File name for the report in output/"},
         )),
         Command("similar", "heavy", "Find the indexed papers closest to a document", fields=(
             {"name": "--input", "type": "file", "help": "A text or markdown file, such as a draft"},
@@ -160,6 +162,7 @@ APPS: list[App] = [
             {"name": "--limit", "type": "int", "help": "Use only the first N para files"},
             {"name": "--sample", "type": "int", "help": "Use a random sample of N para files"},
             {"name": "--mode", "type": "choice", "choices": MODES, "help": "Labelling mode (default: auto)"},
+            {"name": "--with-blueprints", "type": "bool", "help": "Then build the within-section blueprints too"},
             {"name": "--approve-cost", "type": "dollars", "help": "Spend up to this many dollars without asking"},
         )),
         Command("blueprint", "heavy", "Build paragraph-progression blueprints"),
@@ -169,9 +172,13 @@ APPS: list[App] = [
             {"name": "--template", "type": "file", "help": "Plan template to follow"},
             {"name": "--skeleton-id", "type": "text", "help": "Skeleton ID to use"},
             {"name": "--feedback", "type": "text", "help": "One scripted feedback pass"},
+            {"name": "--no-skeleton", "type": "bool", "help": "Let the model choose the structure"},
+            {"name": "--revise", "type": "file", "help": "An earlier outline to rewrite to follow --feedback"},
+            {"name": "--output", "type": "text", "help": "File name for the outline in output/"},
         )),
-        Command("review", "heavy", "Argumentation-flow feedback on an idea or draft", fields=(
+        Command("review", "heavy", "Argumentation-flow feedback on an idea or draft", no_input=True, fields=(
             {"name": "--input", "type": "file", "help": "Idea or draft file"},
+            {"name": "--output", "type": "text", "help": "File name for the feedback in output/"},
         )),
         Command("install", "safe", "Set up files and check dependencies"),
     ], keys=("ANTHROPIC_API_KEY", "PEPA_LLM_API_KEY")),
@@ -182,7 +189,7 @@ APPS: list[App] = [
             {"name": "--plan", "type": "file", "help": "Plan file"},
             {"name": "--reset", "type": "bool", "help": "Start the section assignment again"},
         )),
-        Command("draft", "heavy", "Write a full manuscript draft", fields=(
+        Command("draft", "heavy", "Write a full manuscript draft", no_input=True, fields=(
             {"name": "--review", "type": "file", "help": "Literature review file"},
             {"name": "--plan", "type": "file", "help": "Plan file"},
             {"name": "--sections", "type": "file", "help": "Section assignment file"},
@@ -190,6 +197,8 @@ APPS: list[App] = [
             {"name": "--no-retrieval", "type": "bool", "help": "Skip corpus retrieval"},
             {"name": "--no-style", "type": "bool", "help": "Skip style matching"},
             {"name": "--style-profile", "type": "text", "help": "Style profile name"},
+            {"name": "--accept-sections", "type": "bool", "help": "Place the outline's paragraphs in sections by their move labels, without asking"},
+            {"name": "--output", "type": "text", "help": "File name for the draft in output/"},
         )),
         Command("setup", "terminal", "Configure API keys and paths; keys typed here belong on the Keys page"),
         Command("install", "safe", "Set up files and check dependencies"),

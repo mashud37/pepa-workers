@@ -5,6 +5,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -17,10 +18,10 @@ import numpy as np
 import config
 from backends import llm
 from backends import prompt as prompts
-from cli import costs, progress, ui
+from cli import costs, items, progress, ui
 from corpus.metadata import display_label, list_bases, work_list
 
-FOLLOW_TOKENS = 6000
+FOLLOW_TOKENS = 12000
 PLAN_TOKENS = 1500
 SECTION_TOKENS = 2200
 
@@ -61,6 +62,7 @@ def run(options):
         print(json.dumps(review_estimate(outline_file, list_file, structure or "synthesise")))
         return
     ui.header("Literature review")
+    items.stage("Choosing the papers")
 
     sp = progress.StepSpinner("scanning corpus")
     sp.start()
@@ -99,7 +101,8 @@ def run(options):
     out_path = _write_review(review_text, selected, sig, Path(output_name).name)
     ui.ok(f"saved to {out_path}")
     ui.rule()
-    print(review_text)
+    print(review_text, file=sys.stderr)
+    print(out_path)
 
 
 # ---- Selection (map-driven, interactive) ----
@@ -223,7 +226,7 @@ def _show_groups(groups):
     for g in groups:
         ui.info(f"▸ {g['name']}  ({len(g['records'])})")
         for r in g["records"]:
-            print(f"      - {display_label(r)}")
+            print(f"      - {display_label(r)}", file=sys.stderr)
 
 
 def _keyword_select(works):
@@ -238,10 +241,10 @@ def _keyword_select(works):
         if not matches:
             ui.warn(f"No works match '{term}'")
             continue
-        print()
+        print(file=sys.stderr)
         for i, w in enumerate(matches, 1):
             mark = "✓" if w["base"] in selected_bases else " "
-            print(f"  [{i}] {mark} {display_label(w)}")
+            print(f"  [{i}] {mark} {display_label(w)}", file=sys.stderr)
         raw = ui.ask("Add numbers (comma-separated, blank to skip)")
         if not raw:
             continue
@@ -307,6 +310,7 @@ def _draft_follow(outline, selected, debate_block):
     briefs = _format_briefs(selected)
     if debate_block:
         briefs = debate_block + briefs
+    items.stage("Writing the review")
     sp = progress.StepSpinner("drafting review (following outline)")
     sp.start()
     try:
@@ -326,6 +330,7 @@ def _draft_synthesise(outline, selected, debates):
     ui.info("  · 2/2  Draft sections in parallel")
 
     terms = _candidate_terms(selected)
+    items.stage("Planning the sections")
     sp = progress.StepSpinner("planning structure")
     sp.start()
     try:
@@ -349,6 +354,8 @@ def _draft_synthesise(outline, selected, debates):
 
     total = len(sections)
     counter = count(1)
+    items.stage("Writing the sections")
+    items.announce("total", total)
 
     sp = progress.StepSpinner(f"drafting [0/{total}]")
     sp.start()
@@ -365,7 +372,9 @@ def _draft_synthesise(outline, selected, debates):
 
 
 def _draft_section_with_progress(section, debates, sp, counter, total):
+    items.announce("start", section["title"])
     result = _draft_one_section(section, debates)
+    items.announce("ok", section["title"], f"{len(result.split())} words")
     done = next(counter)
     sp._label = f"drafting [{done}/{total}]"
     return result
@@ -524,7 +533,7 @@ def _get_outline(outline_file):
 
     choice = ui.menu("Outline source", options)
     if choice is None:
-        return {"text": None, "stem": "draft"}
+        raise SystemExit("No outline chosen: pass --input FILE.")
     if choice == 0:
         return {"text": _editor_input(), "stem": "draft"}
     f = input_files[choice - 1]

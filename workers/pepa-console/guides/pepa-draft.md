@@ -12,6 +12,9 @@ language model writes the prose.
 
 ## Use it
 
-1. Copy an outline from pepa-plan and a review from pepa-review into **Plans and reviews**.
-2. Run **sections** with the outline, to assign its paragraphs to sections.
-3. Run **draft** with the review and the outline. The draft is under **Manuscripts**.
+1. On **Draft › First draft**, choose an outline and a literature review. Each paragraph of the
+   outline goes into the section its move belongs to.
+2. The draft opens when it is written, with the papers it drew on beside it.
+
+On its app page, **sections** assigns paragraphs to sections by hand, and **draft** works from files
+in **Plans and reviews**.

@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 import config
 from backends import anthropic_client, llm, prompt
-from cli import ui
+from cli import items, ui
 from corpus import join
 from skeleton import build
 
@@ -28,6 +28,8 @@ def build_blueprints(skeletons=None, sequences=None):
     plan = [(sk, _major_moves(sk)) for sk in skeletons]
     total = sum(len(moves) for _, moves in plan)
     _show_plan(plan, total)
+    items.stage("Learning how each part usually runs")
+    items.announce("total", total)
 
     anthropic_client.reset_usage()
     blueprints, done = {}, 0
@@ -36,11 +38,15 @@ def build_blueprints(skeletons=None, sequences=None):
         for move, intent in major:
             done += 1
             ui.info(f"[{done}/{total}] {sk['id']} · {move}")
+            part = f"{sk.get('name', sk['id'])}: {move.replace('_', ' ').capitalize()}"
+            items.announce("start", part)
             secs = _gather(sk, move, moves_by_base)
             if len(secs) < MIN_SECTIONS:
                 ui.warn(f"    only {len(secs)} section(s), skipped")
+                items.announce("ok", part, "too few examples to learn from")
                 continue
             blueprints[sk["id"]][move] = _synthesise_move(sk, move, intent, secs)
+            items.announce("ok", part)
     build._report_cost()
     return {
         "generated": datetime.now(timezone.utc).isoformat(),

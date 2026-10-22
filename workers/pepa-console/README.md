@@ -19,6 +19,7 @@ flowchart TD
 | Library | The items and how far each stage has got; drop PDFs on it to add them, tick items to process only those, and press Process items to run the stages in order |
 | Apps | One page per worker, each command as a form with its live log, its run settings, and every file it reads or writes |
 | Explore | Search the papers, map them into themes, ask questions of them, find those closest to a text of your own, write literature reviews, see the most cited papers, read a paper with its connections beside it, and keep literature lists |
+| Draft | Outline an idea, write a first draft from an outline and a review, get feedback on a text's argument, and check a text for papers it misses; each result shows what it was made from and offers the next step |
 | Jobs | Every run, kept for as long as chosen there |
 | Settings | Folders: the project folder, and where each worker reads and writes. Models: which model and server each worker writes and embeds with. Keys: store a key once and choose which workers get it |
 | Guide | How to start, and what each worker does |

@@ -29,4 +29,5 @@ before it runs.
    connects Zotero or keeps an export file, shows the most cited papers and how each was found,
    and offers a paid title search for papers the free sources miss, at a cost shown first.
    Reviews then build their debates around the most cited papers.
-6. For gaps, put a draft in **Outlines and drafts** and run **gaps** on the app page.
+6. **Draft › Check for gaps** checks a text against the whole library, a list or a theme, and lists
+   the papers it should engage.

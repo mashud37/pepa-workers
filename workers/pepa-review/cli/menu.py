@@ -9,11 +9,21 @@ def _run(module_name: str) -> None:
     import_module(f"cli.{module_name}").run()
 
 
+def _review():
+    from cli import review
+    review.run({"outline_file": None, "auto": False, "list_file": None, "structure": None, "only_estimate": False, "output_name": None})
+
+
+def _gaps():
+    from cli import gaps
+    gaps.run({"input_file": None, "list_file": None, "only_estimate": False, "output_name": None})
+
+
 _ACTIONS = [
     ("Literature review",     "assemble a review from selected works",
-     lambda: _run("review")),
+     _review),
     ("Gap-check a draft",     "find missed/underused works in your draft",
-     lambda: _run("gaps")),
+     _gaps),
     ("Explore literature",    "interactive discovery over the corpus",
      lambda: _run("explore")),
     ("Corpus map",            "cluster works into thematic threads, write report",

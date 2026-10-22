@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ info.title }} · Draft · pepa{% endblock %}
+{% block content %}
+{% include "_draft_tabs.html" %}
+<nav class="crumbs-nav" aria-label="Breadcrumb">
+  <ol>
+    <li><a href="{{ url_for('draft.action_page', action=action) }}">{{ info.title }}</a></li>
+    <li aria-current="page">New</li>
+  </ol>
+</nav>
+<div class="card start">
+  {% if inputs.revise %}
+  <p class="title">A new version of {{ made_from[0] }}</p>
+  <p class="supporting">To change: {{ inputs.feedback }}</p>
+  {% else %}
+  <p class="title">{{ info.title }} from {{ made_from[0] }}</p>
+  {% if made_from | length > 1 %}<p class="supporting">Drawing on {{ made_from[1:] | join(" and ") }}.</p>{% endif %}
+  {% if action == "gaps" %}<p class="supporting">Checked against: {{ papers }}.</p>{% endif %}
+  {% if action == "draft" %}<p class="supporting">Each paragraph goes into the section its move belongs to, such as Introduction or Methods.</p>{% endif %}
+  {% endif %}
+  {% if estimate %}
+  <p class="supporting">{{ estimate.words }}</p>
+  <form class="form-actions" method="post" data-forget-kept="draft/{{ action }}">
+    <input type="hidden" name="token" value="{{ token }}">
+    {% for name, value in inputs.items() %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+    <a class="button text" href="{{ url_for('draft.action_page', action=action) }}">Cancel</a>
+    <button class="filled">{% if inputs.revise %}Write the new version{% elif action == "outline" %}Write the outline{% elif action == "draft" %}Write the draft{% elif action == "feedback" %}Get feedback{% else %}Check for gaps{% endif %}</button>
+  </form>
+  {% else %}
+  <p class="supporting">{{ info.app }} could not estimate this. Run <strong>{{ info.command }}</strong> on its <a href="{{ url_for('console.app_page', name=info.app) }}">app page</a> to see why.</p>
+  {% endif %}
+</div>
+{% endblock %}

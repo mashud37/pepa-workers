@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Structures · Draft · pepa{% endblock %}
+{% block content %}
+{% include "_draft_tabs.html" %}
+<nav class="crumbs-nav" aria-label="Breadcrumb">
+  <ol>
+    <li><a href="{{ url_for('draft.action_page', action='outline') }}">Outline</a></li>
+    <li aria-current="page">Structures</li>
+  </ol>
+</nav>
+
+{% if not library.structures %}
+<section class="card start">
+  <p class="title">No structures learned yet</p>
+  <p class="supporting">pepa-plan learns them from your summarised papers, at a cost shown first.</p>
+  <div class="form-actions"><a class="button tonal" href="{{ url_for('draft.patterns_new') }}">Learn the structures</a></div>
+</section>
+{% else %}
+<p class="supporting section-note">Learned from {{ library.papers }} papers{% if library.when %} on {{ library.when }}{% endif %}. Each structure is the order of moves its papers make, with each move's usual share of the text. An outline can follow one of them.</p>
+<div class="form-actions"><a class="button text" href="{{ url_for('draft.patterns_new') }}">Learn again from new papers</a></div>
+
+{% for each in library.structures %}
+<section class="card structure" aria-labelledby="structure-{{ each.id }}">
+  <h2 class="title" id="structure-{{ each.id }}">{{ each.name }}{% if each.kind %} <span class="chip">{{ each.kind }}</span>{% endif %}</h2>
+  {% if each.description %}<p class="supporting">{{ each.description }}</p>{% endif %}
+  <ol class="stages">
+    {% for stage in each.stages %}
+    <li>
+      <span class="stage-name">{{ stage.name }}</span>
+      <span class="stage-bar" aria-hidden="true"><span style="width: {{ stage.share }}%"></span></span>
+      <span class="meta">{{ stage.share }}%</span>
+      {% if stage.intent %}<span class="stage-intent">{{ stage.intent }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  {% for section in each.sections %}
+  <details class="structure-detail">
+    <summary>{{ section.name }}: how it usually runs</summary>
+    {% if section.reads_like %}<p class="supporting">{{ section.reads_like }}</p>{% endif %}
+    <ol class="side-list">
+      {% for step in section.steps %}<li>{{ step.name }}<span class="meta">{{ step.intent }}</span></li>{% endfor %}
+    </ol>
+  </details>
+  {% endfor %}
+  {% if each.examples %}
+  <details class="structure-detail">
+    <summary>Papers that follow it ({{ each.examples | length }})</summary>
+    <ul class="side-list">
+      {% for paper in each.examples %}<li><a href="{{ url_for('explore.paper_page', stem=paper.stem, back=request.full_path) }}">{{ paper.title }}</a><span class="meta">{{ paper.authors }}</span></li>{% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+  <div class="form-actions"><a class="button tonal" href="{{ url_for('draft.action_page', action='outline', structure=each.id) }}">Outline with this structure</a></div>
+</section>
+{% endfor %}
+{% endif %}
+{% endblock %}

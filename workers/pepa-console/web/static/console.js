@@ -35,6 +35,7 @@ const MENU_STEPS = {
 const openedMenu = {menu: null, anchor: null, pick: null};
 const ITEM_PREFIX = "pepa-item: ";
 const STEP_HEADING = "── ";
+const KEPT_PREFIX = "pepa-kept:";
 const CONTINUE_NOTE = "This run did not finish. Continue runs the steps left for the same items; finished work is skipped.";
 
 const AFTER_SEND = {
@@ -850,6 +851,7 @@ async function followRun(panel) {
     }
     next = data.next;
     showState(panel, data);
+    showBar(panel, data);
 
     if (data.status !== "running" && data.lines.length === 0) {
       return;
@@ -871,7 +873,7 @@ function showNow(panel, data, shown) {
   let latest = "";
   for (const line of shown.concat([data.partial])) {
     const plain = line.replace(LEADING_SYMBOLS, "").trim();
-    if (plain) {
+    if (plain && !line.startsWith(STEP_HEADING)) {
       latest = plain;
     }
   }
@@ -883,11 +885,22 @@ function showNow(panel, data, shown) {
   }
 }
 
+function showBar(panel, data) {
+  const items = panel.querySelector("[data-items]");
+  const working = data.status === "running" && items.hidden;
+  panel.querySelector("[data-run-bar]").hidden = !working;
+  panel.querySelector("[data-stage]").hidden = !working || !panel.dataset.heading;
+  if (data.status === "failed") {
+    panel.querySelector("[data-log-details]").open = true;
+  }
+}
+
 function takeItemEvents(panel, lines) {
   const shown = [];
   for (const line of lines) {
     if (line.startsWith(STEP_HEADING)) {
       panel.dataset.heading = line.slice(STEP_HEADING.length);
+      panel.querySelector("[data-stage]").textContent = panel.dataset.heading;
     }
     if (line.startsWith(ITEM_PREFIX)) {
       const parts = line.slice(ITEM_PREFIX.length).split(" | ");
@@ -1491,3 +1504,93 @@ async function showModelMenu(button) {
     input.value = value;
   });
 }
+
+
+// ---- Reading: copy a part or the whole ----
+
+function sectionText(heading) {
+  const parts = [heading.dataset.title];
+  let next = heading.nextElementSibling;
+  while (next && next.tagName !== heading.tagName) {
+    parts.push(next.innerText);
+    next = next.nextElementSibling;
+  }
+  return parts.join("\n\n");
+}
+
+function addCopyButton(heading) {
+  heading.dataset.title = heading.innerText;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "text copy-part";
+  button.textContent = "Copy";
+  button.setAttribute("aria-label", "Copy the part " + heading.innerText);
+  button.addEventListener("click", function () {
+    copyText(sectionText(heading));
+  });
+  heading.append(button);
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    showMessage("Copied.");
+  } catch (error) {
+    showMessage("The browser did not allow copying.");
+  }
+}
+
+for (const article of document.querySelectorAll("[data-copy-parts]")) {
+  for (const heading of article.querySelectorAll("h2")) {
+    addCopyButton(heading);
+  }
+}
+
+document.addEventListener("click", function (event) {
+  const button = event.target.closest("[data-copy-all]");
+  if (button) {
+    const article = document.getElementById(button.dataset.copyAll);
+    const clone = article.cloneNode(true);
+    for (const extra of clone.querySelectorAll(".copy-part")) {
+      extra.remove();
+    }
+    copyText(clone.innerText);
+  }
+});
+
+
+// ---- Unsent text: kept in this browser until the run starts ----
+
+function keptKey(field) {
+  return KEPT_PREFIX + field.dataset.keep;
+}
+
+for (const field of document.querySelectorAll("[data-keep]")) {
+  try {
+    const kept = window.localStorage.getItem(keptKey(field));
+    if (kept && !field.value) {
+      field.value = kept;
+    }
+  } catch (error) {
+    break;
+  }
+  field.addEventListener("input", function () {
+    try {
+      window.localStorage.setItem(keptKey(field), field.value);
+    } catch (error) {
+      return;
+    }
+  });
+}
+
+document.addEventListener("submit", function (event) {
+  const form = event.target.closest("[data-forget-kept]");
+  if (!form) {
+    return;
+  }
+  try {
+    window.localStorage.removeItem(KEPT_PREFIX + form.dataset.forgetKept);
+  } catch (error) {
+    return;
+  }
+});

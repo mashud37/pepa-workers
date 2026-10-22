@@ -15,13 +15,24 @@
   <div class="paper-main">
     {% include "_shown_run.html" %}
     {% if review %}
-    <article class="card document prose">{{ review.html | safe }}</article>
+    <article class="card document prose" id="reading" data-copy-parts>{{ review.html | safe }}</article>
     {% endif %}
   </div>
   {% if review %}
   <aside class="paper-side" aria-label="Papers drawn on">
     <section class="card side-card">
-      <a class="button text" href="{{ url_for('console.app_file', name='pepa-review', slot='results', relative=review.file) }}" target="_blank" rel="noopener">{{ icon.open_new() }}Open on its own<span class="visually-hidden"> (new tab)</span></a>
+      <div class="side-actions">
+        <button type="button" class="text" data-copy-all="reading">{{ icon.copy_in() }}Copy all</button>
+        <a class="button text" href="{{ url_for('draft.word_download', key='review:' ~ review.file) }}">{{ icon.download() }}Download as Word</a>
+        <a class="button text" href="{{ url_for('console.app_file', name='pepa-review', slot='results', relative=review.file) }}" target="_blank" rel="noopener">{{ icon.open_new() }}Open on its own<span class="visually-hidden"> (new tab)</span></a>
+      </div>
+    </section>
+    <section class="card side-card">
+      <h2 class="title">Draft with it</h2>
+      <div class="side-actions">
+        <a class="button tonal" href="{{ url_for('draft.action_page', action='outline', literature='review:' ~ review.file) }}">Outline</a>
+        <a class="button tonal" href="{{ url_for('draft.action_page', action='draft', review='review:' ~ review.file) }}">First draft</a>
+      </div>
     </section>
     {% if review.papers %}
     {% set stems = review.papers | map(attribute="stem") | list %}

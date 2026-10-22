@@ -21,6 +21,7 @@ def _build_parser():
                     help="Labelling execution mode (default: auto, picks by est. time)")
     ab.add_argument("--estimate", action="store_true", help="Print the papers to label, each mode's time and the cost as JSON, then stop")
     ab.add_argument("--more", type=int, default=0, help="With --estimate, count this many papers more than the corpus holds")
+    ab.add_argument("--with-blueprints", action="store_true", help="Then build the within-section blueprints too")
     ab.add_argument("--approve-cost", nargs="?", type=float, const=float("inf"), default=None, metavar="DOLLARS", help="Spend without asking; with an amount, stop before spending if the estimate is higher")
 
     sub.add_parser("blueprint", help="Build within-section paragraph-progression blueprints")
@@ -36,17 +37,24 @@ def _build_parser():
                     help="Skeleton ID to use (default: pick interactively)")
     ol.add_argument("--feedback", default=None, metavar="TEXT",
                     help="One scripted feedback pass (no interactive loop)")
+    ol.add_argument("--no-skeleton", action="store_true", help="Let the model choose the structure instead of a learned skeleton")
+    ol.add_argument("--revise", default=None, metavar="FILE", help="Rewrite this earlier outline to follow --feedback, as a new outline")
+    ol.add_argument("-o", "--output", default=None, metavar="NAME", help="File name for the outline in output/ (default: from the time)")
+    ol.add_argument("--estimate", action="store_true", help="Print the most the outline can cost as JSON, and stop")
 
     rv = sub.add_parser("review", help="Argumentation-flow feedback on idea or draft")
     rv.add_argument("--input", default=None, metavar="FILE",
                     help="Path to idea or draft file (default: pick from input/)")
+    rv.add_argument("-o", "--output", default=None, metavar="NAME", help="File name for the feedback in output/ (default: from the time)")
+    rv.add_argument("--estimate", action="store_true", help="Print the most the feedback can cost as JSON, and stop")
 
     tp = sub.add_parser("template", help="Manage plan templates (section/paragraph progressions)")
     tp.add_argument("--new", default=None, metavar="NAME",
                     help="Create a new template by copying the example")
     tp.add_argument("--list", action="store_true", help="List existing templates")
 
-    sub.add_parser("config", help="Show effective configuration")
+    cf = sub.add_parser("config", help="Show effective configuration")
+    cf.add_argument("--json", action="store_true", help="Print the settings as one JSON line")
     sub.add_parser("install", help="Set up files and check dependencies")
     return parser
 
@@ -61,41 +69,45 @@ def main():
         return menu.main()
     if args.command == "abstract" and args.estimate:
         from skeleton import build
-        build.print_estimate(limit=args.limit, sample=args.sample, mode=args.mode, more=args.more)
+        return build.print_estimate(limit=args.limit, sample=args.sample, mode=args.mode, more=args.more)
     elif args.command == "abstract":
         from cli import abstract
-        abstract.run(limit=args.limit, sample=args.sample, mode=args.mode, approved=args.approve_cost)
+        return abstract.run(limit=args.limit, sample=args.sample, mode=args.mode, approved=args.approve_cost, with_blueprints=args.with_blueprints)
     elif args.command == "blueprint":
         from cli import blueprint
-        blueprint.run()
+        return blueprint.run()
     elif args.command == "outline":
         from cli import outline
-        outline.run({
+        return outline.run({
             "input_file": args.input,
             "literature_file": args.literature,
             "skeleton_id": args.skeleton_id,
             "feedback": args.feedback,
             "no_input": args.no_input,
             "template_file": args.template,
+            "no_skeleton": args.no_skeleton,
+            "revise_file": args.revise,
+            "only_estimate": args.estimate,
+            "output_name": args.output,
         })
     elif args.command == "template":
         from cli import templates
-        templates.run(new=args.new, show=args.list)
+        return templates.run(new=args.new, show=args.list)
     elif args.command == "review":
         from cli import review
-        review.run(input_file=args.input)
+        return review.run(input_file=args.input, only_estimate=args.estimate, output_name=args.output)
     elif args.command == "config":
         from cli import show_config
-        show_config.run()
+        return show_config.run(as_json=args.json)
     elif args.command == "install":
-        install.run()
+        return install.run()
 
 
 if __name__ == "__main__":
     try:
         sys.exit(main())
     except KeyboardInterrupt:
-        print("\n\n  Interrupted.")
+        print("\n\n  Interrupted.", file=sys.stderr)
         sys.exit(0)
     except SystemExit as e:
         if isinstance(e.code, str):

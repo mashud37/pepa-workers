@@ -1,56 +1,64 @@
+import json
 import sys
 from datetime import datetime
 from pathlib import Path
 
 import config
-from cli import templates, ui
+from backends import prompt
+from cli import costs, items, templates, ui
 from plan.outline import generate
 from plan.refine import refine
 from skeleton.build import load as load_library
 
+OUTLINE_TOKENS = 4000
 
-def run(options):
+
+def run(options=None):
     """Generate a paper outline from an idea, then refine it against feedback.
 
     Args:
-        options: dict with `input_file`, `literature_file`, `skeleton_id`,
-            `feedback`, `no_input`, and `template_file`, matching the
-            outline subcommand's flags in manage.py.
+        options: dict with `input_file`, `literature_file`, `skeleton_id`, `no_skeleton`,
+            `feedback`, `no_input`, `template_file`, `revise_file`, `only_estimate` and
+            `output_name`, matching the outline subcommand's flags in manage.py.
     """
-    input_file = options.get("input_file")
-    literature_file = options.get("literature_file")
-    skeleton_id = options.get("skeleton_id")
+    options = options or {}
+    if options.get("revise_file"):
+        return revise(options)
     feedback = options.get("feedback")
     no_input = options.get("no_input", False)
-    template_file = options.get("template_file")
-    ui.header("Outline a paper")
-
-    idea = _resolve_idea(input_file, no_input)
-    literature = _resolve_literature(literature_file)
-    structure = _resolve_structure(template_file, no_input)
+    idea = _resolve_idea(options.get("input_file"), no_input)
+    literature = _resolve_literature(options.get("literature_file"))
+    structure = _resolve_structure(options.get("template_file"), no_input)
     # A user-authored template defines the structure outright; only fall back to a
     # learned skeleton (and its requirement that the library exists) when none is set.
-    skeleton = None if structure else _resolve_skeleton(skeleton_id, no_input)
+    skeleton = None
+    if not structure and not options.get("no_skeleton"):
+        skeleton = _resolve_skeleton(options.get("skeleton_id"), no_input)
     blueprint = _resolve_blueprint(skeleton) if skeleton else None
+    if options.get("only_estimate"):
+        sent = prompt.outline_system() + prompt.outline_prompt(idea, literature, skeleton, structure, blueprint)
+        print(json.dumps(outline_estimate(sent, feedback)))
+        return 0
+    ui.header("Outline a paper")
 
     ui.step("Plan")
     ui.info("  · 1/3  Generate outline")
     ui.info("  · 2/3  Review and refine  (optional)")
     ui.info("  · 3/3  Save")
 
-    ui.step("Generating first outline")
+    items.stage("Writing the outline")
     if blueprint:
         ui.info(f"using within-section blueprints for {len(blueprint)} move(s)")
     outline_text = generate(idea, literature, skeleton, structure, blueprint)
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out_path = config.OUTPUT_DIR / f"outline_{ts}.md"
+    out_path = config.OUTPUT_DIR / (options.get("output_name") or f"outline_{ts}.md")
     _save(outline_text, out_path)
     ui.info(out_path.name)
     _show(outline_text)
 
     if feedback:
-        ui.step("Applying feedback")
+        items.stage("Applying your feedback")
         outline_text = refine(outline_text, feedback, skeleton)
         _save(outline_text, out_path)
         _show(outline_text)
@@ -64,6 +72,38 @@ def run(options):
             _save(outline_text, out_path)
             _show(outline_text)
 
+    print(str(out_path))
+    return 0
+
+
+def outline_estimate(sent, feedback):
+    """The most an outline costs: the call that writes it from the prompt `sent`, and one more to follow the feedback."""
+    calls = [{"input_chars": len(sent), "output_tokens": OUTLINE_TOKENS}]
+    if feedback:
+        calls.append({"input_chars": OUTLINE_TOKENS * costs.CHARS_PER_TOKEN + len(feedback), "output_tokens": OUTLINE_TOKENS})
+    return costs.estimate(calls)
+
+
+def revise(options):
+    """Rewrite an earlier outline to follow one piece of feedback, and save it as a new outline."""
+    path = Path(options["revise_file"])
+    if not path.is_file():
+        raise SystemExit(f"Outline not found: {path}")
+    feedback = options.get("feedback")
+    if not feedback:
+        raise SystemExit("Say what to change with --feedback.")
+    outline_text = path.read_text(encoding="utf-8")
+    if options.get("only_estimate"):
+        sent = prompt.refine_system() + prompt.refine_prompt(outline_text, feedback)
+        print(json.dumps(costs.estimate([{"input_chars": len(sent), "output_tokens": OUTLINE_TOKENS}])))
+        return 0
+    ui.header("Revise an outline")
+    items.stage(f"Revising {path.name}")
+    outline_text = refine(outline_text, feedback, None)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out_path = config.OUTPUT_DIR / (options.get("output_name") or f"outline_{ts}.md")
+    _save(outline_text, out_path)
+    _show(outline_text)
     print(str(out_path))
     return 0
 
@@ -96,6 +136,8 @@ def _resolve_idea(input_file, no_input):
         + sorted(config.INPUT_DIR.glob("*.txt"))
         + sorted(config.INPUT_DIR.glob("*.docx"))
     )
+    if no_input or not sys.stdin.isatty():
+        raise SystemExit("No idea file given: pass --input FILE.")
     if files:
         options = [(f.name, "") for f in files] + [("Enter a file path", "")]
         choice = ui.menu("Select idea file", options)
@@ -103,14 +145,10 @@ def _resolve_idea(input_file, no_input):
             raise SystemExit("No idea selected.")
         if choice < len(files):
             return _read_file(files[choice])
-        # User chose "Enter a file path"
-        if not no_input and sys.stdin.isatty():
-            typed = _read_typed_path()
-            if typed is not None:
-                return typed
+        typed = _read_typed_path()
+        if typed is not None:
+            return typed
 
-    if no_input or not sys.stdin.isatty():
-        raise SystemExit("No input file provided and not running interactively.")
     text = ui.ask("Paste your paper idea")
     if not text:
         raise SystemExit("No idea provided.")
@@ -198,10 +236,11 @@ def _resolve_skeleton(skeleton_id, no_input):
 
 
 def _save(text, path):
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
 
 
 def _show(text):
     ui.step("Outline")
     for line in text.splitlines():
-        print(f"  {line}")
+        print(f"  {line}", file=sys.stderr)

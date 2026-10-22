@@ -1,7 +1,7 @@
-"""WS2: checks a draft section by section for gaps, mapping uncited but
-similar corpus works to each section and asking Claude in parallel for
-works, arguments, and terms to add.
+"""Check a draft section by section for papers, arguments and terms it misses from the corpus.
+The console's Draft page shows each report beside the papers it names.
 """
+import json
 import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -10,20 +10,53 @@ from pathlib import Path
 import config
 from backends import llm
 from backends import prompt as prompts
-from cli import progress, ui
+from cli import costs, items, progress, similar, ui
+from corpus.metadata import list_bases
 
 _MIN_PARA_CHARS = 40        # paragraphs shorter than this are treated as headings/noise
+SECTION_NAME_CHARS = 48
 _FALLBACK_GROUP = 4         # paragraphs per section when a draft has no headings
 _PER_SECTION = 8            # candidate works carried into each section's prompt
+_SECTION_CHARS = 3000       # the most of a section's text one call sends
+_BRIEF_CHARS = 400          # the most of one candidate's brief one call sends
+_SUGGEST_TOKENS = 1200
 
 
-def run(input_file=None):
-    ui.header("Gap-check a draft")
+def gaps_estimate(draft_text):
+    """The most a gap check can cost: one call per section, plus embedding every paragraph."""
+    sections = _split_sections(draft_text)
+    calls = []
+    for section in sections:
+        input_chars = min(len(section["text"]), _SECTION_CHARS) + _PER_SECTION * _BRIEF_CHARS
+        calls.append({"input_chars": input_chars, "output_tokens": _SUGGEST_TOKENS})
+    result = costs.estimate(calls, quality=False)
+    paragraphs = []
+    for section in sections:
+        for paragraph in section["paragraphs"]:
+            if len(paragraph) >= _MIN_PARA_CHARS:
+                paragraphs.append(paragraph)
+    embedding = similar.estimate(paragraphs)
+    if result["dollars"] is not None and embedding["dollars"] is not None:
+        result["dollars"] += embedding["dollars"]
+    result["sections"] = len(sections)
+    result["upto"] = True
+    return result
 
-    draft_path = _get_draft(input_file)
+
+def run(options):
+    """Check a draft for gaps against the corpus or one list's papers, and write the report to output/.
+
+    Args:
+        options: "input_file", "list_file", "only_estimate" and "output_name", as manage.py parses them.
+    """
+    draft_path = _get_draft(options["input_file"])
     if not draft_path:
         return
     draft_text = Path(draft_path).read_text(encoding="utf-8", errors="replace")
+    if options["only_estimate"]:
+        print(json.dumps(gaps_estimate(draft_text)))
+        return
+    ui.header("Gap-check a draft")
     ui.ok(f"draft: {Path(draft_path).name} ({len(draft_text)} chars)")
 
     sp = progress.StepSpinner("scanning corpus")
@@ -33,21 +66,25 @@ def run(input_file=None):
     sp.done(f"{len(all_works)} works")
     cited_bases = _detect_cited(draft_text, all_works)
     ui.info(f"already cited: ~{len(cited_bases)} works detected in text")
+    wanted = None
+    if options["list_file"]:
+        wanted = set(list_bases(options["list_file"]))
+        ui.info(f"checking against the {len(wanted)} papers in {Path(options['list_file']).stem}")
 
     sections = _split_sections(draft_text)
     ui.info(f"{len(sections)} sections to check")
 
-    _map_sections_to_candidates(sections, cited_bases)
+    _map_sections_to_candidates(sections, cited_bases, wanted)
 
     active = [s for s in sections if s["candidates"]]
-    if not active:
+    if active:
+        _synthesise_all(active)
+    else:
         ui.ok("No gaps found: the draft engages well with the corpus.")
-        return
 
-    _synthesise_all(active)
-
-    out = _write_gaps(sections, Path(draft_path).name)
+    out = _write_gaps(sections, Path(draft_path).name, options["output_name"])
     ui.ok(f"gap report saved to {out}")
+    print(out)
     ui.rule()
     for i, s in enumerate(sections, 1):
         label = s["heading"] or f"Section {i}"
@@ -55,8 +92,8 @@ def run(input_file=None):
         ui.info(f"  {label[:50]}: {n} works to add" if n else f"  {label[:50]}: engages the corpus well")
 
 
-def _map_sections_to_candidates(sections, cited_bases):
-    """Retrieve candidate works per paragraph and roll them up per section.
+def _map_sections_to_candidates(sections, cited_bases, wanted):
+    """Retrieve candidate works per paragraph, only among `wanted` when it is a set, and roll them up per section.
 
     Fills in "candidates" and "terms" on each section dict in place.
     """
@@ -64,6 +101,7 @@ def _map_sections_to_candidates(sections, cited_bases):
 
     n_para = sum(len([p for p in s["paragraphs"] if len(p) >= _MIN_PARA_CHARS]) for s in sections)
     ui.info(f"mapping {n_para} paragraphs against the corpus…")
+    items.stage("Matching your text to the papers")
 
     sp = progress.StepSpinner(f"mapping [{0}/{n_para}]")
     sp.start()
@@ -76,7 +114,7 @@ def _map_sections_to_candidates(sections, cited_bases):
                     continue
                 done += 1
                 sp._label = f"mapping [{done}/{n_para}]"
-                hits = _score_paragraph(para, cited_bases, retrieve_hybrid)
+                hits = _score_paragraph(para, cited_bases, wanted, retrieve_hybrid)
                 cands = _merge_candidates(cands, hits)
             s["candidates"] = sorted(cands.values(), key=lambda h: h["score"], reverse=True)[:_PER_SECTION]
             s["terms"] = _section_terms(s)
@@ -86,10 +124,10 @@ def _map_sections_to_candidates(sections, cited_bases):
         raise SystemExit(str(e))
 
 
-def _score_paragraph(para, cited_bases, retrieve_hybrid):
+def _score_paragraph(para, cited_bases, wanted, retrieve_hybrid):
     """Return candidate work hits for one paragraph, keyed by work base id."""
     found = {}
-    for h in retrieve_hybrid(para, k=config.GAPS_PARA_K):
+    for h in retrieve_hybrid(para, k=config.GAPS_PARA_K, restrict_bases=wanted):
         base = h["base"]
         if base in cited_bases:
             continue
@@ -108,6 +146,8 @@ def _merge_candidates(cands, hits):
 
 
 def _synthesise_all(active):
+    items.stage("Writing suggestions for each section")
+    items.announce("total", len(active))
     sp = progress.StepSpinner(f"synthesising suggestions for {len(active)} sections")
     sp.start()
     try:
@@ -122,12 +162,15 @@ def _synthesise_all(active):
 
 
 def _suggest(section):
+    name = section["heading"] or section["text"][:SECTION_NAME_CHARS]
+    items.announce("start", name)
     context = (f"{section['heading']}\n\n" if section["heading"] else "") + section["text"]
     response = llm.complete(
         prompts.gaps_section_system(),
         prompts.gaps_section_prompt(context[:3000], _briefs(section["candidates"]), section["terms"]),
         max_tokens=1200,
     )
+    items.announce("ok", name)
     return _parse_suggestions(response)
 
 
@@ -191,7 +234,9 @@ def _get_draft(input_file):
             "Drop a .md or .txt file there, or pass --input <path>."
         )
     choice = ui.menu("Select draft", [f.name for f in candidates])
-    return candidates[choice] if choice is not None else None
+    if choice is None:
+        raise SystemExit("No draft chosen: pass --input FILE.")
+    return candidates[choice]
 
 
 def _detect_cited(text, works):
@@ -238,10 +283,11 @@ def _split_sections(text):
     return result
 
 
-def _write_gaps(sections, draft_name):
+def _write_gaps(sections, draft_name, output_name):
+    """Write the gap report, and the papers it names in a .json of the same name."""
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     stem = Path(draft_name).stem
-    out = config.OUTPUT_DIR / f"gaps_{stem}_{ts}.md"
+    out = config.OUTPUT_DIR / (output_name or f"gaps_{stem}_{ts}.md")
 
     lines = [f"# Gap Report for {draft_name}", ""]
     seen = {}
@@ -253,11 +299,11 @@ def _write_gaps(sections, draft_name):
             continue
         sug = s.get("suggestions", {})
         if sug.get("works"):
-            lines += ["**Works to add:**"] + [f"- {w}" for w in sug["works"]] + [""]
+            lines += ["**Works to add:**", ""] + [f"- {w}" for w in sug["works"]] + [""]
         if sug.get("arguments"):
-            lines += ["**Arguments to engage:**"] + [f"- {a}" for a in sug["arguments"]] + [""]
+            lines += ["**Arguments to engage:**", ""] + [f"- {a}" for a in sug["arguments"]] + [""]
         if sug.get("terms"):
-            lines += ["**Terms to incorporate:**"] + [f"- {t}" for t in sug["terms"]] + [""]
+            lines += ["**Terms to incorporate:**", ""] + [f"- {t}" for t in sug["terms"]] + [""]
         if not any(sug.get(k) for k in ("works", "arguments", "terms")):
             lines += ["_Candidate works were surfaced but none judged a genuine gap._", ""]
         lines += ["---", ""]
@@ -271,4 +317,6 @@ def _write_gaps(sections, draft_name):
 
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(lines), encoding="utf-8")
+    bases = [h["base"] for h in ranked]
+    out.with_suffix(".json").write_text(json.dumps({"works": bases}, indent=2), encoding="utf-8")
     return out

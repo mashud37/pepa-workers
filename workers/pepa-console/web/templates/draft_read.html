@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icon %}
+{% import "_references.html" as references with context %}
+{% block title %}{% if view %}{{ view.title }} · {% endif %}Draft · pepa{% endblock %}
+{% block content %}
+{% include "_draft_tabs.html" %}
+{% set tab = kind if kind in ["outline", "draft", "feedback", "gaps"] else "" %}
+<nav class="crumbs-nav" aria-label="Breadcrumb">
+  <ol>
+    {% if tab %}<li><a href="{{ url_for('draft.action_page', action=tab) }}">{{ {"outline": "Outline", "draft": "First draft", "feedback": "Feedback", "gaps": "Check for gaps"}[tab] }}</a></li>{% endif %}
+    <li aria-current="page">{% if view %}{{ view.title }}{% else %}New {{ kind_label | lower }}{% endif %}</li>
+  </ol>
+</nav>
+
+<div class="paper-layout">
+  <div class="paper-main">
+    {% include "_shown_run.html" %}
+    {% if view %}
+    <article class="card document prose" id="reading" data-copy-parts>{{ view.html | safe }}</article>
+    {% endif %}
+  </div>
+  {% if view %}
+  <aside class="paper-side" aria-label="About this {{ view.kind_label | lower }}">
+    <section class="card side-card">
+      <div class="side-actions">
+        <button type="button" class="text" data-copy-all="reading">{{ icon.copy_in() }}Copy all</button>
+        <a class="button text" href="{{ url_for('draft.word_download', key=view.key) }}">{{ icon.download() }}Download as Word</a>
+      </div>
+    </section>
+    {% if view.made_from or view.checked_against %}
+    <section class="card side-card">
+      <h2 class="title">Made from</h2>
+      <ul class="side-list">
+        {% for each in view.made_from %}
+        <li>{% if each.key.startswith("review:") %}<a href="{{ url_for('explore.review_page', file=each.key.partition(':')[2]) }}">{{ each.title }}</a>{% else %}<a href="{{ url_for('draft.read_page', key=each.key) }}">{{ each.title }}</a>{% endif %}<span class="meta">{{ each.kind }}</span></li>
+        {% endfor %}
+        {% if view.checked_against %}<li>{{ view.checked_against }}<span class="meta">Papers checked against</span></li>{% endif %}
+      </ul>
+    </section>
+    {% endif %}
+    {% if view.next or view.kind == "outline" %}
+    <section class="card side-card">
+      <h2 class="title">Next</h2>
+      <div class="side-actions">
+        {% for each in view.next %}
+        <a class="button tonal" href="{{ url_for('draft.action_page', action=each.action, source=view.key) }}">{{ each.title }}</a>
+        {% endfor %}
+      </div>
+      {% if view.kind == "outline" %}
+      <form method="post" action="{{ url_for('draft.action_save', action='outline') }}" class="revise">
+        <input type="hidden" name="token" value="{{ token }}">
+        <input type="hidden" name="revise" value="{{ view.key }}">
+        <label class="field"><span>What to change</span><textarea name="feedback" rows="3" required></textarea></label>
+        <div class="form-actions"><button class="text">Revise the outline</button></div>
+      </form>
+      {% endif %}
+    </section>
+    {% endif %}
+    {% if view.papers %}
+    {% set stems = view.papers | map(attribute="stem") | list %}
+    <section class="card side-card">
+      <h2 class="title">{% if view.kind == "gaps" %}Papers to engage{% else %}Drawn on{% endif %}</h2>
+      <div class="side-actions">
+        <button type="button" class="text" data-open="add-to-list">{{ icon.plus() }}Add to a list</button>
+        {{ references.export_button(view.title, stems) }}
+      </div>
+      <ul class="side-list">
+        {% for paper in view.papers %}
+        <li><a href="{{ url_for('explore.paper_page', stem=paper.stem, back=request.full_path) }}">{{ paper.title }}</a><span class="meta">{{ paper.authors }}</span></li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+  </aside>
+  {% if view.papers %}
+  {% with collect_ticked = False, stems = view.papers | map(attribute="stem") | list %}{% include "_add_to_list.html" %}{% endwith %}
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

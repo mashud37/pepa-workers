@@ -1,19 +1,19 @@
 """Orchestrate full manuscript drafting across all sections."""
 import time
 
-from cli import ui
+from cli import items, ui
 from cli.progress import StepSpinner
 from draft.sections import items_for_section
 from draft.template import SECTIONS, targets
 
 
-def _retrieve_for_section(label, items, restrict_works):
+def _retrieve_for_section(label, section_items, restrict_works):
     sp = StepSpinner(f"retrieving literature ({label})")
     sp.start()
     passages = []
     try:
         from index.retrieve import retrieve
-        query = " ".join(item["text"][:100] for item in items[:3])
+        query = " ".join(item["text"][:100] for item in section_items[:3])
         passages = retrieve(query, restrict_bases=restrict_works)
     except SystemExit:
         pass
@@ -22,34 +22,35 @@ def _retrieve_for_section(label, items, restrict_works):
     return passages
 
 
-def _style_for_section(items, label, profile=None):
+def _style_for_section(section_items, label, profile=None):
     try:
         from index.style import retrieve as style_retrieve
-        query = items[0]["text"] if items else label
+        query = section_items[0]["text"] if section_items else label
         return style_retrieve(query, profile=profile)
     except Exception:
         return []
 
 
-def _draft_section(key, label, items, review_text, opts):
+def _draft_section(key, label, section_items, review_text, opts):
     from draft.section import draft as draft_section
     backend = opts.get("backend")
     context = {
         "review_text": review_text,
-        "retrieval": _retrieve_for_section(label, items, opts.get("restrict_works")) if opts.get("use_retrieval", True) else [],
-        "style": _style_for_section(items, label, opts.get("style_profile")) if opts.get("use_style", True) else [],
+        "retrieval": _retrieve_for_section(label, section_items, opts.get("restrict_works")) if opts.get("use_retrieval", True) else [],
+        "style": _style_for_section(section_items, label, opts.get("style_profile")) if opts.get("use_style", True) else [],
     }
     sp = StepSpinner(f"drafting {label}")
     sp.start()
     t0 = time.perf_counter()
     text, words = "", 0
     try:
-        drafted = draft_section(key, items, context, target=opts.get("targets", {}).get(key), backend=backend)
+        drafted = draft_section(key, section_items, context, target=opts.get("targets", {}).get(key), backend=backend)
         text, words = drafted["text"], drafted["words"]
     finally:
         elapsed = time.perf_counter() - t0
         sp.done(f"{words} words ({elapsed:.0f}s)")
-    return {"text": text, "words": words}
+    works = [passage["base"] for passage in context["retrieval"]]
+    return {"text": text, "words": words, "works": works}
 
 
 def run(plan_items: list, assignment: dict, review_parsed: dict, opts: dict = None) -> dict:
@@ -62,7 +63,8 @@ def run(plan_items: list, assignment: dict, review_parsed: dict, opts: dict = No
         opts: Options dict. Keys: backend, use_retrieval, use_style, restrict_works, targets.
 
     Returns:
-        Dict with keys: sections (list of {key, label, text, words}), total_words.
+        Dict with keys: sections (list of {key, label, text, words}), total_words, and works
+        (the papers whose passages were retrieved, in the order first used).
     """
     from corpus.parse_review import full_prose
 
@@ -73,24 +75,35 @@ def run(plan_items: list, assignment: dict, review_parsed: dict, opts: dict = No
     review_text = full_prose(review_parsed)
 
     ui.step("Manuscript draft: step plan")
+    to_write = 0
     for s in SECTIONS:
-        items = items_for_section(s["key"], assignment, plan_items)
-        ui.info(f"  {s['label']:<20} {len(items)} moves  ·  target {word_targets[s['key']]} words")
+        section_items = items_for_section(s["key"], assignment, plan_items)
+        ui.info(f"  {s['label']:<20} {len(section_items)} moves  ·  target {word_targets[s['key']]} words")
+        if section_items:
+            to_write += 1
+    items.stage("Writing the sections")
+    items.announce("total", to_write)
 
     sections_out, total = [], 0
+    works = []
     for i, sec in enumerate(SECTIONS, 1):
         key, label = sec["key"], sec["label"]
-        items = items_for_section(key, assignment, plan_items)
+        section_items = items_for_section(key, assignment, plan_items)
         ui.info(f"\n[{i}/{len(SECTIONS)}] {label}")
-        if not items:
+        if not section_items:
             ui.warn(f"No plan items assigned to {label}, skipping")
             sections_out.append({"key": key, "label": label, "text": "", "words": 0})
             continue
-        drafted = _draft_section(key, label, items, review_text, run_opts)
+        items.announce("start", label)
+        drafted = _draft_section(key, label, section_items, review_text, run_opts)
+        items.announce("ok", label, f"{drafted['words']} words")
         total += drafted["words"]
+        for base in drafted["works"]:
+            if base not in works:
+                works.append(base)
         sections_out.append({"key": key, "label": label, "text": drafted["text"], "words": drafted["words"]})
 
-    return {"sections": sections_out, "total_words": total}
+    return {"sections": sections_out, "total_words": total, "works": works}
 
 
 def render_markdown(manuscript: dict) -> str:

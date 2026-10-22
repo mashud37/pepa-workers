@@ -10,10 +10,11 @@ skeletons. An outline follows one skeleton, or a template written by hand.
 
 ## Use it
 
-1. Run **abstract** to learn the skeletons from the summarised papers. Run again, it labels only
-   papers added since. **Learn writing patterns** in **Process papers** on **Library** runs it too.
-2. Put the idea in **Ideas and drafts**: **Write a file** on its page, a few sentences are enough.
-3. Run **outline**. The outline is under **Outlines**.
+1. **Learn the structures** on **Draft › Outline** learns the skeletons from the summarised papers,
+   at a cost shown first. Run it again and it reads only papers added since.
+2. On **Draft › Outline**, write or drop your idea, and choose a literature review to draw on and a
+   structure. Open an outline to revise it with a sentence of feedback.
+3. **Draft › Feedback** says how an idea or a draft builds its argument.
 
-**review** gives feedback on how an idea or draft argues, and **template** lists the hand-written
-templates.
+On its app page, **abstract**, **outline**, **review** and **template** do the same from files in
+**Ideas and drafts**.

@@ -2,13 +2,14 @@
 The console's Ask page runs each question as a job and reads the kept conversations.
 """
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 
 import config
 from backends import llm
 from backends import prompt as prompts
-from cli import costs
+from cli import costs, items
 from cli.explore import format_hits
 from corpus.metadata import list_bases
 
@@ -73,6 +74,7 @@ def run(question, conversation_name=None, list_file=None, only_estimate=False):
         raise SystemExit("Ask a question with --question.")
 
     conversation = load_conversation(conversation_name) if conversation_name else None
+    items.stage("Finding the closest papers")
     works = works_for(question, conversation, list_file, records)
     if not works:
         raise SystemExit("No papers to answer from. Is the review index built?")
@@ -80,6 +82,7 @@ def run(question, conversation_name=None, list_file=None, only_estimate=False):
     if conversation is not None:
         for turn in conversation["turns"][-QUESTIONS_REMEMBERED:]:
             earlier.append(turn["question"])
+    items.stage("Writing the answer")
     answer = llm.complete(prompts.explore_system(), prompts.explore_prompt(question, format_hits(works), "\n".join(earlier)), max_tokens=ANSWER_TOKENS)
 
     now = datetime.now()
@@ -93,4 +96,4 @@ def run(question, conversation_name=None, list_file=None, only_estimate=False):
     (config.OUTPUT_DIR / conversation_name).write_text(json.dumps(conversation, indent=2, ensure_ascii=False), encoding="utf-8")
 
     print(answer)
-    print(f"\nKept in {config.OUTPUT_DIR / conversation_name}")
+    print(f"\nKept in {config.OUTPUT_DIR / conversation_name}", file=sys.stderr)

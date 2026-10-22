@@ -30,6 +30,7 @@ TEXT_SUFFIXES = [
     ".docx",
 ]
 PASTED_NAME = "Pasted %Y-%m-%d %H%M%S"
+PASTED_NAME_WORDS = 8
 FIND_PATTERN = "similar_*.json"
 
 
@@ -115,6 +116,26 @@ def texts_folder():
     return folder
 
 
+def pasted_name(text):
+    """A new file name for pasted text, from its first words, or from the time when it has none."""
+    words = []
+    for word in text.split():
+        cleaned = "".join(letter for letter in word if letter.isalnum() or letter in "-'")
+        if cleaned:
+            words.append(cleaned)
+        if len(words) == PASTED_NAME_WORDS:
+            break
+    if not words:
+        return datetime.now().strftime(PASTED_NAME) + ".md"
+    stem = " ".join(words)
+    name = stem + ".md"
+    number = 2
+    while (texts_folder() / name).exists():
+        name = f"{stem} {number}.md"
+        number += 1
+    return name
+
+
 def save_text(upload, pasted):
     """Keep an uploaded file or pasted text as markdown among the user's texts, and return its file name.
 
@@ -135,7 +156,7 @@ def save_text(upload, pasted):
         name = Path(name).stem + ".md"
     elif pasted.strip():
         text = pasted
-        name = datetime.now().strftime(PASTED_NAME) + ".md"
+        name = pasted_name(pasted)
     else:
         raise ValueError("Paste a text or choose a file first.")
     (folder / name).write_text(text, encoding="utf-8")

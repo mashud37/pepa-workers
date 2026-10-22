@@ -13,7 +13,7 @@
   <p class="supporting">Sections: {{ structure_label }}.</p>
   {% if estimate %}
   <p class="supporting">{{ estimate.papers }} papers. {{ estimate.words }}</p>
-  <form class="form-actions" method="post">
+  <form class="form-actions" method="post" data-forget-kept="reviews">
     <input type="hidden" name="token" value="{{ token }}">
     <input type="hidden" name="text" value="{{ text }}">
     <input type="hidden" name="list" value="{{ list_name }}">

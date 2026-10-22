@@ -11,7 +11,7 @@ import numpy as np
 import config
 from backends import llm
 from backends import prompt as prompts
-from cli import costs, progress, ui
+from cli import costs, items, progress, ui
 from corpus.metadata import list_bases
 from index import cluster
 
@@ -126,6 +126,7 @@ def build_map(records, vecs, n_threads=None, *, title="Corpus map", stem="corpus
     sidecar = _write_sidecar(sections, outlier_recs, meta)
     ui.ok(f"saved to {out.name}")
     ui.info(f"index sidecar: {sidecar.name}")
+    print(out)
     ui.rule()
     for i, s in enumerate(sections, 1):
         extra = f" +{len(s['also'])} shared" if s["also"] else ""
@@ -146,6 +147,7 @@ def _cluster_with_progress(records, vecs_norm, band):
     n_threads, min_threads, max_threads = band
     texts = [cluster.pool_text(r) for r in records]
 
+    items.stage("Grouping the papers into themes")
     sp = progress.StepSpinner("building ensemble features")
     sp.start()
     try:
@@ -204,11 +206,14 @@ def _build_sections(thread_ids, records, clustering, vecs_norm, enriched_map):
     base_to_idx = {r["base"]: i for i, r in enumerate(records)}
     sections = []
     total = len(thread_ids)
+    items.stage("Describing each theme")
+    items.announce("total", total)
     for ci, tid in enumerate(thread_ids):
         members = [records[i] for i, t in primary.items() if t == tid]
         also = [records[i] for i, s in secondary.items() if s == tid]
         sp = progress.StepSpinner(f"[{ci+1}/{total}] thread")
         sp.start()
+        items.announce("start", f"Theme {ci + 1}")
         try:
             central = cluster.most_central(members, base_to_idx, vecs_norm)
             enriched = [dict(r, **enriched_map.get(r["base"], {})) for r in central]
@@ -221,6 +226,7 @@ def _build_sections(thread_ids, records, clustering, vecs_norm, enriched_map):
             )
             section = _parse_response(response, members, also)
             sp.done(section["name"][:45])
+            items.announce("ok", f"Theme {ci + 1}", section["name"])
             sections.append(section)
         except Exception as e:
             sp.done("error")
@@ -258,12 +264,12 @@ def _extract_field(response, label, stop_labels):
 
 
 def _extract_bullets(response, label, stop_labels):
-    items = []
+    bullets = []
     for line in _extract_field(response, label, stop_labels).splitlines():
         line = line.lstrip("-•· ").strip()
         if line:
-            items.append(line)
-    return items
+            bullets.append(line)
+    return bullets
 
 
 def _parse_response(response, records, also):

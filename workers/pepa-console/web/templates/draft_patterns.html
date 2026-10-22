@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Learn structures · Draft · pepa{% endblock %}
+{% block content %}
+{% include "_draft_tabs.html" %}
+<nav class="crumbs-nav" aria-label="Breadcrumb">
+  <ol>
+    <li><a href="{{ url_for('draft.action_page', action='outline') }}">Outline</a></li>
+    <li aria-current="page">Learn how papers here are structured</li>
+  </ol>
+</nav>
+<div class="card start">
+  <p class="title">Learn how papers here are structured</p>
+  <p class="supporting">pepa-plan labels the move each paragraph makes in your summarised papers, then learns the structures they share and how each section unfolds. Papers it has read before are not read again.</p>
+  {% if estimate %}
+  <p class="supporting">{{ estimate.words }}</p>
+  <form class="form-actions" method="post">
+    <input type="hidden" name="token" value="{{ token }}">
+    <a class="button text" href="{{ url_for('draft.action_page', action='outline') }}">Cancel</a>
+    <button class="filled">Learn the structures</button>
+  </form>
+  {% else %}
+  <p class="supporting">pepa-plan could not estimate this. Run <strong>abstract</strong> on its <a href="{{ url_for('console.app_page', name='pepa-plan') }}">app page</a> to see why.</p>
+  {% endif %}
+</div>
+{% endblock %}

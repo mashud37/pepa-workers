@@ -1,0 +1,10 @@
+<div class="page-head">
+  <h1>Draft</h1>
+</div>
+{% set draft_tab = request.path.split("/")[2] if request.path.count("/") > 1 else "" %}
+<nav class="sub-tabs" aria-label="Draft">
+  <a href="{{ url_for('draft.action_page', action='outline') }}"{% if draft_tab in ["outline", "patterns"] %} aria-current="page"{% endif %}>Outline</a>
+  <a href="{{ url_for('draft.action_page', action='draft') }}"{% if draft_tab == "draft" %} aria-current="page"{% endif %}>First draft</a>
+  <a href="{{ url_for('draft.action_page', action='feedback') }}"{% if draft_tab == "feedback" %} aria-current="page"{% endif %}>Feedback</a>
+  <a href="{{ url_for('draft.action_page', action='gaps') }}"{% if draft_tab == "gaps" %} aria-current="page"{% endif %}>Check for gaps</a>
+</nav>

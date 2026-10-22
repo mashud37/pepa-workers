@@ -12,7 +12,7 @@ from flask import Flask, abort, current_app, request
 
 from cli import ui
 from registry import APPS, INSTALLED
-from web import explore_routes, jobs, mascot, routes
+from web import draft_routes, explore_routes, jobs, mascot, routes
 from web.settings import SETTINGS
 
 FOLDER = Path(__file__).resolve().parent
@@ -76,6 +76,7 @@ def create_app():
     app.context_processor(template_values)
     app.register_blueprint(routes.bp)
     app.register_blueprint(explore_routes.bp)
+    app.register_blueprint(draft_routes.bp)
     return app
 
 

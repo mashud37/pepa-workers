@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% import "_file_field.html" as files %}
+{% block title %}{{ info.title }} · Draft · pepa{% endblock %}
+{% block content %}
+{% include "_draft_tabs.html" %}
+
+{% if action == "outline" %}
+<section class="card start patterns">
+  {% if patterns_run %}
+  {% with run = patterns_run, log_url = url_for('console.job_log', job_id=patterns_run.id), reload_when_done = True %}{% include "_run.html" %}{% endwith %}
+  {% endif %}
+  {% if skeletons %}
+  <p class="title">How papers here are structured</p>
+  <p class="supporting">Learned from your library: {{ skeletons | map(attribute="name") | join(", ") }}. An outline can follow one of these.</p>
+  <div class="form-actions"><a class="button tonal" href="{{ url_for('draft.structures_page') }}">See the structures</a><a class="button text" href="{{ url_for('draft.patterns_new') }}">Learn again from new papers</a></div>
+  {% else %}
+  <p class="title">Learn how papers here are structured</p>
+  <p class="supporting">pepa-plan reads your summarised papers for the moves each paragraph makes, and learns the structures they share, so an outline can follow one. Without them, the model chooses the structure.</p>
+  <div class="form-actions"><a class="button tonal" href="{{ url_for('draft.patterns_new') }}">Learn the structures</a></div>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if missing %}
+{% with missing_app = info.app %}{% include "_missing.html" %}{% endwith %}
+{% else %}
+<form method="post" action="{{ url_for('draft.action_save', action=action) }}" enctype="multipart/form-data">
+  <input type="hidden" name="token" value="{{ token }}">
+  {% if action == "outline" %}
+  <p class="supporting section-note">Write a paragraph-by-paragraph outline from an idea: what the paper argues, in your own words. It can draw on a literature review from Explore.</p>
+  {% elif action == "draft" %}
+  <p class="supporting section-note">Write a first draft from an outline, section by section, drawing on a literature review and the papers it names.</p>
+  {% elif action == "feedback" %}
+  <p class="supporting section-note">Get feedback on how a text builds its argument: what each part does, what is missing, and what to change.</p>
+  {% else %}
+  <p class="supporting section-note">Check a text, section by section, for papers, arguments and terms from your library it does not yet engage.</p>
+  {% endif %}
+
+  {% if action == "draft" %}
+  <label class="field"><span>{{ info.slot }}</span>
+    <select name="source">
+      <option value="">Choose an outline</option>
+      {% for each in sources %}<option value="{{ each.key }}" data-detail="{{ each.when }}"{% if each.key == prefill.source %} selected{% endif %}>{{ each.label }}</option>{% endfor %}
+    </select>
+  </label>
+  {% if not sources %}<p class="supporting">No outlines yet. <a href="{{ url_for('draft.action_page', action='outline') }}">Write one under Outline first.</a></p>{% endif %}
+  {% else %}
+  <label class="field"><span>{{ info.slot }}</span><textarea name="pasted" rows="8" data-keep="draft/{{ action }}"></textarea></label>
+  {{ files.file_field("file", "Or a file (.md, .txt or .docx)", ".md,.txt,.docx") }}
+  {% if sources %}
+  <label class="field"><span>Or one you have</span>
+    <select name="source">
+      <option value="" data-detail="Use the text or file above">None</option>
+      {% for each in sources %}<option value="{{ each.key }}" data-detail="{{ each.when }}"{% if each.key == prefill.source %} selected{% endif %}>{{ each.label }}</option>{% endfor %}
+    </select>
+  </label>
+  {% endif %}
+  {% endif %}
+
+  <div class="fields">
+    {% if action == "outline" %}
+    <label class="field"><span>Literature</span>
+      <select name="literature">
+        <option value="" data-detail="The idea alone">None</option>
+        {% for each in reviews %}<option value="{{ each.key }}" data-detail="{{ each.when }}"{% if each.key == prefill.literature %} selected{% endif %}>{{ each.label }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="field"><span>Structure</span>
+      <select name="structure">
+        {% for each in skeletons %}<option value="{{ each.id }}" data-detail="{{ each.kind }}"{% if each.id == prefill.structure %} selected{% endif %}>{{ each.name }}</option>{% endfor %}
+        <option value="" data-detail="No learned structure">Let the model choose</option>
+      </select>
+    </label>
+    {% elif action == "draft" %}
+    <label class="field"><span>Literature review</span>
+      <select name="review">
+        <option value="">Choose a review</option>
+        {% for each in reviews %}<option value="{{ each.key }}" data-detail="{{ each.when }}"{% if each.key == prefill.review %} selected{% endif %}>{{ each.label }}</option>{% endfor %}
+      </select>
+    </label>
+    {% elif action == "gaps" %}
+    <label class="field"><span>Papers</span>
+      <select name="papers">
+        <option value="" data-detail="Every paper in the review index">Everything</option>
+        {% for each in papers %}<option value="{{ each.value }}" data-detail="{{ each.detail }}"{% if each.value == prefill.papers %} selected{% endif %}>{{ each.label }}</option>{% endfor %}
+      </select>
+    </label>
+    {% endif %}
+  </div>
+  {% if action == "draft" and not reviews %}<p class="supporting">No literature reviews yet. <a href="{{ url_for('explore.reviews_page') }}">Write one under Explore › Reviews first.</a></p>{% endif %}
+  <div class="form-actions"><button class="filled">Next</button></div>
+</form>
+{% endif %}
+
+{% if outputs %}
+<h2 class="section-title">{% if action == "outline" %}Outlines{% elif action == "draft" %}First drafts{% elif action == "feedback" %}Feedback{% else %}Gap reports{% endif %}</h2>
+<ul class="list file-list">
+  {% for each in outputs %}
+  <li class="row-item"><a class="row-link" href="{{ url_for('draft.read_page', key=action ~ ':' ~ each.file) }}"><span class="file-name">{% if each.made_from %}From {{ each.made_from | join(" and ") }}{% else %}{{ each.file }}{% endif %}</span><span class="meta">{{ each.when }}</span></a></li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

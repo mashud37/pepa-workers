@@ -1,13 +1,13 @@
 from datetime import datetime
 
 import config
-from cli import ui
+from cli import blueprint, ui
 from cli.progress import StepSpinner
 from corpus.load import paper_count
 from skeleton import build as skeleton_build
 
 
-def run(limit=None, sample=None, mode=None, approved=None):
+def run(limit=None, sample=None, mode=None, approved=None, with_blueprints=False):
     ui.header("Build skeleton library")
 
     ui.step("Scanning corpus")
@@ -35,6 +35,8 @@ def run(limit=None, sample=None, mode=None, approved=None):
 
     library = skeleton_build.build(limit=limit, sample=sample, mode=mode, approved=approved)
     if library is None:
+        if with_blueprints and config.SKELETONS_FILE.exists():
+            blueprint.run()
         return 0
     skeleton_build.save(library)
 
@@ -45,6 +47,9 @@ def run(limit=None, sample=None, mode=None, approved=None):
     n_skel = len(library.get("skeletons", []))
     ui.ok(f"library saved: {n_skel} skeletons from {library['n_papers']} papers")
     ui.ok(f"report:  {report_path}")
+    print(report_path)
+    if with_blueprints:
+        blueprint.run()
     return 0
 
 

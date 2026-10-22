@@ -7,6 +7,21 @@ import config
 from cli import install, menu, ui
 
 
+def _add_biblio(sub):
+    bi = sub.add_parser("biblio", help="Bibliography: fetch from OpenAlex, ingest, export, stats, network")
+    bi.add_argument("subcmd", choices=["fetch", "ingest", "export", "stats", "network"], help="fetch | ingest | export | stats | network")
+    bi.add_argument("--zotero", default=None, metavar="FILE", help="With fetch: a reference export (CSL JSON, BibTeX or RIS) whose DOIs are tried first")
+    bi.add_argument("--zotero-local", action="store_true", help="With fetch: read the reference records from the running Zotero app instead of a file")
+    bi.add_argument("--paid-search", action="store_true", help="With fetch: search OpenAlex by title, at a cost, for papers the free sources miss")
+    bi.add_argument("--force", action="store_true", help="With fetch: look up papers already stored again")
+    bi.add_argument("--estimate", action="store_true", help="With fetch: print the lookups and their cost as JSON, and stop")
+    bi.add_argument("--works", default=None, metavar="FILE", help="Works metadata file (CSV or JSONL), required for ingest")
+    bi.add_argument("--citations", default=None, metavar="FILE", help="Citations edge-list file (CSV or JSONL), optional for ingest")
+    bi.add_argument("--graph-type", default="citation", choices=["citation", "coupling"], metavar="TYPE", help="citation (default) or coupling")
+    bi.add_argument("--format", default="html", choices=["html", "graphml"], metavar="FMT", help="html (default) or graphml")
+    bi.add_argument("--output", default=None, metavar="DIR", help="Output directory (default: output/)")
+
+
 def _build_parser():
     parser = argparse.ArgumentParser(prog=config.COMMAND, description="pepa-review")
     parser.add_argument("--no-input", action="store_true", help="Never ask a question: each one takes its default answer")
@@ -22,6 +37,9 @@ def _build_parser():
 
     g = sub.add_parser("gaps", help="Gap-check a draft against the corpus")
     g.add_argument("--input", default=None, metavar="FILE", help="Path to draft file (default: pick from input/)")
+    g.add_argument("--list", default=None, metavar="FILE", help="Check only against the papers in this literature list")
+    g.add_argument("-o", "--output", default=None, metavar="NAME", help="File name for the report in output/ (default: from the draft and the time)")
+    g.add_argument("--estimate", action="store_true", help="Print the most the check can cost as JSON, and stop")
 
     e = sub.add_parser("explore", help="Interactive discovery over the corpus")
     e.add_argument("--query", default=None, metavar="QUERY", help="Initial query (default: interactive prompt)")
@@ -50,22 +68,11 @@ def _build_parser():
     ix = sub.add_parser("index", help="Build/refresh the embedding index")
     ix.add_argument("--force", action="store_true", help="Rebuild from scratch")
 
-    sub.add_parser("config", help="Show effective configuration")
+    cf = sub.add_parser("config", help="Show effective configuration")
+    cf.add_argument("--json", action="store_true", help="Print the settings as one JSON line")
     sub.add_parser("install", help="Set up files and check dependencies")
 
-    bi = sub.add_parser("biblio", help="Bibliography: fetch from OpenAlex, ingest, export, stats, network")
-    bi.add_argument("subcmd", choices=["fetch", "ingest", "export", "stats", "network"], help="fetch | ingest | export | stats | network")
-    bi.add_argument("--zotero", default=None, metavar="FILE", help="With fetch: a reference export (CSL JSON, BibTeX or RIS) whose DOIs are tried first")
-    bi.add_argument("--zotero-local", action="store_true", help="With fetch: read the reference records from the running Zotero app instead of a file")
-    bi.add_argument("--paid-search", action="store_true", help="With fetch: search OpenAlex by title, at a cost, for papers the free sources miss")
-    bi.add_argument("--force", action="store_true", help="With fetch: look up papers already stored again")
-    bi.add_argument("--estimate", action="store_true", help="With fetch: print the lookups and their cost as JSON, and stop")
-    bi.add_argument("--works", default=None, metavar="FILE", help="Works metadata file (CSV or JSONL), required for ingest")
-    bi.add_argument("--citations", default=None, metavar="FILE", help="Citations edge-list file (CSV or JSONL), optional for ingest")
-    bi.add_argument("--graph-type", default="citation", choices=["citation", "coupling"], metavar="TYPE", help="citation (default) or coupling")
-    bi.add_argument("--format", default="html", choices=["html", "graphml"], metavar="FMT", help="html (default) or graphml")
-    bi.add_argument("--output", default=None, metavar="DIR", help="Output directory (default: output/)")
-
+    _add_biblio(sub)
     return parser
 
 
@@ -89,7 +96,12 @@ def main():
         })
     elif args.command == "gaps":
         from cli import gaps
-        gaps.run(input_file=args.input)
+        gaps.run({
+            "input_file": args.input,
+            "list_file": args.list,
+            "only_estimate": args.estimate,
+            "output_name": args.output,
+        })
     elif args.command == "explore":
         from cli import explore
         explore.run(query=args.query)
@@ -110,30 +122,34 @@ def main():
         index_cmd.run(force=args.force)
     elif args.command == "config":
         from cli import show_config
-        show_config.run()
+        show_config.run(as_json=args.json)
     elif args.command == "install":
-        install.run()
+        return install.run()
     elif args.command == "biblio":
-        from cli import biblio_cmd
-        biblio_cmd.run(args.subcmd, {
-            "works_file": args.works,
-            "citations_file": args.citations,
-            "graph_type": args.graph_type,
-            "fmt": args.format,
-            "output_dir": args.output,
-            "zotero": args.zotero,
-            "zotero_local": args.zotero_local,
-            "force": args.force,
-            "only_estimate": args.estimate,
-            "paid_search": args.paid_search,
-        })
+        _biblio(args)
+
+
+def _biblio(args):
+    from cli import biblio_cmd
+    biblio_cmd.run(args.subcmd, {
+        "works_file": args.works,
+        "citations_file": args.citations,
+        "graph_type": args.graph_type,
+        "fmt": args.format,
+        "output_dir": args.output,
+        "zotero": args.zotero,
+        "zotero_local": args.zotero_local,
+        "force": args.force,
+        "only_estimate": args.estimate,
+        "paid_search": args.paid_search,
+    })
 
 
 if __name__ == "__main__":
     try:
         sys.exit(main())
     except KeyboardInterrupt:
-        print("\n\n  Interrupted.")
+        print("\n\n  Interrupted.", file=sys.stderr)
         sys.exit(0)
     except SystemExit as e:
         if isinstance(e.code, str):
