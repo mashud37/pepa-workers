@@ -19,7 +19,8 @@ def main():
     d.add_argument("--host", choices=list(HOSTS), help="Where the server runs")
     d.add_argument("--server", choices=list(SERVERS), help="Which server: small runs on CPU, large on a GPU")
 
-    sub.add_parser("list", help="List the deployed servers")
+    ls = sub.add_parser("list", help="List the deployed servers")
+    ls.add_argument("--json", action="store_true", help="Print the servers as one JSON line, without their keys")
 
     r = sub.add_parser("remove", help="Delete a deployed server")
     r.add_argument("name", nargs="?", help="The server's name, as list shows it")
@@ -34,7 +35,7 @@ def main():
     if args.command == "deploy":
         return deploy.run(host_name=args.host, server_name=args.server)
     if args.command == "list":
-        return servers.list_servers()
+        return servers.list_servers(as_json=args.json)
     if args.command == "remove":
         return servers.remove_server(args.name)
     if args.command == "install":
@@ -45,7 +46,7 @@ if __name__ == "__main__":
     try:
         sys.exit(main() or 0)
     except KeyboardInterrupt:
-        print("\n\n  Interrupted.")
+        print("\n\n  Interrupted.", file=sys.stderr)
         sys.exit(0)
     except SystemExit as e:
         if isinstance(e.code, str):

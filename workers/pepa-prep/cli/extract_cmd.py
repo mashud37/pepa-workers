@@ -69,6 +69,7 @@ def run(cfg: dict, file: str | None = None, force: bool = False) -> None:
     todo = n_straight + n_book + n_ocr
     if not todo:
         ui.info("Nothing to extract.")
+        print(out_dir.resolve())
         return
 
     items.announce("total", todo)
@@ -83,10 +84,17 @@ def run(cfg: dict, file: str | None = None, force: bool = False) -> None:
 
     ui.step("Done")
     ui.ok(f"{todo} file(s) processed → {out_dir.resolve()}")
-    if warns:
-        ui.warn(f"{len(warns)} file(s) need a look:")
-        for name, w in warns:
-            ui.warn(f"  {name}: {w}")
+    _report_warnings(warns)
+    print(out_dir.resolve())
+
+
+def _report_warnings(warns: list) -> None:
+    """List the files that finished with a warning, so the user knows which to open."""
+    if not warns:
+        return
+    ui.warn(f"{len(warns)} file(s) need a look:")
+    for name, w in warns:
+        ui.warn(f"  {name}: {w}")
 
 
 def _clear_outputs(out_dir: Path, stem: str) -> None:
@@ -192,23 +200,23 @@ def _live(text: str) -> None:
 
     Mirrors ``ui.info``'s prefix so the live line and the settled lines align.
     """
-    if sys.stdout.isatty():
+    if sys.stderr.isatty():
         bullet = ui._c(ui.DIM, ui._SYM["info"])
-        sys.stdout.write(f"\r  {bullet} {text}\033[K")
-        sys.stdout.flush()
+        sys.stderr.write(f"\r  {bullet} {text}\033[K")
+        sys.stderr.flush()
 
 
 def _live_clear() -> None:
-    if sys.stdout.isatty():
-        sys.stdout.write("\r\033[K")
-        sys.stdout.flush()
+    if sys.stderr.isatty():
+        sys.stderr.write("\r\033[K")
+        sys.stderr.flush()
 
 
 def _report_progress(i: int, name: str, n: int, done: int, total: int) -> None:
     """Show OCR page progress: a live line in a terminal, a log line every few pages elsewhere, and the console's item row."""
     _live(f"[{i}/{n}] {name}: page {done}/{total}")
     items.announce("progress", name, f"page {done:,} of {total:,}")
-    if not sys.stdout.isatty() and done and (done % OCR_LOG_EVERY == 0 or done == total):
+    if not sys.stderr.isatty() and done and (done % OCR_LOG_EVERY == 0 or done == total):
         ui.info(f"[{i}/{n}] {name}: page {done}/{total}")
 
 

@@ -1,5 +1,6 @@
 """CLI layer for manual chapter correction of extracted books."""
 import difflib
+import sys
 import tempfile
 from pathlib import Path
 
@@ -23,6 +24,8 @@ def _state(book: split_mod.Book) -> str:
 
 
 def run(cfg: dict, file: str | None = None) -> None:
+    if not sys.stdin.isatty():
+        raise SystemExit("split opens your editor, so it needs a terminal. Mark chapter starts on the Papers page in pepa-console instead.")
     out_dir = Path(cfg["output_folder"]) / "text"
     if not out_dir.is_dir():
         raise SystemExit(f"No extracted text found in {out_dir}: run extract first")

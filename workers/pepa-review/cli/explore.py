@@ -2,6 +2,7 @@
 body of works across turns that the user can follow up on, expand, or
 replace with a new search.
 """
+import sys
 from datetime import datetime
 
 import config
@@ -182,12 +183,12 @@ def _keyword_select():
             ui.warn(f"No works match '{term}'")
             continue
 
-        print()
+        print(file=sys.stderr)
         visible = matches[:30]
         for i, r in enumerate(visible, 1):
             mark = "✓" if r["base"] in selected_bases else " "
             label = f"{r.get('authors', '')}: {r.get('title', '')[:55]}"
-            print(f"  [{i:2}] {mark} {label}")
+            print(f"  [{i:2}] {mark} {label}", file=sys.stderr)
         if len(matches) > 30:
             ui.info(f"  … {len(matches) - 30} more: refine your search term")
 

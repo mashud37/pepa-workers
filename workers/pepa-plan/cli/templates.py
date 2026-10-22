@@ -44,6 +44,7 @@ def run(new=None, show=False):
         ui.ok(f"created {dest.name}")
         ui.info(f"edit it: {dest}")
         ui.info(f"then run: {config.COMMAND} outline --template " + str(dest))
+        print(dest)
         return 0
 
     existing = list_templates()
@@ -69,7 +70,7 @@ def run(new=None, show=False):
             ui.step(path.name)
             ui.info(str(path))
             for line in read(path).splitlines()[:12]:
-                print(f"  {line}")
+                print(f"  {line}", file=sys.stderr)
 
 
 def _show_list(existing):
@@ -78,4 +79,4 @@ def _show_list(existing):
         return
     ui.step("Templates")
     for p in existing:
-        ui.info(p.name)
+        print(p)

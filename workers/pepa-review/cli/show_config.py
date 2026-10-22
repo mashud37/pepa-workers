@@ -5,7 +5,37 @@ import config
 from cli import ui
 
 
-def run():
+def effective():
+    """The effective settings as one dictionary, for --json."""
+    models = config.model_names()
+    embed = config.embed_config()
+    records = None
+    if config.INDEX_FILE.exists():
+        records = len(json.loads(config.INDEX_FILE.read_text(encoding="utf-8")).get("records", []))
+    return {
+        "corpus_dir": str(config.corpus_dir()),
+        "backend": config.backend(),
+        "server": config.setting("llm_base_url") or None,
+        "model_fast": models["fast"] or None,
+        "model_quality": models["quality"] or None,
+        "embed_provider": embed["provider"] or None,
+        "embed_model": embed["model"] or None,
+        "anthropic_api_key": "set" if config.setting("anthropic_api_key") else "unset",
+        "llm_api_key": "set" if config.setting("llm_api_key") else "unset",
+        "gemini_api_key": "set" if config.setting("gemini_api_key") else "unset",
+        "embed_api_key": "set" if config.setting("embed_api_key") else "unset",
+        "index_records": records,
+        "use_biblio": config.use_biblio(),
+        "data_dir": str(config.DATA_DIR),
+        "input_dir": str(config.INPUT_DIR),
+        "output_dir": str(config.OUTPUT_DIR),
+    }
+
+
+def run(as_json=False):
+    if as_json:
+        print(json.dumps(effective()))
+        return
     ui.header("Configuration")
     _show_corpus()
     _show_models()

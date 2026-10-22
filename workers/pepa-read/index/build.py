@@ -184,7 +184,7 @@ def _index_row(conn, book_stem, chapter, found):
 
 def run(force: bool = False):
     ui.header("pepa-reader index")
-    print("  1) scan pepa-prep  2) scan pepa-sum  3) build search index")
+    ui.info("1) scan pepa-prep  2) scan pepa-sum  3) build search index")
 
     ui.step("1/3 scan pepa-prep")
     docs = _scan_text_dir(config.TEXT_DIR)

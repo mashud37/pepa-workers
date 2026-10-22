@@ -5,7 +5,16 @@ import config
 from cli import ui
 
 
-def run():
+def run(given=None):
+    chosen = {}
+    for key, value in (given or {}).items():
+        if value is not None:
+            chosen[key] = value
+    if chosen:
+        config.set_values(chosen)
+        ui.ok("saved: " + ", ".join(f"{key.lower()}={value}" for key, value in chosen.items()))
+        return 0
+
     ui.header("Settings")
 
     backend = ui.ask_choice(

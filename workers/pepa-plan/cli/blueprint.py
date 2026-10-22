@@ -26,6 +26,7 @@ def run():
     n = sum(len(moves) for moves in library["blueprints"].values())
     ui.ok(f"blueprints saved: {n} move blueprint(s) -> {config.BLUEPRINTS_FILE.name}")
     ui.ok(f"report:  {report_path}")
+    print(report_path)
     return 0
 
 

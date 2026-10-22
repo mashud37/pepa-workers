@@ -12,7 +12,7 @@ def _add(file_path: str, profile: str = None) -> None:
     if not file_path:
         file_path = ui.ask("Path to writing sample file")
     if not file_path:
-        return
+        raise SystemExit("No writing sample given: pass --file FILE.")
     p = Path(file_path)
     if not p.exists():
         ui.abort(f"file not found: {p}")
@@ -37,7 +37,7 @@ def _list(profile: str = None) -> None:
         return
     ui.info(f"  {len(samples)} sample file(s):")
     for s in samples:
-        ui.info(f"    {s}")
+        print(s)
 
 
 def _build_all(profile: str = None) -> None:

@@ -3,6 +3,7 @@
 subcommands are the scriptable twin of what the console does.
 """
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -13,7 +14,14 @@ INSTALLED = Path(__file__).resolve().parent.parent.name == "apps"
 COMMAND = "pepa-console" if INSTALLED else "python manage.py"
 
 
-def cmd_status() -> int:
+def cmd_status(as_json: bool = False) -> int:
+    if as_json:
+        apps = []
+        for app in APPS:
+            commands = [{"name": c.name, "kind": c.kind, "help": c.help} for c in app.commands]
+            apps.append({"name": app.name, "blurb": app.blurb, "path": str(app.path), "commands": commands})
+        print(json.dumps({"apps": apps}))
+        return 0
     for app in APPS:
         print(f"{app.name}  :  {app.blurb}")
         for c in app.commands:
@@ -25,13 +33,16 @@ def cmd_status() -> int:
     return 0
 
 
-def cmd_config() -> int:
+def cmd_config(as_json: bool = False) -> int:
     from registry import ROOT
     interactive = 0
     for app in APPS:
         for command in app.commands:
             if command.kind in ("interactive", "terminal"):
                 interactive += 1
+    if as_json:
+        print(json.dumps({"root": str(ROOT), "apps": len(APPS), "commands": sum(len(a.commands) for a in APPS), "interactive": interactive}))
+        return 0
     print(f"root         {ROOT}")
     print(f"apps         {len(APPS)}")
     print(f"commands     {sum(len(a.commands) for a in APPS)}")
@@ -90,8 +101,10 @@ def main() -> int:
     w.add_argument("--no-browser", action="store_true", help="Do not open a browser tab")
 
     sub.add_parser("tui", help="Open the older terminal console (needs: pip install textual)")
-    sub.add_parser("status", help="List apps and their commands")
-    sub.add_parser("config", help="Show effective configuration")
+    st = sub.add_parser("status", help="List apps and their commands")
+    st.add_argument("--json", action="store_true", help="Print the apps and commands as one JSON line")
+    cf = sub.add_parser("config", help="Show effective configuration")
+    cf.add_argument("--json", action="store_true", help="Print the configuration as one JSON line")
     sub.add_parser("install", help="Check dependencies and discover apps")
 
     args = parser.parse_args()
@@ -107,9 +120,9 @@ def main() -> int:
     if args.command == "tui":
         return cmd_tui()
     if args.command == "status":
-        return cmd_status()
+        return cmd_status(as_json=args.json)
     if args.command == "config":
-        return cmd_config()
+        return cmd_config(as_json=args.json)
     if args.command == "install":
         return cmd_install()
     if args.command == "run":
@@ -121,7 +134,7 @@ if __name__ == "__main__":
     try:
         sys.exit(main() or 0)
     except KeyboardInterrupt:
-        print("\n\n  Interrupted.")
+        print("\n\n  Interrupted.", file=sys.stderr)
         sys.exit(0)
     except SystemExit as e:
         if isinstance(e.code, str):

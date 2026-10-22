@@ -16,7 +16,7 @@ def _fmt_secs(seconds):
 
 
 class StepSpinner:
-    """Animated spinner for a single step. No-op when stdout is not a TTY."""
+    """Animated spinner for a single step. No-op when stderr is not a TTY."""
 
     def __init__(self, label: str):
         self._label = label
@@ -28,15 +28,15 @@ class StepSpinner:
         while not self._stop.is_set():
             frame = _FRAMES[i % len(_FRAMES)]
             try:
-                sys.stdout.write(f"\r  {frame}  {self._label:<{_LABEL_W}}")
-                sys.stdout.flush()
+                sys.stderr.write(f"\r  {frame}  {self._label:<{_LABEL_W}}")
+                sys.stderr.flush()
             except Exception:
                 pass
             time.sleep(0.08)
             i += 1
 
     def start(self) -> None:
-        if sys.stdout.isatty():
+        if sys.stderr.isatty():
             self._thread = threading.Thread(target=self._spin, daemon=True)
             self._thread.start()
 
@@ -46,14 +46,14 @@ class StepSpinner:
             self._thread.join()
         safe = summary.encode("ascii", "replace").decode("ascii")
         suffix = f"  {safe}" if safe else ""
-        if sys.stdout.isatty():
+        if sys.stderr.isatty():
             try:
-                sys.stdout.write(f"\r  {_CHECK}  {self._label:<{_LABEL_W}}{suffix}\n")
+                sys.stderr.write(f"\r  {_CHECK}  {self._label:<{_LABEL_W}}{suffix}\n")
             except UnicodeEncodeError:
-                sys.stdout.write(f"\r  *  {self._label:<{_LABEL_W}}{suffix}\n")
-            sys.stdout.flush()
+                sys.stderr.write(f"\r  *  {self._label:<{_LABEL_W}}{suffix}\n")
+            sys.stderr.flush()
         else:
-            print(f"  {self._label}... {safe}")
+            print(f"  {self._label}... {safe}", file=sys.stderr)
 
 
 class ProgressSpinner:
@@ -74,7 +74,7 @@ class ProgressSpinner:
         self._stop = threading.Event()
         self._thread = None
         self._t0 = None
-        self._tty = sys.stdout.isatty()
+        self._tty = sys.stderr.isatty()
 
     def _line(self, frame):
         with self._lock:
@@ -88,8 +88,8 @@ class ProgressSpinner:
         i = 0
         while not self._stop.is_set():
             try:
-                sys.stdout.write(self._line(_FRAMES[i % len(_FRAMES)]))
-                sys.stdout.flush()
+                sys.stderr.write(self._line(_FRAMES[i % len(_FRAMES)]))
+                sys.stderr.flush()
             except Exception:
                 pass
             time.sleep(0.1)
@@ -106,7 +106,7 @@ class ProgressSpinner:
             self._count += n
             count = self._count
         if not self._tty and (count % 25 == 0 or count == self._total):
-            print(f"  {self._label} {count}/{self._total}")
+            print(f"  {self._label} {count}/{self._total}", file=sys.stderr)
 
     def log(self, msg):
         """Print a persistent line above the live progress line; the spinner
@@ -116,13 +116,13 @@ class ProgressSpinner:
         with self._lock:
             if self._tty:
                 try:
-                    sys.stdout.write(self._CLEAR + msg + "\n")
+                    sys.stderr.write(self._CLEAR + msg + "\n")
                 except UnicodeEncodeError:
-                    sys.stdout.write(self._CLEAR
+                    sys.stderr.write(self._CLEAR
                                      + msg.encode("ascii", "replace").decode("ascii") + "\n")
-                sys.stdout.flush()
+                sys.stderr.flush()
             else:
-                print(msg)
+                print(msg, file=sys.stderr)
 
     def done(self, summary=""):
         self._stop.set()
@@ -133,9 +133,9 @@ class ProgressSpinner:
         safe = safe.encode("ascii", "replace").decode("ascii")
         if self._tty:
             try:
-                sys.stdout.write(f"{self._CLEAR}  {_CHECK}  {self._label}  {safe}\n")
+                sys.stderr.write(f"{self._CLEAR}  {_CHECK}  {self._label}  {safe}\n")
             except UnicodeEncodeError:
-                sys.stdout.write(f"{self._CLEAR}  *  {self._label}  {safe}\n")
-            sys.stdout.flush()
+                sys.stderr.write(f"{self._CLEAR}  *  {self._label}  {safe}\n")
+            sys.stderr.flush()
         else:
-            print(f"  {self._label}... {safe}")
+            print(f"  {self._label}... {safe}", file=sys.stderr)

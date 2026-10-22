@@ -2,6 +2,7 @@
 Silent in a terminal; the console switches it on through PEPA_ITEM_EVENTS.
 """
 import os
+import sys
 import threading
 
 ON = os.environ.get("PEPA_ITEM_EVENTS") == "on"
@@ -14,4 +15,4 @@ def announce(state, name="", detail=""):
     if not ON:
         return
     with LOCK:
-        print(f"{PREFIX} {state} | {name} | {detail}", flush=True)
+        print(f"{PREFIX} {state} | {name} | {detail}", file=sys.stderr, flush=True)

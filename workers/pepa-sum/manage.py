@@ -11,6 +11,19 @@ import config
 from cli import batches, cleanup, install, menu, settings, show_config, summarize, ui
 
 
+def _add_setting_commands(sub):
+    st = sub.add_parser("settings", help="Choose backend + paragraph-rundown method; any flag saves without asking")
+    st.add_argument("--backend", choices=list(config.BACKENDS), help="Model backend")
+    st.add_argument("--para-method", choices=list(config.PARA_METHODS), help="Paragraph rundown method")
+    st.add_argument("--on-existing", choices=list(config.ON_EXISTING_MODES), help="What to do with a paper already done")
+    st.add_argument("--mode", choices=list(config.MODES), help="Run mode")
+    st.add_argument("--speed", choices=list(config.SPEED_TIERS), help="Parallel speed tier")
+    st.add_argument("--ocr", choices=list(config.OCR_MODES), help="Scanned-PDF OCR")
+
+    cf = sub.add_parser("config", help="Print effective config and cost note")
+    cf.add_argument("--json", action="store_true", help="Print the settings as one JSON line")
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog=config.COMMAND,
@@ -39,8 +52,8 @@ def main():
     c.add_argument("-n", "--dry-run", action="store_true", help="List what would be deleted, delete nothing")
     c.add_argument("-f", "--force", action="store_true", help="Delete without confirmation")
 
-    sub.add_parser("settings", help="Choose backend + paragraph-rundown method")
-    sub.add_parser("config", help="Print effective config and cost note")
+    _add_setting_commands(sub)
+
     sub.add_parser("install", help="Create env.yaml, store API key, check dependencies")
 
     args = parser.parse_args()
@@ -59,9 +72,16 @@ def main():
     if args.command == "clean":
         return cleanup.run(output_dir=args.output, dry_run=args.dry_run, force=args.force)
     if args.command == "settings":
-        return settings.run()
+        return settings.run({
+            "BACKEND": args.backend,
+            "PARA_METHOD": args.para_method,
+            "ON_EXISTING": args.on_existing,
+            "MODE": args.mode,
+            "SPEED": args.speed,
+            "OCR": args.ocr,
+        })
     if args.command == "config":
-        return show_config.run()
+        return show_config.run(as_json=args.json)
     if args.command == "install":
         return install.run()
 
@@ -70,7 +90,7 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except KeyboardInterrupt:
-        print("\n\n  Interrupted.")
+        print("\n\n  Interrupted.", file=sys.stderr)
         sys.exit(0)
     except SystemExit as e:
         if isinstance(e.code, str):

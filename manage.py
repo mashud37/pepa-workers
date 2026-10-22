@@ -83,7 +83,7 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except KeyboardInterrupt:
-        print("\n\n  Interrupted.")
+        print("\n\n  Interrupted.", file=sys.stderr)
         sys.exit(0)
     except SystemExit as error:
         if isinstance(error.code, str):

@@ -1,6 +1,15 @@
+import json
+
 from extract import config as cfg_mod
 
 from . import ui
+
+MINIMUM = {
+    "workers": 1,
+    "book_page_threshold": 1,
+    "max_chapters": 2,
+    "ocr_dpi": 72,
+}
 
 
 def _show(cfg: dict) -> None:
@@ -94,3 +103,26 @@ def _advanced(cfg: dict) -> dict:
             cfg = {**cfg, "scan_subfolders": not cfg["scan_subfolders"]}
             cfg_mod.save(cfg)
             ui.ok("Sub-folders scanned too" if cfg["scan_subfolders"] else "Sub-folders left alone")
+
+
+def run(cfg: dict, given: dict, as_json: bool = False) -> int:
+    """Show the settings, or save the ones given as flags without asking."""
+    chosen = {}
+    for key, value in given.items():
+        if value is not None:
+            chosen[key] = value
+    for key, minimum in MINIMUM.items():
+        if key in chosen and chosen[key] < minimum:
+            raise SystemExit(f"{key} must be at least {minimum}")
+    if "scan_subfolders" in chosen:
+        chosen["scan_subfolders"] = chosen["scan_subfolders"] == "on"
+    if chosen:
+        cfg = {**cfg, **chosen}
+        cfg_mod.save(cfg)
+        ui.ok("Saved: " + ", ".join(chosen))
+    if as_json:
+        print(json.dumps(cfg, default=str))
+    elif not chosen:
+        ui.header("Configuration")
+        _show(cfg)
+    return 0

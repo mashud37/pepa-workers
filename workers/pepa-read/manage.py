@@ -61,6 +61,9 @@ def _cmd_lists(args):
         summaries = list_store.list_summaries(conn)
     finally:
         conn.close()
+    if args.json:
+        print(json.dumps({"lists": summaries}))
+        return
     if not summaries:
         print("no lists yet", file=sys.stderr)
         return
@@ -76,6 +79,9 @@ def _cmd_list_show(args):
         items = list_store.list_items(conn, row["id"])
     finally:
         conn.close()
+    if args.json:
+        print(json.dumps({"name": args.name, "items": items}))
+        return
     if not items:
         print("(empty)", file=sys.stderr)
         return
@@ -106,6 +112,8 @@ def _cmd_list_delete(args):
     conn = _list_conn()
     try:
         row = _find_list(conn, args.name)
+        if not args.yes and not sys.stdin.isatty():
+            raise SystemExit("Not deleted: pass --yes to delete without asking.")
         if not args.yes and not ui.confirm(f"Delete list '{args.name}' ({row['id']})?", default_yes=False):
             return
         list_store.delete_list(conn, row["id"])
@@ -162,10 +170,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("install", help="Check dependencies and source directories")
 
-    sub.add_parser("lists", help="Show all literature lists and their item counts")
+    li = sub.add_parser("lists", help="Show all literature lists and their item counts")
+    li.add_argument("--json", action="store_true", help="Print the lists as one JSON line")
 
     ls = sub.add_parser("list-show", help="Show the documents in a literature list")
     ls.add_argument("name", help="List name")
+    ls.add_argument("--json", action="store_true", help="Print the documents as one JSON line")
 
     le = sub.add_parser("list-export", help="Export a list's document stems, one per line")
     le.add_argument("name", help="List name")

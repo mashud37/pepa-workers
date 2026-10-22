@@ -126,7 +126,7 @@ def edit_loop(assignment: dict, plan_items: list, sec_path, draft_mode: bool = F
 
     while True:
         _show_current(assignment)
-        choice = ui.menu("Edit assignment", menu["options"], back_label="Save and exit")
+        choice = ui.menu("Edit assignment", menu["options"])
 
         if choice is None:
             save_assignment(assignment, sec_path)

@@ -86,7 +86,7 @@ def _resolve_map(map_file):
             raise SystemExit(f"No corpus map found. Run: {config.COMMAND} map")
         choice = ui.menu("Select a corpus map", [(m.name, "") for m in maps])
         if choice is None:
-            return None
+            raise SystemExit("No corpus map chosen: pass --map FILE.")
         path = maps[choice]
 
     if path.suffix == ".json":
@@ -111,7 +111,7 @@ def _choose_threads(threads, thread):
     options += [(t["name"], f"{len(t['bases'])} works") for t in threads]
     choice = ui.menu("Select a thread to map in detail", options)
     if choice is None:
-        return []
+        raise SystemExit("No thread chosen: pass --thread N, NAME or all.")
     return threads if choice == 0 else [threads[choice - 1]]
 
 

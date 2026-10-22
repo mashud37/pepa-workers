@@ -34,7 +34,16 @@ def _prompt_key(key: str, label: str, required: bool) -> str | None:
     return value or None
 
 
-def run() -> None:
+def run(given=None) -> None:
+    chosen = {}
+    for key, value in (given or {}).items():
+        if value:
+            chosen[key] = value
+    if chosen:
+        config.set_values(chosen)
+        ui.ok(f"saved {len(chosen)} value(s) to secrets.yaml")
+        return
+
     ui.header("pepa-draft: setup")
     ui.info("Configure API keys and paths. Existing values are not overwritten.")
 

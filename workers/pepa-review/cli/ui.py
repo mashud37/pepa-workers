@@ -1,5 +1,5 @@
-"""Terminal UI helpers: header rule, step markers, status lines, and prompts.
-Colour and unicode degrade when stdout is not a TTY or NO_COLOR is set.
+"""Terminal UI helpers: status lines, prompts and menus go to stderr, tables to stdout.
+Colour and unicode degrade off a terminal or when NO_COLOR is set.
 """
 import os
 import sys
@@ -18,7 +18,7 @@ WIDTH = 64
 def _supports_color():
     if os.environ.get("NO_COLOR"):
         return False
-    if not sys.stdout.isatty():
+    if not sys.stdout.isatty() or not sys.stderr.isatty():
         return False
     if os.name == "nt":
         # Enable ANSI (Virtual Terminal) processing on the Windows console.
@@ -34,13 +34,14 @@ def _supports_color():
 # Try to render unicode symbols even on legacy Windows code pages.
 try:
     sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
 _COLOR = _supports_color()
 _UNICODE = True
 try:
-    "▶✓⚠✗·".encode(sys.stdout.encoding or "utf-8")
+    "▶✓⚠✗·".encode(sys.stderr.encoding or "utf-8")
 except Exception:
     _UNICODE = False
 
@@ -60,35 +61,35 @@ def _c(code, text):
 
 def header(text):
     rule = _SYM["rule"] * WIDTH
-    print()
-    print(_c(BLUE, rule))
-    print(_c(BOLD + BLUE, f"  {text}"))
-    print(_c(BLUE, rule))
+    print(file=sys.stderr)
+    print(_c(BLUE, rule), file=sys.stderr)
+    print(_c(BOLD + BLUE, f"  {text}"), file=sys.stderr)
+    print(_c(BLUE, rule), file=sys.stderr)
 
 
 def rule():
-    print(_c(DIM, _SYM["rule"] * WIDTH))
+    print(_c(DIM, _SYM["rule"] * WIDTH), file=sys.stderr)
 
 
 def step(text):
-    print()
-    print(_c(BOLD + BLUE, f"{_SYM['step']} {text}"))
+    print(file=sys.stderr)
+    print(_c(BOLD + BLUE, f"{_SYM['step']} {text}"), file=sys.stderr)
 
 
 def ok(text):
-    print(f"  {_c(GREEN, _SYM['ok'])} {text}")
+    print(f"  {_c(GREEN, _SYM['ok'])} {text}", file=sys.stderr)
 
 
 def warn(text):
-    print(f"  {_c(YELLOW, _SYM['warn'])} {text}")
+    print(f"  {_c(YELLOW, _SYM['warn'])} {text}", file=sys.stderr)
 
 
 def info(text):
-    print(f"  {_c(DIM, _SYM['info'])} {text}")
+    print(f"  {_c(DIM, _SYM['info'])} {text}", file=sys.stderr)
 
 
 def error(text):
-    print(f"  {_c(RED, _SYM['err'])} {text}")
+    print(f"  {_c(RED, _SYM['err'])} {text}", file=sys.stderr)
 
 
 def abort(text, code=1):
@@ -120,9 +121,11 @@ def table(rows, columns):
 def ask(prompt, default=None):
     suffix = f" [{default}]" if default is not None else ""
     try:
-        raw = input(_c(BOLD, f"  {prompt}{suffix}: ")).lstrip("﻿").strip()
+        sys.stderr.write(_c(BOLD, f"  {prompt}{suffix}: "))
+        sys.stderr.flush()
+        raw = input().lstrip("﻿").strip()
     except (EOFError, KeyboardInterrupt):
-        print()
+        print(file=sys.stderr)
         return default
     return raw or default
 
@@ -160,17 +163,17 @@ def menu(title, options):
     Returns:
         0-based index of the chosen option, or None to close the menu.
     """
-    print()
+    print(file=sys.stderr)
     rule()
-    print(_c(BOLD, f"  {title}"))
+    print(_c(BOLD, f"  {title}"), file=sys.stderr)
     width = max((len(o[0]) if isinstance(o, tuple) else len(o)) for o in options)
     for i, o in enumerate(options, 1):
         if isinstance(o, tuple):
             label, desc = o
-            print(f"  {_c(BLUE, f'[{i}]')} {label.ljust(width)}   {_c(DIM, desc)}")
+            print(f"  {_c(BLUE, f'[{i}]')} {label.ljust(width)}   {_c(DIM, desc)}", file=sys.stderr)
         else:
-            print(f"  {_c(BLUE, f'[{i}]')} {o}")
-    print(f"  {_c(BLUE, '[0]')} Back")
+            print(f"  {_c(BLUE, f'[{i}]')} {o}", file=sys.stderr)
+    print(f"  {_c(BLUE, '[0]')} Back", file=sys.stderr)
     while True:
         raw = ask("Choose")
         if raw in (None, "0", "q", "quit", "exit"):

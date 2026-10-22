@@ -38,11 +38,11 @@ def keep_record(record):
     save_records(records)
 
 
-def list_servers():
+def list_servers(as_json=False):
     """Print every deployed server; the keys stay in the record file."""
     ui.step("Servers")
     records = load_records()
-    if not records:
+    if not records and not as_json:
         ui.info("No server deployed yet.")
         return 0
     rows = []
@@ -53,6 +53,9 @@ def list_servers():
             "model": record["model"],
             "address": record["address"],
         })
+    if as_json:
+        print(json.dumps({"servers": rows}))
+        return 0
     ui.table(rows, ["name", "host", "model", "address"])
     ui.info(f"Keys are in {SERVERS_FILE}")
     return 0
