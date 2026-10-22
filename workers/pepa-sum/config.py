@@ -99,6 +99,8 @@ _CHARS_PER_TOKEN_BY_MODEL = {
 # prompts included) and gets back (sum_ plus para_), for the pre-run cost estimate.
 PAPER_INPUT_CHARS = 110_000
 PAPER_OUTPUT_CHARS = 17_500
+# Output tokens a typical paper's calls spend thinking, on a model that thinks, at medium effort.
+PAPER_THINKING_TOKENS = 12_000
 
 BACKENDS = (
     "anthropic",

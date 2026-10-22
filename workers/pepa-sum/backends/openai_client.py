@@ -65,9 +65,11 @@ def cloud_run_headers(base_url):
 
 
 def drop_thinking(text):
-    """Remove the reasoning some open models write between think tags before their answer."""
+    """Remove the reasoning some open models write between think tags before their answer; nothing is left when it never finished thinking."""
     answer = text.strip()
-    if answer.startswith("<think>") and "</think>" in answer:
+    if answer.startswith("<think>"):
+        if "</think>" not in answer:
+            return ""
         answer = answer.split("</think>", 1)[1]
     return answer.strip()
 

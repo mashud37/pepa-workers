@@ -2,6 +2,7 @@
 The console shows these estimates before every paid step.
 """
 import config
+from backends.anthropic_client import thinks
 
 # List prices in US dollars per million tokens, input then output; a model missing here has no known price.
 PRICES_PER_MILLION = {
@@ -15,6 +16,8 @@ PRICES_PER_MILLION = {
 CHARS_PER_TOKEN = 3
 # The instructions every call sends besides the briefs.
 PROMPT_CHARS = 3000
+# Thinking is billed as output; a model that thinks is allowed this much per call at medium effort.
+THINKING_TOKENS_PER_CALL = 4000
 
 
 def brief_chars(record):
@@ -57,6 +60,8 @@ def estimate(calls, quality):
     for call in calls:
         input_tokens += (call["input_chars"] + PROMPT_CHARS) // CHARS_PER_TOKEN
         output_tokens += call["output_tokens"]
+        if thinks(model):
+            output_tokens += THINKING_TOKENS_PER_CALL
     price = price_of(model)
     dollars = None
     if price is not None:

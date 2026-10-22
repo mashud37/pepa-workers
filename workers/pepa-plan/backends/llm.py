@@ -10,7 +10,7 @@ def complete(system, prompt, max_tokens=DEFAULT_MAX_TOKENS, quality=False):
     settings = config.load()
     if settings["backend"] == "openai-compatible":
         from backends import openai_client
-        return openai_client.complete(system, prompt, max_tokens, quality)["text"]
+        return openai_client.complete(system, prompt, max_tokens, quality)
     from backends import anthropic_client
     model = settings["review_model"] if quality else settings["anthropic_model"]
     return anthropic_client.complete(system, prompt, max_tokens=max_tokens, model=model)

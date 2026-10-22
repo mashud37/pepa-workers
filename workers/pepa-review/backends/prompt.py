@@ -20,7 +20,8 @@ def review_prompt(outline, briefs_text):
         "marker in the outline as its own section with its own `##` heading. Do not collapse "
         "them into a single section. Under each, synthesise the works that bear on that point, "
         "showing agreements, divergences, and gaps, and cite every claim inline. End with a "
-        "short synthesis paragraph tying the sections together."
+        "short synthesis paragraph tying the sections together. Give each section about 250 to "
+        "400 words and the closing synthesis about 150, so the whole review is finished."
     )
 
 
@@ -67,7 +68,7 @@ def review_section_prompt(title, covers, briefs_text, debate_block=""):
         f"{covers_block}"
         f"WORKS FOR THIS SECTION (sum_ briefs):\n{briefs_text}\n\n"
         f"{debate_block}"
-        f"Draft this section as 1 to 3 connected paragraphs under a `## {title}` heading. "
+        f"Draft this section as 1 to 3 connected paragraphs, about 300 to 600 words in all, under a `## {title}` heading. "
         f"Advance an argument; do not list works. Cite every claim inline."
     )
 
@@ -130,8 +131,8 @@ def explore_prompt(query, briefs_text, history=""):
         f"{hist_block}"
         f"USER QUERY:\n{query}\n\n"
         f"RELEVANT WORKS FROM THE CORPUS:\n{briefs_text}\n\n"
-        "Answer the query drawing on the works above. Identify themes and tensions. "
-        "Suggest follow-up questions."
+        "Answer the query drawing on the works above, in about 300 to 500 words. Identify themes "
+        "and tensions. Suggest follow-up questions."
     )
 
 

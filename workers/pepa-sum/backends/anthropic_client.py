@@ -12,15 +12,18 @@ _RETRYABLE = (429, 500, 502, 503, 529)
 _MAX_ATTEMPTS = 5
 DEFAULT_MAX_TOKENS = 2000
 
-# Models that still take a sampling temperature; newer ones refuse one and run on their default.
+# Older models take a sampling temperature and do not think unless asked. Newer ones think before
+# they answer, spending the same output limit, so they get room for thinking and a set effort.
 TEMPERATURE = 0.2
-TEMPERATURE_MODELS = (
+OLDER_MODELS = (
     "claude-haiku-4-5",
     "claude-sonnet-4-5",
     "claude-sonnet-4-6",
     "claude-opus-4-5",
     "claude-opus-4-6",
 )
+THINKING_TOKENS = 16000
+EFFORT = "medium"
 
 # API ceiling is 100k requests per batch; stay under it.
 _BATCH_MAX_REQUESTS = 90000
@@ -57,11 +60,23 @@ class Truncated(Exception):
         self.text = text
 
 
+def thinks(model):
+    """Whether this model thinks before it answers, spending output tokens on it."""
+    return not model.startswith(OLDER_MODELS)
+
+
 def _sampling(model):
-    """The temperature to send for this model, as request fields; empty for a model that refuses one."""
-    if model.startswith(TEMPERATURE_MODELS):
-        return {"temperature": TEMPERATURE}
-    return {}
+    """The extra request fields for this model: a temperature for an older model, an effort for a newer one."""
+    if thinks(model):
+        return {"output_config": {"effort": EFFORT}}
+    return {"temperature": TEMPERATURE}
+
+
+def output_limit(model, answer_tokens):
+    """The output limit for this model: the answer's own room, plus room for thinking when it thinks."""
+    if thinks(model):
+        return answer_tokens + THINKING_TOKENS
+    return answer_tokens
 
 
 def _estimate_tokens(text):
@@ -169,17 +184,19 @@ def complete(system, prompt, max_tokens=DEFAULT_MAX_TOKENS, flag_truncation=Fals
     client = _client()
     import anthropic
 
+    model = config.load('ANTHROPIC_MODEL')
     last = None
     for attempt in range(_MAX_ATTEMPTS):
         try:
             with _governor():
-                msg = client.messages.create(
-                    model=config.load('ANTHROPIC_MODEL'),
-                    max_tokens=max_tokens,
+                with client.messages.stream(
+                    model=model,
+                    max_tokens=output_limit(model, max_tokens),
                     system=system,
                     messages=[{"role": "user", "content": prompt}],
-                    extra_body=_sampling(config.load('ANTHROPIC_MODEL')),
-                )
+                    extra_body=_sampling(model),
+                ) as stream:
+                    msg = stream.get_final_message()
             u = getattr(msg, "usage", None)
             if u is not None:
                 with _usage_lock:
@@ -240,7 +257,7 @@ def submit_batch(requests):
                 "custom_id": r["custom_id"],
                 "params": {
                     "model": model,
-                    "max_tokens": r["max_tokens"],
+                    "max_tokens": output_limit(model, r["max_tokens"]),
                     "system": r["system"],
                     "messages": [{"role": "user", "content": r["prompt"]}],
                 } | _sampling(model),

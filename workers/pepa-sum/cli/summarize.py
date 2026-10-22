@@ -87,6 +87,7 @@ def run(input_dir=None, output_dir=None, force=False, mode=None, approve_cost=No
     if not work:
         ui.step("Done")
         ui.ok(f"0 processed, {skipped} skipped")
+        print(out_dir)
         return 0
 
     chosen = _select_mode(len(work), mode)
@@ -101,6 +102,7 @@ def run(input_dir=None, output_dir=None, force=False, mode=None, approve_cost=No
     else:
         code = _run_parallel(work, out_dir, skipped)
     _report_cost()
+    print(out_dir)
     return code
 
 
@@ -988,9 +990,13 @@ def _estimated_cost(n, mode):
     price = config.price_per_mtok()
     if price is None:
         return None
-    ratio = config.chars_per_token(config.load('ANTHROPIC_MODEL'))
+    from backends.anthropic_client import thinks
+    model = config.load('ANTHROPIC_MODEL')
+    ratio = config.chars_per_token(model)
     total_in = n * config.PAPER_INPUT_CHARS / ratio
     total_out = n * config.PAPER_OUTPUT_CHARS / ratio
+    if thinks(model):
+        total_out += n * config.PAPER_THINKING_TOKENS
     cost = total_in / 1e6 * price[0] + total_out / 1e6 * price[1]
     if mode == "batch":
         cost *= 0.5
@@ -1088,11 +1094,11 @@ def _done_line(label, summary="saved"):
     """Print a ✓ completion line matching StepSpinner.done() format (no colour)."""
     safe = summary.encode("ascii", "replace").decode("ascii")
     suffix = f"  {safe}" if safe else ""
-    if sys.stdout.isatty():
-        sys.stdout.write(f"  {_CHECK}  {label:<{_LABEL_W}}{suffix}\n")
-        sys.stdout.flush()
+    if sys.stderr.isatty():
+        sys.stderr.write(f"  {_CHECK}  {label:<{_LABEL_W}}{suffix}\n")
+        sys.stderr.flush()
     else:
-        print(f"  {label}... {safe}")
+        print(f"  {label}... {safe}", file=sys.stderr)
 
 
 def _spin(label, fn, summary=lambda r: ""):

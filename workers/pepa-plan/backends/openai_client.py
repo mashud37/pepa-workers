@@ -1,6 +1,7 @@
 """Call any server that accepts OpenAI's chat format, such as DeepSeek, Kimi, Qwen, Ollama or vLLM, through OpenAI's own library."""
 import shutil
 import subprocess
+import sys
 import threading
 import time
 from urllib.parse import urlparse
@@ -8,6 +9,7 @@ from urllib.parse import urlparse
 import openai
 
 import config
+from backends.anthropic_client import CONTINUATIONS, CONTINUE_PROMPT, whole_paragraphs
 
 TEMPERATURE = 0.3
 TIMEOUT_SECONDS = 600
@@ -65,15 +67,17 @@ def cloud_run_headers(base_url):
 
 
 def drop_thinking(text):
-    """Remove the reasoning some open models write between think tags before their answer."""
+    """Remove the reasoning some open models write between think tags before their answer; nothing is left when it never finished thinking."""
     answer = text.strip()
-    if answer.startswith("<think>") and "</think>" in answer:
+    if answer.startswith("<think>"):
+        if "</think>" not in answer:
+            return ""
         answer = answer.split("</think>", 1)[1]
     return answer.strip()
 
 
-def complete(system, prompt, max_tokens, quality=False):
-    """Send one system and user message pair and return the answer, from the quality model when asked.
+def _send(client, connection, model, messages, max_tokens):
+    """One request to the server.
 
     Returns:
         dict with "text", the answer, and "truncated", True when it stopped at max_tokens.
@@ -83,15 +87,6 @@ def complete(system, prompt, max_tokens, quality=False):
             model's context; the paper is skipped and a re-run tries it again.
         SystemExit: the server refused the request, for example a wrong key or model name.
     """
-    connection = config.llm_connection()
-    client = make_client(connection)
-    model = connection["model"]
-    if quality:
-        model = connection["quality_model"]
-    messages = [
-        {"role": "system", "content": system},
-        {"role": "user", "content": prompt},
-    ]
     try:
         with calls_in_flight():
             reply = client.chat.completions.create(
@@ -114,3 +109,31 @@ def complete(system, prompt, max_tokens, quality=False):
         "text": drop_thinking(choice.message.content or ""),
         "truncated": choice.finish_reason == "length",
     }
+
+
+def complete(system, prompt, max_tokens, quality=False):
+    """Send one system and user message pair and return the whole answer, from the quality model when asked,
+    continuing it when it reaches max_tokens."""
+    connection = config.llm_connection()
+    client = make_client(connection)
+    model = connection["model"]
+    if quality:
+        model = connection["quality_model"]
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": prompt},
+    ]
+    parts = []
+    for round_number in range(1 + CONTINUATIONS):
+        reply = _send(client, connection, model, messages, max_tokens)
+        kept = whole_paragraphs(reply["text"])
+        last_round = round_number == CONTINUATIONS
+        if not reply["truncated"] or last_round or not kept:
+            parts.append(reply["text"])
+            break
+        parts.append(kept)
+        messages.append({"role": "assistant", "content": kept})
+        messages.append({"role": "user", "content": CONTINUE_PROMPT})
+    if reply["truncated"]:
+        print("The model stopped at its length limit; the text ends where it stopped.", file=sys.stderr)
+    return "\n\n".join(parts)
